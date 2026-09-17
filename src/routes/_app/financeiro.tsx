@@ -184,14 +184,16 @@ const EMPTY_PAGAR = {
 };
 
 function FinanceiroPage() {
-  const { perfil } = useAuth();
+  const { roles } = useAuth();
   const qc = useQueryClient();
-  const podeEditar =
-    perfil?.perfil === "admin" ||
-    perfil?.perfil === "diretor" ||
-    perfil?.perfil === "financeiro_civil" ||
-    perfil?.perfil === "financeiro_imobiliaria";
-  const podeExcluir = perfil?.perfil === "admin" || perfil?.perfil === "diretor";
+  const isAdminOrDirector = roles.includes("admin") || roles.includes("diretor");
+  const canAccessCivil = isAdminOrDirector || roles.includes("financeiro_civil") || (roles as string[]).includes("financeiro");
+  const canAccessImobiliaria = isAdminOrDirector || roles.includes("financeiro_imobiliaria");
+  const scopedOrigin = canAccessCivil && canAccessImobiliaria
+    ? null
+    : canAccessImobiliaria ? "imobiliaria" : "erp";
+  const podeEditar = canAccessCivil || canAccessImobiliaria;
+  const podeExcluir = isAdminOrDirector;
 
   const [activeTab, setActiveTab] = useState("receber");
   const [receberFormOpen, setReceberFormOpen] = useState(false);
@@ -223,30 +225,54 @@ function FinanceiroPage() {
   const [filtroStatusPagar, setFiltroStatusPagar] = useState("todos");
   const [filtroOrigem, setFiltroOrigem] = useState("todos");
 
+  useEffect(() => {
+    setFiltroOrigem(scopedOrigin ?? "todos");
+  }, [scopedOrigin]);
+
   // Queries
   const { data: contasReceber, isLoading: loadingCR } = useQuery({
-    queryKey: ["contas_receber"],
+    queryKey: ["contas_receber", scopedOrigin],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("contas_receber")
         .select("*")
         .order("data_vencimento", { ascending: false });
+      if (scopedOrigin) query = query.eq("origem", scopedOrigin);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as ContaReceberRow[];
     },
+    enabled: podeEditar,
   });
 
   const { data: contasPagar, isLoading: loadingCP } = useQuery({
-    queryKey: ["contas_pagar"],
+    queryKey: ["contas_pagar", scopedOrigin],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("contas_pagar")
         .select("*")
         .order("data_vencimento", { ascending: false });
+      if (scopedOrigin) query = query.eq("origem", scopedOrigin);
+      const { data, error } = await query;
       if (error) throw error;
       return (data ?? []) as ContaPagarRow[];
     },
+    enabled: podeEditar,
   });
+
+  const contasReceberFiltradas = useMemo(() => {
+    return (contasReceber ?? []).filter((conta) => {
+      if (filtroOrigem === "todos") return true;
+      return (conta.origem ?? "erp") === filtroOrigem;
+    });
+  }, [contasReceber, filtroOrigem]);
+
+  const contasPagarFiltradas = useMemo(() => {
+    return (contasPagar ?? []).filter((conta) => {
+      if (filtroOrigem === "todos") return true;
+      return (conta.origem ?? "erp") === filtroOrigem;
+    });
+  }, [contasPagar, filtroOrigem]);
 
   const { data: clientes } = useQuery({
     queryKey: ["clientes-fin"],
@@ -327,8 +353,8 @@ function FinanceiroPage() {
       return { receitas: [], despesas: [], totalReceitas: 0, totalDespesas: 0, resultado: 0 };
     }
 
-    const paidReceitas = contasReceber.filter(r => r.status === "recebida");
-    const paidDespesas = contasPagar.filter(p => p.status === "paga");
+    const paidReceitas = contasReceberFiltradas.filter(r => r.status === "recebida");
+    const paidDespesas = contasPagarFiltradas.filter(p => p.status === "paga");
 
     const categoryMap = new Map<string, string>();
     categoriasFinanceiras.forEach(cat => categoryMap.set(cat.id, cat.nome));
@@ -358,7 +384,7 @@ function FinanceiroPage() {
       totalDespesas,
       resultado: totalReceitas - totalDespesas
     };
-  }, [contasReceber, contasPagar, categoriasFinanceiras]);
+  }, [contasReceberFiltradas, contasPagarFiltradas, categoriasFinanceiras]);
 
   const bankAccountsList = useMemo(() => {
     if (!contasBancarias) return [];
@@ -419,23 +445,6 @@ function FinanceiroPage() {
     });
     return m;
   }, [pedidos]);
-
-  // Filtro de Origem (ERP Obras ou Imobiliária)
-  const contasReceberFiltradas = useMemo(() => {
-    return (contasReceber ?? []).filter((cr) => {
-      if (filtroOrigem === "todos") return true;
-      const origem = cr.origem ?? "erp";
-      return origem === filtroOrigem;
-    });
-  }, [contasReceber, filtroOrigem]);
-
-  const contasPagarFiltradas = useMemo(() => {
-    return (contasPagar ?? []).filter((cp) => {
-      if (filtroOrigem === "todos") return true;
-      const origem = cp.origem ?? "erp";
-      return origem === filtroOrigem;
-    });
-  }, [contasPagar, filtroOrigem]);
 
   // Bank Account & Category States & Mutations
   const [bancoFormOpen, setBancoFormOpen] = useState(false);
@@ -1141,16 +1150,22 @@ function FinanceiroPage() {
             <div className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
               Origem:
             </div>
-            <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Todos os Lançamentos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os Lançamentos</SelectItem>
-                <SelectItem value="erp">Apenas Obras / ERP</SelectItem>
-                <SelectItem value="imobiliaria">Apenas Imobiliária</SelectItem>
-              </SelectContent>
-            </Select>
+            {scopedOrigin ? (
+              <Badge variant="outline" className="h-9 px-3">
+                {scopedOrigin === "imobiliaria" ? "Financeiro Imobiliária" : "Financeiro Civil"}
+              </Badge>
+            ) : (
+              <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Todos os Lançamentos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os Lançamentos</SelectItem>
+                  <SelectItem value="erp">Apenas Obras / ERP</SelectItem>
+                  <SelectItem value="imobiliaria">Apenas Imobiliária</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </div>
 
@@ -2048,6 +2063,7 @@ function FinanceiroPage() {
         target={receberEditTarget}
         obras={obras ?? []}
         clientes={clientes ?? []}
+        origem={receberEditTarget?.origem ?? (filtroOrigem === "imobiliaria" ? "imobiliaria" : "erp")}
         onSuccess={() => qc.invalidateQueries({ queryKey: ["contas_receber"] })}
       />
 
@@ -2059,6 +2075,7 @@ function FinanceiroPage() {
         obras={obras ?? []}
         fornecedores={fornecedores ?? []}
         pedidos={pedidos ?? []}
+        origem={pagarEditTarget?.origem ?? (filtroOrigem === "imobiliaria" ? "imobiliaria" : "erp")}
         onSuccess={() => qc.invalidateQueries({ queryKey: ["contas_pagar"] })}
       />
 
@@ -2140,6 +2157,7 @@ function ReceberFormDialog({
   target,
   obras,
   clientes,
+  origem,
   onSuccess,
 }: {
   open: boolean;
@@ -2147,6 +2165,7 @@ function ReceberFormDialog({
   target: ContaReceberRow | null;
   obras: { id: string; numero: string; nome: string; cliente_id: string }[];
   clientes: { id: string; nome: string }[];
+  origem: "erp" | "imobiliaria";
   onSuccess: () => void;
 }) {
   const [notaFile, setNotaFile] = useState<File | null>(null);
@@ -2214,6 +2233,7 @@ function ReceberFormDialog({
       }
 
       const payload = {
+        origem,
         obra_id: values.obra_id || null,
         cliente_id: values.cliente_id || null,
         descricao: values.descricao,
@@ -2555,6 +2575,7 @@ function PagarFormDialog({
   obras,
   fornecedores,
   pedidos,
+  origem,
   onSuccess,
 }: {
   open: boolean;
@@ -2563,6 +2584,7 @@ function PagarFormDialog({
   obras: { id: string; numero: string; nome: string }[];
   fornecedores: { id: string; razao_social: string }[];
   pedidos: { id: string; numero: string; valor_total: number }[];
+  origem: "erp" | "imobiliaria";
   onSuccess: () => void;
 }) {
   const [notaFile, setNotaFile] = useState<File | null>(null);
@@ -2629,6 +2651,7 @@ function PagarFormDialog({
       }
 
       const payload = {
+        origem,
         obra_id: values.obra_id || null,
         fornecedor_id: values.fornecedor_id || null,
         pedido_id: values.pedido_id || null,

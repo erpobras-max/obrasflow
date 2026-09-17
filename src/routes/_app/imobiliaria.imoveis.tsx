@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Plus, Search, Pencil, Trash2, Eye, Loader2, Building, Home, Bed, Bath, Car, Maximize, Upload, Image as ImageIcon } from "lucide-react";
-import { uploadR2, getR2Url } from "@/lib/r2";
+import { getSecureR2Url, uploadR2, validateFileSize, validateFileType } from "@/lib/r2";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -108,13 +108,13 @@ const fmtBRL = (val: number | null | undefined) => {
 };
 
 function ImoveisPage() {
-  const { perfil } = useAuth();
+  const { roles } = useAuth();
   const qc = useQueryClient();
   const podeEditar =
-    perfil?.perfil === "admin" ||
-    perfil?.perfil === "diretor" ||
-    perfil?.perfil === "financeiro_civil" ||
-    perfil?.perfil === "financeiro_imobiliaria";
+    roles.includes("admin") ||
+    roles.includes("diretor") ||
+    roles.includes("financeiro_imobiliaria") ||
+    roles.includes("imobiliaria");
 
   const [search, setSearch] = useState("");
   const [filterTipo, setFilterTipo] = useState<string>("all");
@@ -124,6 +124,7 @@ function ImoveisPage() {
   const [editTarget, setEditTarget] = useState<ImovelRow | null>(null);
   const [viewTarget, setViewTarget] = useState<ImovelRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ImovelRow | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   // Queries
   const { data: imoveis, isLoading } = useQuery({
@@ -397,11 +398,7 @@ function ImoveisPage() {
               {/* Photo Section */}
               {im.foto_url && (
                 <div className="h-40 overflow-hidden bg-muted">
-                  <img
-                    src={`${import.meta.env.VITE_R2_PUBLIC_URL}/${im.foto_url}`}
-                    alt={im.titulo}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  />
+                  <SecureR2Image objectKey={im.foto_url} alt={im.titulo} />
                 </div>
               )}
               <CardHeader className={cn("p-4 border-b", !im.foto_url && "pt-4")}>
@@ -556,31 +553,52 @@ function ImoveisPage() {
                   render={({ field }) => (
                     <FormItem className="col-span-1 md:col-span-2">
                       <FormLabel>Foto do Imóvel</FormLabel>
-                      <div className="flex items-center gap-4">
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const file = e.target.files?.[0];
-                              if (!file) return;
-                              try {
-                                const key = await uploadR2(file, "imobiliaria/imoveis");
-                                field.onChange(key);
-                                toast.success("Foto enviada com sucesso!");
-                              } catch (err: any) {
-                                toast.error("Erro ao enviar foto: " + err.message);
-                              }
-                            }}
-                          />
-                          <Button type="button" variant="outline" className="gap-2">
-                            <Upload className="size-4" />
-                            Upload Foto
-                          </Button>
-                        </label>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <input
+                          id="imovel-foto-upload"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          disabled={uploadingPhoto}
+                          onChange={async (e) => {
+                            const input = e.currentTarget;
+                            const file = input.files?.[0];
+                            if (!file) return;
+                            if (!validateFileType(file, "imagens")) {
+                              toast.error("Selecione uma imagem JPEG, PNG ou WebP.");
+                              input.value = "";
+                              return;
+                            }
+                            if (!validateFileSize(file)) {
+                              toast.error("A foto deve ter no máximo 10 MB.");
+                              input.value = "";
+                              return;
+                            }
+                            setUploadingPhoto(true);
+                            try {
+                              const key = await uploadR2(file, "imobiliaria/imoveis");
+                              field.onChange(key);
+                              toast.success("Foto enviada com sucesso!");
+                            } catch (err: any) {
+                              toast.error("Erro ao enviar foto: " + err.message);
+                            } finally {
+                              setUploadingPhoto(false);
+                              input.value = "";
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="gap-2"
+                          disabled={uploadingPhoto}
+                          onClick={() => document.getElementById("imovel-foto-upload")?.click()}
+                        >
+                          {uploadingPhoto ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                          {uploadingPhoto ? "Enviando..." : "Selecionar foto"}
+                        </Button>
                         {field.value && (
-                          <span className="text-xs text-muted-foreground">{field.value}</span>
+                          <span className="max-w-sm truncate text-xs text-muted-foreground">Foto anexada: {field.value}</span>
                         )}
                       </div>
                       <FormMessage />
@@ -1081,5 +1099,45 @@ function ImoveisPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+function SecureR2Image({ objectKey, alt }: { objectKey: string; alt: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl: string | null = null;
+
+    void getSecureR2Url(objectKey)
+      .then((nextUrl) => {
+        objectUrl = nextUrl;
+        if (active) setUrl(nextUrl);
+      })
+      .catch(() => {
+        if (active) setUrl(null);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [objectKey]);
+
+  if (!url) {
+    return (
+      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+        <ImageIcon className="size-8 opacity-40" aria-hidden="true" />
+        <span className="sr-only">Carregando foto de {alt}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={url}
+      alt={alt}
+      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+    />
   );
 }

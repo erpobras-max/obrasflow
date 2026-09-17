@@ -1,5 +1,11 @@
 
-CREATE TYPE public.app_role AS ENUM ('admin','diretor','financeiro','compras','engenharia','almoxarifado','rh','cliente');
+DO $$
+BEGIN
+  CREATE TYPE public.app_role AS ENUM ('admin','diretor','financeiro','compras','engenharia','almoxarifado','rh','cliente');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END
+$$;
 
 CREATE TABLE public.perfis_usuarios (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,

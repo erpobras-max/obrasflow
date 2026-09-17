@@ -59,7 +59,11 @@ export function useAuth(): AuthState {
 
     const applySession = async (session: Session | null) => {
       const perfil = await loadPerfil(session?.user ?? null);
-      const roles = await loadRoles(session?.user ?? null);
+      const loadedRoles = await loadRoles(session?.user ?? null);
+      const roles = Array.from(new Set([
+        ...loadedRoles,
+        ...(perfil?.perfil ? [perfil.perfil] : []),
+      ]));
 
       if (!active) return;
       setState({

@@ -76,6 +76,8 @@ export type R2Folder =
   | "financeiro/comprovantes"
   | "financeiro/notas"
   | "diario/fotos"
+  | "imobiliaria/imoveis"
+  | "imobiliaria/vistorias"
   | "outros";
 
 // ─────────────────────────────────────────────

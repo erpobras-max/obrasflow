@@ -10,7 +10,7 @@ import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
-import { inviteUser, removeUser } from "@/lib/usuarios.functions";
+import { inviteUser, removeUser, updateUserAccess } from "@/lib/usuarios.functions";
 import { ROLE_BADGE_CLASS, ROLE_LABEL, ROLE_OPTIONS } from "@/lib/role-meta";
 import type { AppRole } from "@/lib/permissions";
 import {
@@ -41,6 +41,7 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -54,13 +55,14 @@ interface PerfilRow {
   nome: string;
   email: string;
   perfil: AppRole;
+  roles: AppRole[];
   ativo: boolean;
   created_at: string;
 }
 
 function UsuariosPage() {
   const navigate = useNavigate();
-  const { loading, perfil } = useAuth();
+  const { loading, perfil, roles: currentRoles } = useAuth();
   const qc = useQueryClient();
 
   const [search, setSearch] = useState("");
@@ -85,27 +87,43 @@ function UsuariosPage() {
 
   // Guard: admin only
   useEffect(() => {
-    if (!loading && perfil && perfil.perfil !== "admin") {
+    if (!loading && perfil && !currentRoles.includes("admin")) {
       navigate({ to: "/dashboard", replace: true });
     }
-  }, [loading, perfil, navigate]);
+  }, [loading, perfil, currentRoles, navigate]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["usuarios"],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: profiles, error } = await supabase
         .from("perfis_usuarios")
         .select("id,user_id,nome,email,perfil,ativo,created_at")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (data ?? []) as PerfilRow[];
+      const { data: roleRows, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id,role");
+      if (rolesError) throw rolesError;
+      const rolesByUser = new Map<string, AppRole[]>();
+      for (const row of roleRows ?? []) {
+        const list = rolesByUser.get(row.user_id) ?? [];
+        list.push(row.role as AppRole);
+        rolesByUser.set(row.user_id, list);
+      }
+      return (profiles ?? []).map((profile) => ({
+        ...profile,
+        roles: [
+          profile.perfil as AppRole,
+          ...(rolesByUser.get(profile.user_id) ?? []).filter((role) => role !== profile.perfil),
+        ],
+      })) as PerfilRow[];
     },
-    enabled: perfil?.perfil === "admin",
+    enabled: currentRoles.includes("admin"),
   });
 
   const filtered = useMemo(() => {
     return (data ?? []).filter((u) => {
-      if (filterRole !== "all" && u.perfil !== filterRole) return false;
+      if (filterRole !== "all" && !u.roles.includes(filterRole as AppRole)) return false;
       if (filterStatus === "active" && !u.ativo) return false;
       if (filterStatus === "inactive" && u.ativo) return false;
       if (search) {
@@ -165,7 +183,7 @@ function UsuariosPage() {
             <TableRow>
               <TableHead>Nome</TableHead>
               <TableHead>Email</TableHead>
-              <TableHead>Perfil</TableHead>
+              <TableHead>Cargos</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Cadastro</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -192,9 +210,13 @@ function UsuariosPage() {
                   <TableCell className="font-medium">{u.nome}</TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn("border", ROLE_BADGE_CLASS[u.perfil])}>
-                      {ROLE_LABEL[u.perfil]}
-                    </Badge>
+                    <div className="flex max-w-sm flex-wrap gap-1.5">
+                      {u.roles.map((role) => (
+                        <Badge key={role} variant="outline" className={cn("border", ROLE_BADGE_CLASS[role])}>
+                          {ROLE_LABEL[role]}
+                        </Badge>
+                      ))}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant={u.ativo ? "default" : "secondary"} className={u.ativo ? "bg-green-600 hover:bg-green-600" : ""}>
@@ -271,14 +293,11 @@ function UsuariosPage() {
 const inviteFormSchema = z.object({
   nome: z.string().trim().min(1, "Nome obrigatório").max(120),
   email: z.string().trim().max(255).optional().nullable().or(z.literal("")),
-  perfil: z.enum([
-    "admin","diretor","financeiro","compras",
-    "engenharia","almoxarifado","rh","cliente","funcionario"
-  ]),
+  roles: z.array(z.enum(ROLE_OPTIONS as [AppRole, ...AppRole[]])).min(1, "Selecione ao menos um cargo"),
   funcionarioId: z.string().optional().nullable(),
 }).refine((data) => {
   // Se for perfil diferente de funcionário, email é obrigatório e precisa ser válido
-  if (data.perfil !== "funcionario") {
+  if (!data.roles.includes("funcionario")) {
     if (!data.email) return false;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(data.email);
@@ -300,10 +319,10 @@ function InviteDialog({
 }: { open: boolean; onOpenChange: (v: boolean) => void; onSuccess: () => void }) {
   const form = useForm<InviteFormValues>({
     resolver: zodResolver(inviteFormSchema),
-    defaultValues: { nome: "", email: "", perfil: "cliente", funcionarioId: "" },
+    defaultValues: { nome: "", email: "", roles: ["cliente"], funcionarioId: "" },
   });
 
-  const selectedPerfil = form.watch("perfil");
+  const selectedRoles = form.watch("roles");
 
   // Busca lista de funcionários ativos disponíveis para vincular
   const { data: funcionarios } = useQuery({
@@ -361,31 +380,18 @@ function InviteDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
             
-            {/* Perfil por primeiro */}
-            <FormField control={form.control} name="perfil" render={({ field }) => (
+            <FormField control={form.control} name="roles" render={({ field }) => (
               <FormItem>
-                <FormLabel>Perfil</FormLabel>
-                <Select value={field.value} onValueChange={(val) => {
-                  field.onChange(val);
-                  if (val !== "funcionario") {
-                    form.setValue("funcionarioId", "");
-                  }
-                }}>
-                  <FormControl>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {ROLE_OPTIONS.map((r) => (
-                      <SelectItem key={r} value={r}>{ROLE_LABEL[r]}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormLabel>Cargos e áreas de acesso</FormLabel>
+                <FormControl>
+                  <RolePicker value={field.value} onChange={field.onChange} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
 
             {/* Funcionário por segundo (com Autofill) */}
-            {selectedPerfil === "funcionario" && (
+            {selectedRoles.includes("funcionario") && (
               <FormField control={form.control} name="funcionarioId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Vincular ao Funcionário (RH)</FormLabel>
@@ -439,7 +445,9 @@ function InviteDialog({
             <FormField control={form.control} name="email" render={({ field }) => (
               <FormItem>
                 <FormLabel>Email</FormLabel>
-                <FormControl><Input type="email" placeholder="joao@empresa.com" {...field} /></FormControl>
+                <FormControl>
+                  <Input type="email" placeholder="joao@empresa.com" {...field} value={field.value ?? ""} />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )} />
@@ -469,7 +477,7 @@ function EditDialog({
   onSuccess: () => void;
 }) {
   const [nome, setNome] = useState("");
-  const [perfilVal, setPerfilVal] = useState<AppRole>("cliente");
+  const [selectedRoles, setSelectedRoles] = useState<AppRole[]>(["cliente"]);
   const [ativo, setAtivo] = useState(true);
   const [funcionarioId, setFuncionarioId] = useState<string>("");
 
@@ -505,7 +513,7 @@ function EditDialog({
   useEffect(() => {
     if (target) {
       setNome(target.nome);
-      setPerfilVal(target.perfil);
+      setSelectedRoles(target.roles.length ? target.roles : [target.perfil]);
       setAtivo(target.ativo);
       
       // Encontrar se já existe um funcionário vinculado a este user_id
@@ -519,37 +527,22 @@ function EditDialog({
   }, [target, funcionarios]);
 
   const isSelf = !!target && target.user_id === currentUserId;
+  const updateAccess = useServerFn(updateUserAccess);
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (!target) return;
       
-      // 1. Atualizar perfil
-      const payload: Partial<PerfilRow> = { nome, ativo };
-      if (!isSelf) payload.perfil = perfilVal;
-      const { error } = await supabase
-        .from("perfis_usuarios")
-        .update(payload)
-        .eq("id", target.id);
-      if (error) throw error;
-
-      // 2. Se mudou o vínculo do funcionário (apenas se perfil for 'funcionario')
-      if (perfilVal === "funcionario" && target.user_id) {
-        // Remover vínculo antigo deste user_id
-        await supabase
-          .from("funcionarios")
-          .update({ user_id: null })
-          .eq("user_id", target.user_id);
-
-        // Adicionar novo vínculo se selecionado
-        if (funcionarioId && funcionarioId !== "none") {
-          const { error: linkError } = await supabase
-            .from("funcionarios")
-            .update({ user_id: target.user_id })
-            .eq("id", funcionarioId);
-          if (linkError) throw linkError;
-        }
-      }
+      await updateAccess({
+        data: {
+          userId: target.user_id,
+          profileId: target.id,
+          nome,
+          ativo,
+          roles: selectedRoles,
+          funcionarioId: funcionarioId && funcionarioId !== "none" ? funcionarioId : null,
+        },
+      });
     },
     onSuccess: () => {
       toast.success("Usuário atualizado!");
@@ -572,20 +565,8 @@ function EditDialog({
             <Input value={nome} onChange={(e) => setNome(e.target.value)} />
           </div>
           <div className="space-y-2">
-            <Label>Perfil</Label>
-            <Select value={perfilVal} onValueChange={(v) => {
-              setPerfilVal(v as AppRole);
-              if (v !== "funcionario") {
-                setFuncionarioId("");
-              }
-            }} disabled={isSelf}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {ROLE_OPTIONS.map((r) => (
-                  <SelectItem key={r} value={r}>{ROLE_LABEL[r]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label>Cargos e áreas de acesso</Label>
+            <RolePicker value={selectedRoles} onChange={setSelectedRoles} disabled={isSelf} />
             {isSelf && (
               <p className="text-xs text-muted-foreground">
                 Você não pode alterar seu próprio perfil de administrador.
@@ -593,7 +574,7 @@ function EditDialog({
             )}
           </div>
 
-          {perfilVal === "funcionario" && (
+          {selectedRoles.includes("funcionario") && (
             <div className="space-y-2">
               <Label>Vincular ao Funcionário (RH)</Label>
               <Select value={funcionarioId} onValueChange={setFuncionarioId}>
@@ -630,5 +611,48 @@ function EditDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RolePicker({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: AppRole[];
+  onChange: (roles: AppRole[]) => void;
+  disabled?: boolean;
+}) {
+  const toggleRole = (role: AppRole, checked: boolean) => {
+    if (checked) {
+      onChange(Array.from(new Set([...value, role])));
+      return;
+    }
+    if (value.length > 1) onChange(value.filter((item) => item !== role));
+  };
+
+  return (
+    <div className="grid grid-cols-1 gap-2 rounded-md border p-3 sm:grid-cols-2">
+      {ROLE_OPTIONS.map((role) => {
+        const checked = value.includes(role);
+        return (
+          <label
+            key={role}
+            className={cn(
+              "flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm",
+              checked && "border-primary bg-primary/5",
+              disabled && "cursor-not-allowed opacity-60",
+            )}
+          >
+            <Checkbox
+              checked={checked}
+              disabled={disabled || (checked && value.length === 1)}
+              onCheckedChange={(next) => toggleRole(role, next === true)}
+            />
+            <span>{ROLE_LABEL[role]}</span>
+          </label>
+        );
+      })}
+    </div>
   );
 }

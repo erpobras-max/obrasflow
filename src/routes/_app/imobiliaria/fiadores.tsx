@@ -66,13 +66,13 @@ const EMPTY_FORM = {
 };
 
 function ImobFiadoresPage() {
-  const { perfil } = useAuth();
+  const { roles } = useAuth();
   const qc = useQueryClient();
   const podeEditar =
-    perfil?.perfil === "admin" ||
-    perfil?.perfil === "diretor" ||
-    perfil?.perfil === "financeiro_civil" ||
-    perfil?.perfil === "financeiro_imobiliaria";
+    roles.includes("admin") ||
+    roles.includes("diretor") ||
+    roles.includes("imobiliaria") ||
+    roles.includes("financeiro_imobiliaria");
 
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);

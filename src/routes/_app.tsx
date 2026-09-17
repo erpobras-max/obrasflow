@@ -16,12 +16,12 @@ function AppLayout() {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth", replace: true });
-    else if (!loading && perfil?.perfil === "cliente") {
+    else if (!loading && roles.length > 0 && roles.every((role) => role === "cliente")) {
       navigate({ to: "/portal", replace: true });
-    } else if (!loading && perfil?.perfil === "funcionario") {
+    } else if (!loading && roles.length > 0 && roles.every((role) => role === "funcionario")) {
       navigate({ to: "/ponto" as any, replace: true });
     }
-  }, [loading, user, perfil, navigate]);
+  }, [loading, user, roles, navigate]);
 
   if (loading || !user) {
     return (

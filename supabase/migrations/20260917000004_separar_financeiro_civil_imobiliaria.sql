@@ -25,6 +25,9 @@ SELECT user_id, 'financeiro_civil' FROM public.perfis_usuarios
 WHERE perfil = 'financeiro_civil'
 ON CONFLICT (user_id, role) DO NOTHING;
 
+-- O cargo legado não deve continuar liberando os dois financeiros.
+DELETE FROM public.user_roles WHERE role = 'financeiro';
+
 -- 5. Inserir roles para usuários imobiliaria
 INSERT INTO public.user_roles (user_id, role)
 SELECT user_id, 'imobiliaria' FROM public.perfis_usuarios

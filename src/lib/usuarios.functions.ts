@@ -5,12 +5,21 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware.cus
 const inviteSchema = z.object({
   nome: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(255).optional().nullable(),
-  perfil: z.enum([
-    "admin", "diretor", "financeiro", "compras",
-    "engenharia", "almoxarifado", "rh", "cliente", "funcionario",
-  ]),
+  roles: z.array(z.enum([
+    "admin", "diretor", "financeiro_civil", "financeiro_imobiliaria", "compras",
+    "engenharia", "almoxarifado", "rh", "cliente", "funcionario", "imobiliaria",
+  ])).min(1).max(11),
   funcionarioId: z.string().uuid().optional().nullable(),
 });
+
+const ROLE_PRIORITY = [
+  "admin", "diretor", "financeiro_civil", "financeiro_imobiliaria", "engenharia",
+  "imobiliaria", "compras", "almoxarifado", "rh", "funcionario", "cliente",
+] as const;
+
+function getPrimaryRole(roles: Array<(typeof ROLE_PRIORITY)[number]>) {
+  return ROLE_PRIORITY.find((role) => roles.includes(role)) ?? roles[0];
+}
 
 async function requireAdmin(context: {
   supabase: { from: (table: string) => any };
@@ -22,7 +31,14 @@ async function requireAdmin(context: {
     .eq("user_id", context.userId)
     .maybeSingle();
 
-  if (profile?.perfil !== "admin" || profile.ativo === false) {
+  const { data: adminRole } = await context.supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", context.userId)
+    .eq("role", "admin")
+    .maybeSingle();
+
+  if ((profile?.perfil !== "admin" && !adminRole) || profile?.ativo === false) {
     throw new Error("Ação não autorizada.");
   }
 }
@@ -34,8 +50,9 @@ export const inviteUser = createServerFn({ method: "POST" })
     await requireAdmin(context);
 
     let emailToInvite = data.email?.toLowerCase();
+    const primaryRole = getPrimaryRole(data.roles);
 
-    if (data.perfil === "funcionario") {
+    if (data.roles.includes("funcionario")) {
       if (!data.funcionarioId) {
         throw new Error("É necessário vincular um funcionário do RH.");
       }
@@ -63,7 +80,7 @@ export const inviteUser = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       emailToInvite,
-      { data: { nome: data.nome, perfil: data.perfil } },
+      { data: { nome: data.nome, perfil: primaryRole } },
     );
 
     if (inviteError || !inviteData.user) {
@@ -77,7 +94,7 @@ export const inviteUser = createServerFn({ method: "POST" })
         user_id: userId,
         nome: data.nome,
         email: emailToInvite,
-        perfil: data.perfil,
+        perfil: primaryRole,
         ativo: true,
       }, { onConflict: "user_id" });
 
@@ -85,7 +102,18 @@ export const inviteUser = createServerFn({ method: "POST" })
       throw new Error("Não foi possível configurar as permissões do usuário.");
     }
 
-    if (data.perfil === "funcionario" && data.funcionarioId) {
+    const { error: rolesError } = await supabaseAdmin
+      .from("user_roles")
+      .upsert(
+        data.roles.map((role) => ({ user_id: userId, role })),
+        { onConflict: "user_id,role" },
+      );
+
+    if (rolesError) {
+      throw new Error("Convite criado, mas não foi possível atribuir os cargos.");
+    }
+
+    if (data.roles.includes("funcionario") && data.funcionarioId) {
       const { error: linkError } = await supabaseAdmin
         .from("funcionarios")
         .update({ user_id: userId })
@@ -94,6 +122,64 @@ export const inviteUser = createServerFn({ method: "POST" })
       if (linkError) {
         throw new Error("Convite criado, mas não foi possível vincular o funcionário.");
       }
+    }
+
+    return { ok: true };
+  });
+
+const updateAccessSchema = z.object({
+  userId: z.string().uuid(),
+  profileId: z.string().uuid(),
+  nome: z.string().trim().min(1).max(120),
+  ativo: z.boolean(),
+  roles: inviteSchema.shape.roles,
+  funcionarioId: z.string().uuid().optional().nullable(),
+});
+
+export const updateUserAccess = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => updateAccessSchema.parse(input))
+  .handler(async ({ data, context }) => {
+    await requireAdmin(context);
+    const primaryRole = getPrimaryRole(data.roles);
+
+    if (data.userId === context.userId) {
+      if (!data.ativo || !data.roles.includes("admin")) {
+        throw new Error("Você não pode remover seu próprio acesso administrativo.");
+      }
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
+    const roleRows = data.roles.map((role) => ({ user_id: data.userId, role }));
+    const { error: insertRolesError } = await supabaseAdmin
+      .from("user_roles")
+      .upsert(roleRows, { onConflict: "user_id,role" });
+    if (insertRolesError) throw new Error("Não foi possível atribuir os cargos.");
+
+    const { error: removeRolesError } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId)
+      .not("role", "in", `(${data.roles.join(",")})`);
+    if (removeRolesError) throw new Error("Não foi possível remover os cargos antigos.");
+
+    const { error: profileError } = await supabaseAdmin
+      .from("perfis_usuarios")
+      .update({ nome: data.nome, ativo: data.ativo, perfil: primaryRole })
+      .eq("id", data.profileId);
+    if (profileError) throw new Error("Não foi possível atualizar o usuário.");
+
+    await supabaseAdmin
+      .from("funcionarios")
+      .update({ user_id: null })
+      .eq("user_id", data.userId);
+
+    if (data.roles.includes("funcionario") && data.funcionarioId) {
+      const { error: linkError } = await supabaseAdmin
+        .from("funcionarios")
+        .update({ user_id: data.userId })
+        .eq("id", data.funcionarioId);
+      if (linkError) throw new Error("Cargos salvos, mas o funcionário não pôde ser vinculado.");
     }
 
     return { ok: true };

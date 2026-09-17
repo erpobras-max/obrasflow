@@ -5,7 +5,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware.cus
 const folders = [
   "rh/atestados", "rh/documentos", "documentos/obras", "documentos/contratos",
   "fiscal/xmls", "fiscal/pdfs", "financeiro/comprovantes", "financeiro/notas",
-  "diario/fotos", "outros",
+  "diario/fotos", "imobiliaria/imoveis", "imobiliaria/vistorias", "outros",
 ] as const;
 const allowedMimeTypes = [
   "application/pdf", "image/jpeg", "image/png", "image/webp",
@@ -15,7 +15,10 @@ const allowedMimeTypes = [
 ] as const;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_BASE64_LENGTH = Math.ceil(MAX_FILE_BYTES * 4 / 3) + 8;
-const writableRoles = ["admin", "diretor", "financeiro", "compras", "engenharia", "almoxarifado", "rh"];
+const writableRoles = [
+  "admin", "diretor", "financeiro", "financeiro_civil", "financeiro_imobiliaria",
+  "imobiliaria", "compras", "engenharia", "almoxarifado", "rh",
+];
 
 async function requireActiveProfile(context: any) {
   const { data: profile } = await context.supabase
@@ -36,7 +39,16 @@ async function requireR2WriteAccess(context: any) {
     .eq("user_id", context.userId)
     .maybeSingle();
 
-  if (!profile?.ativo || !writableRoles.includes(profile.perfil)) {
+  const { data: roleRows } = await context.supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", context.userId);
+  const roles = new Set<string>([
+    profile?.perfil,
+    ...(roleRows ?? []).map((row: { role: string }) => row.role),
+  ].filter(Boolean));
+
+  if (!profile?.ativo || !writableRoles.some((role) => roles.has(role))) {
     throw new Error("Você não tem permissão para alterar arquivos.");
   }
 }
@@ -77,7 +89,7 @@ export const uploadR2ServerFn = createServerFn({ method: "POST" })
   });
 
 const keySchema = z.string().regex(
-  /^(rh\/(atestados|documentos)|documentos\/(obras|contratos)|fiscal\/(xmls|pdfs)|financeiro\/(comprovantes|notas)|diario\/fotos|outros)\/[a-f0-9-]+\.[a-z0-9]+$/,
+  /^(rh\/(atestados|documentos)|documentos\/(obras|contratos)|fiscal\/(xmls|pdfs)|financeiro\/(comprovantes|notas)|diario\/fotos|imobiliaria\/(imoveis|vistorias)|outros)\/[a-f0-9-]+\.[a-z0-9]+$/,
   "Caminho de arquivo inválido.",
 );
 
