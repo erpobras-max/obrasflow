@@ -1,12 +1,9 @@
-name: Deploy to Cloudflare Pages
+name: Deploy to Cloudflare Workers
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
-env:
-  VITE_SUPABASE_URL: https://supejqjocgnwhigppyeb.supabase.co
 
 jobs:
   deploy:
@@ -26,22 +23,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Build
         run: npm run build
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
 
-      - name: Deploy to Cloudflare Pages
-        uses: cloudflare/pages-action@v1
+      - name: Validate public Supabase configuration
+        shell: bash
+        run: |
+          grep -R -q "supejqjocgnwhigppyeb.supabase.co" .output/public/assets
+          grep -R -q "sb_publishable_" .output/public/assets
+
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: obrasflow-erp
-          directory: .output/public
-          branch: main
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+          command: deploy --config .output/server/wrangler.json
