@@ -10,7 +10,9 @@ import {
   EyeOff,
   HardHat,
   Loader2,
+  MailCheck,
   ShieldCheck,
+  Smartphone,
   UserRound,
   UsersRound,
 } from "lucide-react";
@@ -21,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client.custom";
-import { iniciarAcessoPorDocumento } from "@/lib/acesso-documento.functions";
+import { confirmarAcessoPorDocumento, iniciarAcessoPorDocumento } from "@/lib/acesso-documento.functions";
 import { onlyDigits, validarCPF, validarCpfCnpj } from "@/lib/validacao-documento";
 
 const schema = z.object({
@@ -80,7 +82,13 @@ function AuthPage() {
   const [area, setArea] = useState<AccessArea>("general");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [accessSentTo, setAccessSentTo] = useState<string | null>(null);
+  const [pendingAccess, setPendingAccess] = useState<{
+    method: "email" | "sms";
+    maskedTarget: string;
+    documento: string;
+    area: Exclude<AccessArea, "general">;
+  } | null>(null);
+  const [otpCode, setOtpCode] = useState("");
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -140,9 +148,9 @@ function AuthPage() {
         data: { area, documento },
       });
 
-      setAccessSentTo(acesso.maskedEmail);
-      form.reset({ identificador: "", password: "" });
-      toast.success("Link de acesso enviado. Confira seu e-mail.");
+      setPendingAccess({ ...acesso, documento, area });
+      setOtpCode("");
+      toast.success(acesso.method === "sms" ? "Código enviado por SMS." : "Link de acesso enviado por e-mail.");
     } catch {
       if (area === "general") await supabase.auth.signOut();
       toast.error(
@@ -153,6 +161,37 @@ function AuthPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const confirmSmsCode = async () => {
+    if (!pendingAccess || pendingAccess.method !== "sms" || otpCode.length !== 6) return;
+    setSubmitting(true);
+    try {
+      const tokens = await confirmarAcessoPorDocumento({
+        data: {
+          area: pendingAccess.area,
+          documento: pendingAccess.documento,
+          codigo: otpCode,
+        },
+      });
+      const { data, error } = await supabase.auth.setSession({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+      });
+      if (error || !data.user) throw new Error("Código inválido.");
+      toast.success("Bem-vindo!");
+      navigate({ to: pendingAccess.area === "client" ? "/portal" : "/ponto", replace: true });
+    } catch {
+      toast.error("Código inválido ou expirado. Solicite um novo código e tente novamente.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const resetDocumentAccess = () => {
+    setPendingAccess(null);
+    setOtpCode("");
+    form.reset({ identificador: "", password: "" });
   };
 
   const currentCopy = AREA_COPY[area];
@@ -229,7 +268,8 @@ function AuthPage() {
                 aria-selected={area === value}
                 onClick={() => {
                   setArea(value);
-                  setAccessSentTo(null);
+                  setPendingAccess(null);
+                  setOtpCode("");
                   form.reset({ identificador: "", password: "" });
                 }}
                     className={`flex min-h-12 items-center justify-center gap-1.5 rounded px-2 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 ${
@@ -250,6 +290,43 @@ function AuthPage() {
               <p className="mt-1 text-sm text-slate-500">{currentCopy.hint}</p>
           </div>
 
+            {pendingAccess?.method === "sms" ? (
+              <div className="space-y-5">
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-950" role="status">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <Smartphone className="size-4" /> Código enviado por SMS
+                  </div>
+                  <p className="mt-1 text-xs">Enviamos um código de 6 dígitos para {pendingAccess.maskedTarget}.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="otp-code">Código de acesso</Label>
+                  <Input
+                    id="otp-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    value={otpCode}
+                    onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="h-14 border-slate-300 text-center text-2xl font-semibold tracking-[0.45em]"
+                    disabled={submitting}
+                    autoFocus
+                  />
+                </div>
+                <Button
+                  type="button"
+                  className="h-12 w-full bg-slate-950 text-white hover:bg-slate-800"
+                  disabled={submitting || otpCode.length !== 6}
+                  onClick={confirmSmsCode}
+                >
+                  {submitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+                  Confirmar código
+                </Button>
+                <button type="button" onClick={resetDocumentAccess} className="w-full text-sm font-medium text-slate-600 hover:text-slate-950 hover:underline">
+                  Usar outro documento
+                </button>
+              </div>
+            ) : (
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="identificador">{isGeneral ? "E-mail" : documentLabel}</Label>
@@ -307,6 +384,7 @@ function AuthPage() {
                 {isGeneral ? "Entrar no sistema" : `Acessar área do ${area === "client" ? "cliente" : "funcionário"}`}
             </Button>
           </form>
+            )}
 
           {isGeneral && (
               <div className="mt-5 text-center">
@@ -317,17 +395,20 @@ function AuthPage() {
           )}
 
             {!isGeneral && (
-              accessSentTo ? (
+              pendingAccess?.method === "email" ? (
                 <div className="mt-6 flex items-start gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-xs leading-5 text-emerald-950" role="status">
-                  <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-                  Enviamos o link de acesso para {accessSentTo}. Abra o e-mail neste dispositivo para continuar.
+                  <MailCheck className="mt-0.5 size-4 shrink-0" />
+                  <div>
+                    Enviamos o link de acesso para {pendingAccess.maskedTarget}. Abra o e-mail neste dispositivo para continuar.
+                    <button type="button" onClick={resetDocumentAccess} className="mt-2 block font-semibold underline underline-offset-2">Usar outro documento</button>
+                  </div>
                 </div>
-              ) : (
+              ) : !pendingAccess ? (
                 <div className="mt-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
                   <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-                  O documento localiza uma conta autorizada e o link de acesso é enviado ao e-mail cadastrado.
+                  O documento localiza uma conta autorizada. Enviaremos um link ao e-mail cadastrado ou um código ao celular quando não houver e-mail.
                 </div>
-              )
+              ) : null
             )}
           </div>
         </section>

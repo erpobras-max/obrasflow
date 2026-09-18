@@ -359,8 +359,10 @@ function InviteDialog({
   const invite = useServerFn(inviteUser);
   const mutation = useMutation({
     mutationFn: (values: InviteFormValues) => invite({ data: values }),
-    onSuccess: () => {
-      toast.success("Convite enviado com sucesso!");
+    onSuccess: (result) => {
+      toast.success(result.delivery === "sms"
+        ? "Acesso criado. O funcionário já pode entrar pelo CPF e receber o código no celular."
+        : "Convite enviado com sucesso!");
       form.reset();
       onOpenChange(false);
       onSuccess();
@@ -374,7 +376,7 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Convidar usuário</DialogTitle>
           <DialogDescription>
-            Um email com link de convite será enviado para o usuário.
+            O convite será enviado por e-mail. Para funcionário sem e-mail, o acesso será criado com o celular cadastrado no RH.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -444,7 +446,7 @@ function InviteDialog({
             {/* Email */}
             <FormField control={form.control} name="email" render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>{selectedRoles.includes("funcionario") ? "Email (opcional para funcionário)" : "Email"}</FormLabel>
                 <FormControl>
                   <Input type="email" placeholder="joao@empresa.com" {...field} value={field.value ?? ""} />
                 </FormControl>
@@ -457,7 +459,7 @@ function InviteDialog({
                 Cancelar
               </Button>
               <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "Enviando..." : "Enviar convite"}
+                {mutation.isPending ? "Criando acesso..." : "Criar acesso"}
               </Button>
             </DialogFooter>
           </form>

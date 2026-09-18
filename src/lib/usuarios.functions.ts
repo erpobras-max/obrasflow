@@ -21,6 +21,13 @@ function getPrimaryRole(roles: Array<(typeof ROLE_PRIORITY)[number]>) {
   return ROLE_PRIORITY.find((role) => roles.includes(role)) ?? roles[0];
 }
 
+function normalizeBrazilianPhone(value?: string | null) {
+  const digits = (value ?? "").replace(/\D/g, "");
+  if (digits.length === 10 || digits.length === 11) return `+55${digits}`;
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) return `+${digits}`;
+  return null;
+}
+
 async function requireAdmin(context: {
   supabase: { from: (table: string) => any };
   userId: string;
@@ -49,7 +56,8 @@ export const inviteUser = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     await requireAdmin(context);
 
-    let emailToInvite = data.email?.toLowerCase();
+    let emailToInvite = data.email?.toLowerCase() || null;
+    let phoneToInvite: string | null = null;
     const primaryRole = getPrimaryRole(data.roles);
 
     if (data.roles.includes("funcionario")) {
@@ -59,7 +67,7 @@ export const inviteUser = createServerFn({ method: "POST" })
 
       const { data: employee, error: employeeError } = await context.supabase
         .from("funcionarios")
-        .select("email")
+        .select("email,celular,telefone")
         .eq("id", data.funcionarioId)
         .maybeSingle();
 
@@ -67,33 +75,41 @@ export const inviteUser = createServerFn({ method: "POST" })
         throw new Error("Funcionário não localizado.");
       }
 
-      emailToInvite = emailToInvite || employee.email?.toLowerCase();
-      if (!emailToInvite) {
-        throw new Error("Cadastre um e-mail válido para o funcionário antes de convidá-lo.");
+      emailToInvite = emailToInvite || employee.email?.toLowerCase() || null;
+      phoneToInvite = normalizeBrazilianPhone(employee.celular || employee.telefone);
+      if (!emailToInvite && !phoneToInvite) {
+        throw new Error("Cadastre um e-mail ou celular válido para o funcionário antes de criar o acesso.");
       }
     }
 
-    if (!emailToInvite) {
+    if (!emailToInvite && !phoneToInvite) {
       throw new Error("E-mail é obrigatório para enviar um convite.");
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
-    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      emailToInvite,
-      { data: { nome: data.nome, perfil: primaryRole } },
-    );
+    const authResult = emailToInvite
+      ? await supabaseAdmin.auth.admin.inviteUserByEmail(
+          emailToInvite,
+          { data: { nome: data.nome, perfil: primaryRole } },
+        )
+      : await supabaseAdmin.auth.admin.createUser({
+          phone: phoneToInvite!,
+          phone_confirm: true,
+          user_metadata: { nome: data.nome, perfil: primaryRole },
+        });
 
-    if (inviteError || !inviteData.user) {
-      throw new Error("Não foi possível enviar o convite.");
+    if (authResult.error || !authResult.data.user) {
+      throw new Error(emailToInvite ? "Não foi possível enviar o convite." : "Não foi possível criar o acesso pelo celular.");
     }
 
-    const userId = inviteData.user.id;
+    const userId = authResult.data.user.id;
+    const profileEmail = emailToInvite || `${phoneToInvite!.replace(/\D/g, "")}@sms.obrasflow.local`;
     const { error: profileError } = await supabaseAdmin
       .from("perfis_usuarios")
       .upsert({
         user_id: userId,
         nome: data.nome,
-        email: emailToInvite,
+        email: profileEmail,
         perfil: primaryRole,
         ativo: true,
       }, { onConflict: "user_id" });
@@ -124,7 +140,7 @@ export const inviteUser = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true };
+    return { ok: true, delivery: emailToInvite ? "email" as const : "sms" as const };
   });
 
 const updateAccessSchema = z.object({
