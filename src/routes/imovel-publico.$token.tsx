@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Bath, Bed, Building2, Car, Home, MapPin, Maximize2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client.custom";
-import { getR2Url } from "@/lib/r2";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -59,7 +59,7 @@ function ImovelPublicoPage() {
 
         {fotos.length > 0 && <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {fotos.map((foto, index) => <div key={foto.object_key} className={index === 0 ? "overflow-hidden rounded-xl bg-stone-200 sm:col-span-2 lg:row-span-2" : "overflow-hidden rounded-xl bg-stone-200"}>
-            <img src={getR2Url(foto.object_key)} alt={`Foto ${index + 1} de ${imovel.titulo}`} className="aspect-[4/3] h-full w-full object-cover" />
+            <PublicPropertyImage token={token} objectKey={foto.object_key} alt={`Foto ${index + 1} de ${imovel.titulo}`} />
           </div>)}
         </section>}
 
@@ -84,6 +84,23 @@ function ImovelPublicoPage() {
       </div>
     </main>
   );
+}
+
+function PublicPropertyImage({ token, objectKey, alt }: { token: string; objectKey: string; alt: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true; let objectUrl: string | null = null;
+    void import("@/lib/r2.functions").then(({ readPublicPropertyImageServerFn }) =>
+      readPublicPropertyImageServerFn({ data: { token, key: objectKey } })
+    ).then((result) => {
+      const binary = atob(result.bodyBase64);
+      const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+      objectUrl = URL.createObjectURL(new Blob([bytes], { type: result.contentType }));
+      if (active) setUrl(objectUrl);
+    }).catch(() => active && setUrl(null));
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [token, objectKey]);
+  return url ? <img src={url} alt={alt} className="aspect-[4/3] h-full w-full object-cover" /> : <div className="aspect-[4/3] h-full w-full animate-pulse bg-stone-200" aria-label={`Carregando ${alt}`} />;
 }
 
 function Info({ icon: Icon, label, value }: { icon: typeof Bed; label: string; value: string | number }) {
