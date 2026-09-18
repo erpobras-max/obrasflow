@@ -9,6 +9,7 @@ interface Perfil {
   nome: string;
   email: string;
   perfil: AppRole;
+  ativo: boolean;
   avatar_url: string | null;
 }
 
@@ -37,7 +38,7 @@ export function useAuth(): AuthState {
 
       const { data, error } = await supabase
         .from("perfis_usuarios")
-        .select("id, user_id, nome, email, perfil, avatar_url")
+        .select("id, user_id, nome, email, perfil, avatar_url, ativo")
         .eq("user_id", user.id)
         .maybeSingle();
 

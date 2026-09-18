@@ -17,17 +17,18 @@ export const Route = createFileRoute("/portal")({
 function PortalLayout() {
   const navigate = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
-  const { loading, user, perfil } = useAuth();
+  const { loading, user, perfil, roles } = useAuth();
   const [selectedObraId, setSelectedObraId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
       navigate({ to: "/auth", replace: true });
-    } else if (!loading && user && perfil?.perfil !== "cliente") {
-      // Usuários não-clientes (admin, diretor, etc.) e perfis nulos não pertencem ao portal
+    } else if (!loading && perfil?.ativo === false) {
+      void supabase.auth.signOut().then(() => navigate({ to: "/auth", replace: true }));
+    } else if (!loading && user && !roles.includes("cliente")) {
       navigate({ to: "/dashboard", replace: true });
     }
-  }, [loading, user, perfil, navigate]);
+  }, [loading, user, perfil?.ativo, roles, navigate]);
 
   // Fetch client obras
   const { data: obras, isLoading: loadingObras } = useQuery({
