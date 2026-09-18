@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, Eye, Loader2, Building, Home, Bed, Bath, Car, Maximize, Upload, Image as ImageIcon } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Eye, Loader2, Building, Home, Bed, Bath, Car, Maximize, Upload, Image as ImageIcon, Share2, Link2Off } from "lucide-react";
 import { deleteR2, getSecureR2Url, uploadR2, validateFileSize, validateFileType } from "@/lib/r2";
 
 import { supabase } from "@/integrations/supabase/client.custom";
@@ -72,6 +72,7 @@ interface ImovelRow {
   proprietario_id: string;
   foto_url: string | null;
   imovel_fotos?: ImovelFoto[];
+  imovel_links_publicos?: Array<{ id: string; token: string; revogado_em: string | null }>;
   imobiliaria_clientes: {
     nome: string;
   } | null;
@@ -158,6 +159,7 @@ function ImoveisPage() {
           valor_locacao, valor_venda, cidade, uf, quartos, banheiros, vagas, area_privativa,
           proprietario_id, foto_url,
           imovel_fotos ( id, object_key, ordem ),
+          imovel_links_publicos ( id, token, revogado_em ),
           imobiliaria_clientes ( nome )
         `)
         .is("deleted_at", null)
@@ -265,7 +267,7 @@ function ImoveisPage() {
     try {
       const { data, error } = await supabase
         .from("imoveis")
-        .select("*, imobiliaria_clientes ( nome ), imovel_fotos ( id, object_key, ordem )")
+        .select("*, imobiliaria_clientes ( nome ), imovel_fotos ( id, object_key, ordem ), imovel_links_publicos ( id, token, revogado_em )")
         .eq("id", im.id)
         .single();
       if (error) throw error;
@@ -351,6 +353,40 @@ function ImoveisPage() {
 
   const onSubmit = (values: ImovelFormValues) => {
     saveMutation.mutate(values);
+  };
+
+  const shareProperty = async (imovel: ImovelRow) => {
+    try {
+      let link = imovel.imovel_links_publicos?.find((item) => !item.revogado_em);
+      if (!link) {
+        const { data, error } = await supabase
+          .from("imovel_links_publicos" as any)
+          .insert({ imovel_id: imovel.id })
+          .select("id,token,revogado_em")
+          .single();
+        if (error) throw error;
+        link = data as any;
+      }
+      const url = `${window.location.origin}/imovel-publico/${link!.token}`;
+      await navigator.clipboard.writeText(url);
+      toast.success("Link público copiado.");
+      qc.invalidateQueries({ queryKey: ["imoveis"] });
+    } catch (error: any) {
+      toast.error("Erro ao gerar link público: " + error.message);
+    }
+  };
+
+  const revokePropertyLink = async (imovel: ImovelRow) => {
+    const link = imovel.imovel_links_publicos?.find((item) => !item.revogado_em);
+    if (!link) return;
+    const { error } = await supabase
+      .from("imovel_links_publicos" as any)
+      .update({ revogado_em: new Date().toISOString() })
+      .eq("id", link.id);
+    if (error) return toast.error("Erro ao revogar link: " + error.message);
+    toast.success("Link público revogado.");
+    setViewTarget((current) => current ? { ...current, imovel_links_publicos: [] } : current);
+    qc.invalidateQueries({ queryKey: ["imoveis"] });
   };
 
   const closeForm = () => {
@@ -589,6 +625,9 @@ function ImoveisPage() {
               </CardContent>
 
               <CardFooter className="bg-muted/10 p-3 border-t flex justify-end gap-1">
+                <Button variant="ghost" size="icon" onClick={() => void shareProperty(im)} title="Copiar link público">
+                  <Share2 className="size-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => handleView(im)} title="Ver Detalhes">
                   <Eye className="size-4" />
                 </Button>
@@ -1204,6 +1243,18 @@ function ImoveisPage() {
           )}
 
           <DialogFooter>
+            {viewTarget && (
+              <>
+                <Button type="button" variant="outline" className="gap-2" onClick={() => void shareProperty(viewTarget)}>
+                  <Share2 className="size-4" /> Copiar link público
+                </Button>
+                {viewTarget.imovel_links_publicos?.some((item) => !item.revogado_em) && (
+                  <Button type="button" variant="outline" className="gap-2 text-destructive" onClick={() => void revokePropertyLink(viewTarget)}>
+                    <Link2Off className="size-4" /> Revogar link
+                  </Button>
+                )}
+              </>
+            )}
             <Button type="button" onClick={() => setViewTarget(null)}>
               Fechar
             </Button>
