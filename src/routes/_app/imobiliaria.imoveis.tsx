@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -664,7 +665,7 @@ function ImoveisPage() {
                 <div className="col-span-1 space-y-3 md:col-span-2">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <FormLabel>Fotos do imóvel</FormLabel>
+                      <Label htmlFor="imovel-fotos-upload">Fotos do imóvel</Label>
                       <p className="text-xs text-muted-foreground">
                         Até 10 imagens JPEG, PNG ou WebP. A primeira será usada como capa.
                       </p>
