@@ -18,7 +18,8 @@ type AccessArea = z.infer<typeof accessAreaSchema>;
 function normalizeBrazilianPhone(value?: string | null) {
   const digits = (value ?? "").replace(/\D/g, "");
   if (digits.length === 10 || digits.length === 11) return `+55${digits}`;
-  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55")) return `+${digits}`;
+  if ((digits.length === 12 || digits.length === 13) && digits.startsWith("55"))
+    return `+${digits}`;
   return null;
 }
 
@@ -34,7 +35,24 @@ function maskPhone(phone: string) {
 }
 
 function isRealEmail(email?: string | null) {
-  return Boolean(email && !email.toLowerCase().endsWith("@obrasflow.com.br") && !email.toLowerCase().endsWith("@sms.obrasflow.local"));
+  return Boolean(
+    email &&
+    !email.toLowerCase().endsWith("@obrasflow.com.br") &&
+    !email.toLowerCase().endsWith("@sms.obrasflow.local"),
+  );
+}
+
+function documentVariants(documento: string) {
+  if (documento.length === 11) {
+    return [documento, documento.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, "$1.$2.$3-$4")];
+  }
+  if (documento.length === 14) {
+    return [
+      documento,
+      documento.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5"),
+    ];
+  }
+  return [documento];
 }
 
 async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
@@ -47,32 +65,72 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
   }
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
-  const lookup = area === "client"
-    ? await supabaseAdmin
-        .from("clientes")
-        .select("auth_user_id,email,celular,telefone")
-        .eq("cpf_cnpj", documento)
-        .eq("status", "ativo")
-        .is("deleted_at", null)
-        .maybeSingle()
-    : await supabaseAdmin
-        .from("funcionarios")
-        .select("user_id,email,celular,telefone")
-        .eq("cpf", documento)
-        .eq("status", "ativo")
-        .maybeSingle();
+  const variants = documentVariants(documento);
+  const lookup =
+    area === "client"
+      ? await supabaseAdmin
+          .from("clientes")
+          .select("id,nome,auth_user_id,email,celular,telefone")
+          .in("cpf_cnpj", variants)
+          .eq("status", "ativo")
+          .is("deleted_at", null)
+          .maybeSingle()
+      : await supabaseAdmin
+          .from("funcionarios")
+          .select("id,nome,user_id,email,celular,telefone")
+          .in("cpf", variants)
+          .eq("status", "ativo")
+          .maybeSingle();
 
   const record = lookup.data as {
+    id: string;
+    nome: string;
     auth_user_id?: string | null;
     user_id?: string | null;
     email?: string | null;
     celular?: string | null;
     telefone?: string | null;
   } | null;
-  const userId = area === "client" ? record?.auth_user_id : record?.user_id;
-  if (lookup.error || !record || !userId) throw new Error(GENERIC_ERROR);
+  if (lookup.error || !record) throw new Error(GENERIC_ERROR);
 
   const expectedRole = area === "client" ? "cliente" : "funcionario";
+  const phone = normalizeBrazilianPhone(record.celular || record.telefone);
+  const profileEmail =
+    record.email?.trim().toLowerCase() ||
+    (phone ? `${phone.replace(/\D/g, "")}@sms.obrasflow.local` : null);
+  if (!profileEmail && !phone) throw new Error(GENERIC_ERROR);
+
+  let userId = area === "client" ? record.auth_user_id : record.user_id;
+
+  if (!userId && profileEmail) {
+    const { data: existingProfile } = await supabaseAdmin
+      .from("perfis_usuarios")
+      .select("user_id")
+      .eq("email", profileEmail)
+      .maybeSingle();
+    userId = existingProfile?.user_id || null;
+  }
+
+  if (!userId) {
+    const createPayload = {
+      user_metadata: { nome: record.nome, perfil: expectedRole },
+      ...(isRealEmail(record.email)
+        ? { email: record.email!.trim().toLowerCase(), email_confirm: true }
+        : {}),
+      ...(phone ? { phone, phone_confirm: true } : {}),
+    };
+    const { data: created, error: createError } =
+      await supabaseAdmin.auth.admin.createUser(createPayload);
+    if (createError || !created.user) throw new Error(GENERIC_ERROR);
+    userId = created.user.id;
+  }
+
+  const linkResult =
+    area === "client"
+      ? await supabaseAdmin.from("clientes").update({ auth_user_id: userId }).eq("id", record.id)
+      : await supabaseAdmin.from("funcionarios").update({ user_id: userId }).eq("id", record.id);
+  if (linkResult.error) throw new Error(GENERIC_ERROR);
+
   const [{ data: profile, error: profileError }, { data: role, error: roleError }] =
     await Promise.all([
       supabaseAdmin
@@ -88,9 +146,26 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
         .maybeSingle(),
     ]);
 
-  const hasExpectedRole = profile?.perfil === expectedRole || role?.role === expectedRole;
-  if (profileError || roleError || !profile?.ativo || !hasExpectedRole) {
+  if (profileError || roleError || profile?.ativo === false) {
     throw new Error(GENERIC_ERROR);
+  }
+
+  if (!profile) {
+    const { error } = await supabaseAdmin.from("perfis_usuarios").insert({
+      user_id: userId,
+      nome: record.nome,
+      email: profileEmail!,
+      perfil: expectedRole,
+      ativo: true,
+    });
+    if (error) throw new Error(GENERIC_ERROR);
+  }
+
+  if (profile?.perfil !== expectedRole && role?.role !== expectedRole) {
+    const { error } = await supabaseAdmin
+      .from("user_roles")
+      .upsert({ user_id: userId, role: expectedRole }, { onConflict: "user_id,role" });
+    if (error) throw new Error(GENERIC_ERROR);
   }
 
   return { supabaseAdmin, userId, record };
