@@ -45,6 +45,12 @@ import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AssinaturasContrato,
+  AssinaturasImpressao,
+  useAssinaturasContrato,
+  type SignatarioContrato,
+} from "@/components/contratos/assinaturas-contrato";
 
 export const Route = createFileRoute("/_app/imobiliaria/locacoes")({
   component: LocacoesPage,
@@ -166,7 +172,7 @@ const fmtBRLFromCents = (cents: number | null | undefined) => {
 };
 
 function LocacoesPage() {
-  const { roles } = useAuth();
+  const { roles, perfil } = useAuth();
   const qc = useQueryClient();
   const podeEditar =
     roles.includes("admin") ||
@@ -206,6 +212,27 @@ function LocacoesPage() {
 
   // Details view active tab
   const [detailsTab, setDetailsTab] = useState("info");
+
+  const { data: assinaturasLocacao = [] } = useAssinaturasContrato({
+    locacaoId: viewTarget?.id,
+    enabled: Boolean(viewTarget),
+  });
+  const signatariosLocacao = useMemo<SignatarioContrato[]>(() => [
+    {
+      papel: "locador",
+      label: "LOCADOR",
+      nome: viewTarget?.imoveis?.imobiliaria_clientes?.nome,
+      documento: viewTarget?.imoveis?.imobiliaria_clientes?.cpf_cnpj,
+    },
+    {
+      papel: "locatario",
+      label: "LOCATÁRIO",
+      nome: viewTarget?.imobiliaria_clientes?.nome,
+      documento: viewTarget?.imobiliaria_clientes?.cpf_cnpj,
+    },
+    { papel: "testemunha_1", label: "TESTEMUNHA 1" },
+    { papel: "testemunha_2", label: "TESTEMUNHA 2" },
+  ], [viewTarget]);
 
   // Queries
   const { data: locacoes, isLoading } = useQuery({
@@ -1470,6 +1497,11 @@ function LocacoesPage() {
                   </Button>
                 </div>
 
+                <AssinaturasContrato
+                  locacaoId={viewTarget.id}
+                  signatarios={signatariosLocacao}
+                />
+
                 <div 
                   id="contrato-impressao" 
                   className="bg-white text-black p-8 rounded-lg border shadow-sm font-serif text-[11px] leading-relaxed max-h-[400px] overflow-y-auto"
@@ -1540,24 +1572,10 @@ function LocacoesPage() {
                     São Paulo, {new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}.
                   </p>
 
-                  <div className="signatures">
-                    <div className="signature-line">
-                      <strong>LOCADOR</strong>
-                      <div className="text-[10px] text-muted-foreground">{viewTarget.imoveis?.imobiliaria_clientes?.nome}</div>
-                    </div>
-                    <div className="signature-line">
-                      <strong>LOCATÁRIO</strong>
-                      <div className="text-[10px] text-muted-foreground">{viewTarget.imobiliaria_clientes?.nome}</div>
-                    </div>
-                    <div className="signature-line">
-                      <strong>TESTEMUNHA 1</strong>
-                      <div className="text-[10px] text-muted-foreground">CPF:</div>
-                    </div>
-                    <div className="signature-line">
-                      <strong>TESTEMUNHA 2</strong>
-                      <div className="text-[10px] text-muted-foreground">CPF:</div>
-                    </div>
-                  </div>
+                  <AssinaturasImpressao
+                    assinaturas={assinaturasLocacao}
+                    signatarios={signatariosLocacao}
+                  />
                 </div>
               </TabsContent>
 
