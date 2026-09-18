@@ -2,19 +2,19 @@
 // Keep it free of Node-only globals such as process.env.
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+// Estes identificadores são públicos e podem ficar no bundle do navegador.
+// Variáveis de build continuam tendo prioridade quando estiverem configuradas.
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ??
+  "https://supejqjocgnwhigppyeb.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
+  "sb_publishable_j8PVJwvhrxz1bzP4i7eR5g_P6ZUPZyx";
 
 export const SUPABASE_PROJECT_URL = SUPABASE_URL;
 export const SUPABASE_ANON_KEY = SUPABASE_PUBLISHABLE_KEY;
 
 function createSupabaseClient() {
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    throw new Error(
-      "Configuração pública do Supabase ausente. Defina VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY no ambiente de build.",
-    );
-  }
-
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: {
       storage: typeof window !== "undefined" ? localStorage : undefined,

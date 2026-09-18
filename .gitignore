@@ -35,8 +35,6 @@ dist-ssr
 .env
 .env.*
 !.env.example
-!.env.production
-!.env.production.example
 
 # Temporary diagnostics and legacy deployment artifacts
 .netlify/
