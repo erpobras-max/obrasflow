@@ -4,10 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client.custom";
+import {
+  AssinaturasContrato,
+  AssinaturasImpressao,
+  useAssinaturasContrato,
+  type SignatarioContrato,
+} from "@/components/contratos/assinaturas-contrato";
 
 type Contrato = { id: string; numero: string; titulo: string; objeto: string | null; valor_total: number; data_inicio: string | null; data_fim: string | null; observacoes: string | null; cliente_id: string };
 type Cliente = { nome: string; cpf_cnpj: string | null; email: string | null; telefone: string | null; logradouro: string | null; numero: string | null; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null };
-type Empresa = { razao_social: string; nome_fantasia: string | null; cnpj: string; inscricao_estadual: string | null; email: string | null; telefone: string | null; endereco: string | null; logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null; logo_url: string | null };
+type Empresa = { razao_social: string; nome_fantasia: string | null; cnpj: string; inscricao_estadual: string | null; email: string | null; telefone: string | null; endereco: string | null; logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; cidade: string | null; uf: string | null; cep: string | null; logo_url: string | null; clausula_padrao: string | null };
 
 const brl = (valor: number) => Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const data = (valor: string | null) => valor ? new Date(valor + "T00:00").toLocaleDateString("pt-BR") : "A definir";
@@ -28,6 +34,24 @@ export function ContratoImpressao({ contrato, open, onOpenChange }: { contrato: 
       return { cliente: cliente.data as Cliente | null, empresa: empresa.data as Empresa | null };
     },
   });
+  const { data: assinaturas = [] } = useAssinaturasContrato({
+    contratoId: contrato?.id,
+    enabled: Boolean(contrato && open),
+  });
+  const signatarios: SignatarioContrato[] = [
+    {
+      papel: "contratada",
+      label: "CONTRATADA",
+      nome: documento?.empresa?.razao_social || documento?.empresa?.nome_fantasia,
+      documento: documento?.empresa?.cnpj,
+    },
+    {
+      papel: "contratante",
+      label: "CONTRATANTE",
+      nome: documento?.cliente?.nome,
+      documento: documento?.cliente?.cpf_cnpj,
+    },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -36,7 +60,10 @@ export function ContratoImpressao({ contrato, open, onOpenChange }: { contrato: 
           <DialogTitle>Contrato pronto para emissão</DialogTitle>
           <DialogDescription>Use a impressão do navegador para salvar uma cópia em PDF ou enviar para assinatura.</DialogDescription>
         </DialogHeader>
-        <div className="print:hidden"><Button onClick={() => window.print()}><Printer className="size-4" /> Imprimir / Salvar PDF</Button></div>
+        <div className="print:hidden flex flex-wrap items-center gap-3">
+          <Button onClick={() => window.print()}><Printer className="size-4" /> Imprimir / Salvar PDF</Button>
+        </div>
+        {contrato && <AssinaturasContrato contratoId={contrato.id} signatarios={signatarios} />}
         {isLoading || !contrato ? (
           <div className="space-y-3"><Skeleton className="h-20 w-full" /><Skeleton className="h-72 w-full" /></div>
         ) : (
@@ -68,7 +95,7 @@ export function ContratoImpressao({ contrato, open, onOpenChange }: { contrato: 
               {contrato.observacoes && <p><b>OBSERVAÇÕES.</b> {contrato.observacoes}</p>}
             </section>
             <section className="mt-8 rounded border p-4"><h3 className="font-bold uppercase">Dados para contato</h3><p className="mt-2">Contratante: {[documento?.cliente?.email, documento?.cliente?.telefone].filter(Boolean).join(" · ") || "—"}</p></section>
-            <footer className="mt-20 grid grid-cols-2 gap-12 text-center"><div className="border-t pt-2">{documento?.empresa?.razao_social || "Contratada"}</div><div className="border-t pt-2">{documento?.cliente?.nome || "Contratante"}</div></footer>
+            <AssinaturasImpressao assinaturas={assinaturas} signatarios={signatarios} />
           </article>
         )}
       </DialogContent>
