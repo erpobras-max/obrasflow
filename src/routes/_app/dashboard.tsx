@@ -108,6 +108,7 @@ function DashboardPage() {
       const { data: crNext } = await (supabase as any)
         .from("contas_receber")
         .select("id, descricao, valor_total, data_vencimento")
+        .or("origem.is.null,origem.neq.imobiliaria")
         .gte("data_vencimento", todayStr)
         .lte("data_vencimento", next7DaysStr)
         .neq("status", "cancelada");
@@ -115,6 +116,7 @@ function DashboardPage() {
       const { data: cpNext } = await (supabase as any)
         .from("contas_pagar")
         .select("id, descricao, valor_total, data_vencimento")
+        .or("origem.is.null,origem.neq.imobiliaria")
         .gte("data_vencimento", todayStr)
         .lte("data_vencimento", next7DaysStr)
         .neq("status", "cancelada");
@@ -128,11 +130,13 @@ function DashboardPage() {
       const { data: crOverdue } = await (supabase as any)
         .from("contas_receber")
         .select("valor_total")
+        .or("origem.is.null,origem.neq.imobiliaria")
         .eq("status", "atrasada");
 
       const { data: cpOverdue } = await (supabase as any)
         .from("contas_pagar")
         .select("valor_total")
+        .or("origem.is.null,origem.neq.imobiliaria")
         .eq("status", "atrasada");
 
       // Calculations
@@ -156,12 +160,14 @@ function DashboardPage() {
       const { data: crCashFlow } = await (supabase as any)
         .from("contas_receber")
         .select("valor_total, data_recebimento, status")
+        .or("origem.is.null,origem.neq.imobiliaria")
         .eq("status", "recebida")
         .gte("data_recebimento", startOfPeriodStr);
 
       const { data: cpCashFlow } = await (supabase as any)
         .from("contas_pagar")
         .select("valor_total, data_pagamento, status")
+        .or("origem.is.null,origem.neq.imobiliaria")
         .eq("status", "paga")
         .gte("data_pagamento", startOfPeriodStr);
 
