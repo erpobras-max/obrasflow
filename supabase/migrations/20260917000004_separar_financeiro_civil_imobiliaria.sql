@@ -19,6 +19,11 @@ UPDATE public.perfis_usuarios
 SET perfil = 'financeiro_civil'
 WHERE perfil = 'financeiro';
 
+-- Normalizar o cargo legado de estoque para o nome atual da aplicação.
+UPDATE public.perfis_usuarios
+SET perfil = 'almoxarifado'
+WHERE perfil = 'estoque';
+
 -- 4. Inserir roles na tabela user_roles para usuários migrados
 INSERT INTO public.user_roles (user_id, role)
 SELECT user_id, 'financeiro_civil' FROM public.perfis_usuarios
@@ -27,6 +32,13 @@ ON CONFLICT (user_id, role) DO NOTHING;
 
 -- O cargo legado não deve continuar liberando os dois financeiros.
 DELETE FROM public.user_roles WHERE role = 'financeiro';
+
+INSERT INTO public.user_roles (user_id, role)
+SELECT user_id, 'almoxarifado' FROM public.perfis_usuarios
+WHERE perfil = 'almoxarifado'
+ON CONFLICT (user_id, role) DO NOTHING;
+
+DELETE FROM public.user_roles WHERE role = 'estoque';
 
 -- 5. Inserir roles para usuários imobiliaria
 INSERT INTO public.user_roles (user_id, role)

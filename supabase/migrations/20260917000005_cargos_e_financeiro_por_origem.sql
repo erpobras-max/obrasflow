@@ -86,7 +86,7 @@ BEGIN
     WHERE schemaname = 'public'
       AND tablename IN (
         'imobiliaria_clientes', 'imoveis', 'locacoes', 'imob_fiadores',
-        'imob_vistorias', 'imob_vistorias_itens', 'indices_reajuste'
+        'imob_vistorias', 'imob_vistorias_itens', 'imob_indices_reajuste'
       )
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', policy_row.policyname, policy_row.tablename);
@@ -118,7 +118,7 @@ CREATE POLICY "imob_vistorias_itens_acesso_por_cargo" ON public.imob_vistorias_i
   FOR ALL TO authenticated
   USING (public.can_access_real_estate(auth.uid()))
   WITH CHECK (public.can_access_real_estate(auth.uid()));
-CREATE POLICY "indices_reajuste_acesso_por_cargo" ON public.indices_reajuste
+CREATE POLICY "imob_indices_reajuste_acesso_por_cargo" ON public.imob_indices_reajuste
   FOR ALL TO authenticated
   USING (public.can_access_real_estate(auth.uid()))
   WITH CHECK (public.can_access_real_estate(auth.uid()));
