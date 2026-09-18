@@ -21,6 +21,7 @@ import { Route as PortalFotosRouteImport } from './routes/portal/fotos'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro'
 import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
 import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
+import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
 import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
 import { Route as AppRhRouteImport } from './routes/_app/rh'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
@@ -111,6 +112,11 @@ const PortalDocumentosRoute = PortalDocumentosRouteImport.update({
 const ImovelPublicoTokenRoute = ImovelPublicoTokenRouteImport.update({
   id: '/imovel-publico/$token',
   path: '/imovel-publico/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AssinarTokenRoute = AssinarTokenRouteImport.update({
+  id: '/assinar/$token',
+  path: '/assinar/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppUsuariosRoute = AppUsuariosRouteImport.update({
@@ -303,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
+  '/assinar/$token': typeof AssinarTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
@@ -347,6 +354,7 @@ export interface FileRoutesByTo {
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
+  '/assinar/$token': typeof AssinarTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
@@ -394,6 +402,7 @@ export interface FileRoutesById {
   '/_app/relatorios': typeof AppRelatoriosRoute
   '/_app/rh': typeof AppRhRoute
   '/_app/usuarios': typeof AppUsuariosRoute
+  '/assinar/$token': typeof AssinarTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
@@ -441,6 +450,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/rh'
     | '/usuarios'
+    | '/assinar/$token'
     | '/imovel-publico/$token'
     | '/portal/documentos'
     | '/portal/financeiro'
@@ -485,6 +495,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/rh'
     | '/usuarios'
+    | '/assinar/$token'
     | '/imovel-publico/$token'
     | '/portal/documentos'
     | '/portal/financeiro'
@@ -531,6 +542,7 @@ export interface FileRouteTypes {
     | '/_app/relatorios'
     | '/_app/rh'
     | '/_app/usuarios'
+    | '/assinar/$token'
     | '/imovel-publico/$token'
     | '/portal/documentos'
     | '/portal/financeiro'
@@ -558,6 +570,7 @@ export interface RootRouteChildren {
   PontoRoute: typeof PontoRoute
   PortalRoute: typeof PortalRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  AssinarTokenRoute: typeof AssinarTokenRoute
   ImovelPublicoTokenRoute: typeof ImovelPublicoTokenRoute
 }
 
@@ -645,6 +658,13 @@ declare module '@tanstack/react-router' {
       path: '/imovel-publico/$token'
       fullPath: '/imovel-publico/$token'
       preLoaderRoute: typeof ImovelPublicoTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/assinar/$token': {
+      id: '/assinar/$token'
+      path: '/assinar/$token'
+      fullPath: '/assinar/$token'
+      preLoaderRoute: typeof AssinarTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/usuarios': {
@@ -991,6 +1011,7 @@ const rootRouteChildren: RootRouteChildren = {
   PontoRoute: PontoRoute,
   PortalRoute: PortalRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  AssinarTokenRoute: AssinarTokenRoute,
   ImovelPublicoTokenRoute: ImovelPublicoTokenRoute,
 }
 export const routeTree = rootRouteImport

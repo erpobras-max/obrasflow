@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eraser, Loader2, PenLine, RotateCcw, Trash2 } from "lucide-react";
+import { Eraser, Link2, Loader2, PenLine, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client.custom";
@@ -73,7 +73,7 @@ export function useAssinaturasContrato({
   });
 }
 
-function SignatureCanvas({
+export function SignatureCanvas({
   onChange,
   resetKey,
 }: {
@@ -195,6 +195,42 @@ export function AssinaturasContrato({
     setResetKey((value) => value + 1);
   };
 
+  const createPublicLink = async (signer: SignatarioContrato) => {
+    try {
+      const documentId = contratoId || locacaoId;
+      const kind = contratoId ? "Contrato comercial" : "Contrato de locação";
+      const filter = contratoId ? { contrato_id: contratoId } : { locacao_id: locacaoId };
+      let query = supabase
+        .from("contrato_links_assinatura" as any)
+        .select("token")
+        .eq("papel", signer.papel)
+        .is("usado_em", null)
+        .is("revogado_em", null)
+        .gt("expira_em", new Date().toISOString());
+      query = contratoId ? query.eq("contrato_id", contratoId) : query.eq("locacao_id", locacaoId!);
+      const { data: current, error: findError } = await query.maybeSingle();
+      if (findError) throw findError;
+      let token = (current as any)?.token as string | undefined;
+      if (!token) {
+        const { data, error } = await supabase.from("contrato_links_assinatura" as any).insert({
+          ...filter,
+          papel: signer.papel,
+          papel_label: signer.label,
+          nome_esperado: signer.nome || null,
+          documento_esperado: signer.documento || null,
+          documento_titulo: `${kind} ${documentId}`,
+          documento_resumo: `Assinatura solicitada para ${signer.label}. Confirme seus dados e assine somente após revisar o contrato recebido da empresa.`,
+        }).select("token").single();
+        if (error) throw error;
+        token = (data as any).token;
+      }
+      await navigator.clipboard.writeText(`${window.location.origin}/assinar/${token}`);
+      toast.success("Link de assinatura copiado. Válido por 7 dias.");
+    } catch (error: any) {
+      toast.error("Erro ao gerar link: " + error.message);
+    }
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!selected || !signatureData || nome.trim().length < 2) {
@@ -281,6 +317,11 @@ export function AssinaturasContrato({
                       {saved?.nome_assinante || signer.nome || "Nome não informado"}
                     </p>
                     <div className="mt-2 flex justify-end gap-1">
+                      {!saved && (
+                        <Button type="button" size="icon" variant="ghost" className="size-8" title="Copiar link para assinatura" onClick={() => void createPublicLink(signer)}>
+                          <Link2 className="size-3.5" />
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         size="sm"
