@@ -137,6 +137,23 @@ interface VistoriaRow {
   fotos: string[];
 }
 
+interface VistoriaItemRow {
+  id: string;
+  item_categoria: string;
+  item_nome: string;
+  observacao: string | null;
+  status: "pendente" | "ok" | "defeito" | "observacao";
+  ordem: number;
+}
+
+const VISTORIA_CHECKLIST_CATEGORIAS = [
+  { categoria: "estrutura", label: "Estrutura", itens: ["Paredes", "Teto", "Piso", "Portas", "Janelas", "Fechaduras"] },
+  { categoria: "hidrossanitario", label: "Hidrossanitário", itens: ["Vazamentos", "Pressão água", "Vasos sanitários", "Pias", "Chuveiros", "Ralos"] },
+  { categoria: "eletrico", label: "Elétrico", itens: ["Interruptores", "Tomadas", "Lâmpadas", "Disjuntores", "Tomadas 220V", "Aterramento"] },
+  { categoria: "acabamento", label: "Acabamento", itens: ["Pintura", "Revestimentos", "Rodapés", "Espelhos", "Box", "Armários"] },
+  { categoria: "externo", label: "Área Externa", itens: ["Fachada", "Varanda", "Garagem", "Jardim", "Cerca/Muro", "Portão"] },
+] as const;
+
 const EMPTY_FORM: LocacaoFormValues = {
   contrato_numero: "",
   imovel_id: "",
@@ -336,6 +353,22 @@ function LocacoesPage() {
       return (data ?? []) as VistoriaRow[];
     },
     enabled: !!viewTarget,
+  });
+
+  const { data: printVistoriaItens = [], isLoading: loadingPrintVistoriaItens } = useQuery({
+    queryKey: ["vistoria_itens_print", printVistoriaTarget?.id],
+    queryFn: async () => {
+      if (!printVistoriaTarget) return [];
+      const { data, error } = await supabase
+        .from("imob_vistorias_itens")
+        .select("id,item_categoria,item_nome,observacao,status,ordem")
+        .eq("vistoria_id", printVistoriaTarget.id)
+        .is("deleted_at", null)
+        .order("ordem", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as VistoriaItemRow[];
+    },
+    enabled: !!printVistoriaTarget,
   });
 
   const filteredLocacoes = useMemo(() => {
@@ -726,35 +759,65 @@ function LocacoesPage() {
       return;
     }
     createVistoriaMutation.mutate({
-      locacao_id: viewTarget.id,
-      imovel_id: viewTarget.imovel_id,
-      tipo: vistoriaTipo,
-      status: vistoriaStatus,
-      data_vistoria: vistoriaData,
-      responsavel: vistoriaResponsavel,
-      parecer_geral: vistoriaParecer,
-      fotos: vistoriaFotos,
+      vistoria: {
+        locacao_id: viewTarget.id,
+        imovel_id: viewTarget.imovel_id,
+        tipo: vistoriaTipo,
+        status: vistoriaStatus,
+        data_vistoria: vistoriaData,
+        responsavel: vistoriaResponsavel,
+        parecer_geral: vistoriaParecer,
+        fotos: vistoriaFotos,
+      },
+      checklist: vistoriaChecklist,
     });
-    setVistoriaFormOpen(false);
-    // Reset Form
-    setVistoriaResponsavel("");
-    setVistoriaParecer("");
-    setVistoriaFotos([]);
   };
 
   // Vistoria Creation Mutation
   const createVistoriaMutation = useMutation({
-    mutationFn: async (payload: any) => {
-      const { error } = await supabase.from("imob_vistorias").insert({
-        ...payload,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-      if (error) throw error;
+    mutationFn: async ({ vistoria, checklist }: {
+      vistoria: Record<string, unknown>;
+      checklist: Record<string, { status: string; obs: string }>;
+    }) => {
+      const { data: created, error } = await supabase
+        .from("imob_vistorias")
+        .insert({
+          ...vistoria,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        } as any)
+        .select("id")
+        .single();
+      if (error || !created) throw error || new Error("Vistoria não criada.");
+
+      const items = VISTORIA_CHECKLIST_CATEGORIAS.flatMap((category, categoryIndex) =>
+        category.itens.map((item, itemIndex) => {
+          const saved = checklist[`${category.categoria}-${item}`];
+          return {
+            vistoria_id: created.id,
+            item_categoria: category.categoria,
+            item_nome: item,
+            status: saved?.status || "pendente",
+            observacao: saved?.obs?.trim() || null,
+            ordem: categoryIndex * 100 + itemIndex,
+          };
+        }),
+      );
+
+      const { error: itemsError } = await supabase.from("imob_vistorias_itens").insert(items);
+      if (itemsError) {
+        await supabase.from("imob_vistorias").delete().eq("id", created.id);
+        throw itemsError;
+      }
     },
     onSuccess: () => {
       toast.success("Vistoria registrada!");
       refetchVistorias();
+      setVistoriaFormOpen(false);
+      setVistoriaResponsavel("");
+      setVistoriaParecer("");
+      setVistoriaFotos([]);
+      setVistoriaChecklist({});
     },
     onError: (err: any) => {
       toast.error("Erro ao salvar vistoria: " + err.message);
@@ -1625,13 +1688,7 @@ function LocacoesPage() {
                       <div className="md:col-span-3 space-y-4">
                         <label className="text-xs font-semibold text-muted-foreground block uppercase tracking-wider">Checklist de Vistoria</label>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {[
-                            { categoria: 'estrutura', label: 'Estrutura', itens: ['Paredes', 'Teto', 'Piso', 'Portas', 'Janelas', 'Fechaduras'] },
-                            { categoria: 'hidrossanitario', label: 'Hidrossanitário', itens: ['Vazamentos', 'Pressão água', 'Vasos sanitários', 'Pias', 'Chuveiros', 'Ralos'] },
-                            { categoria: 'eletrico', label: 'Elétrico', itens: ['Interruptores', 'Tomadas', 'Lâmpadas', 'Disjuntores', 'Tomadas 220V', 'Aterramento'] },
-                            { categoria: 'acabamento', label: 'Acabamento', itens: ['Pintura', 'Revestimentos', 'Rodapés', 'Espelhos', 'Box', 'Armários'] },
-                            { categoria: 'externo', label: 'Área Externa', itens: ['Fachada', 'Varanda', 'Garagem', 'Jardim', 'Cerca/Muro', 'Portão'] },
-                          ].map(({ categoria, label, itens }) => (
+                          {VISTORIA_CHECKLIST_CATEGORIAS.map(({ categoria, label, itens }) => (
                             <div key={categoria} className="bg-muted/30 p-4 rounded-lg">
                               <h5 className="font-semibold text-sm mb-2 text-muted-foreground">{label}</h5>
                               <div className="space-y-2">
@@ -1639,30 +1696,43 @@ function LocacoesPage() {
                                   const key = `${categoria}-${item}`;
                                   const itemState = vistoriaChecklist[key] || { status: 'pendente', obs: '' };
                                   return (
-                                    <div key={key} className="flex items-center gap-2 text-xs">
-                                      <input
-                                        type="checkbox"
-                                        checked={itemState.status !== 'pendente'}
-                                        onChange={(e) => setVistoriaChecklist((prev) => ({
-                                          ...prev,
-                                          [key]: { ...prev[key], status: e.target.checked ? 'ok' : 'pendente' }
-                                        }))}
-                                        className="rounded border-gray-300 text-blue-600 size-4"
-                                      />
-                                      <label className="flex-1">{item}</label>
-                                      <select
-                                        value={itemState.status}
-                                        onChange={(e) => setVistoriaChecklist((prev) => ({
-                                          ...prev,
-                                          [key]: { ...prev[key], status: e.target.value }
-                                        }))}
-                                        className="text-[10px] px-2 py-1 border rounded text-muted-foreground"
-                                      >
-                                        <option value="pendente">Pendente</option>
-                                        <option value="ok">OK</option>
-                                        <option value="defeito">Defeito</option>
-                                        <option value="observacao">Observação</option>
-                                      </select>
+                                    <div key={key} className="space-y-1 text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="checkbox"
+                                          checked={itemState.status === 'ok'}
+                                          onChange={(e) => setVistoriaChecklist((prev) => ({
+                                            ...prev,
+                                            [key]: { status: e.target.checked ? 'ok' : 'pendente', obs: prev[key]?.obs || '' }
+                                          }))}
+                                          className="rounded border-gray-300 text-blue-600 size-4"
+                                        />
+                                        <label className="flex-1">{item}</label>
+                                        <select
+                                          value={itemState.status}
+                                          onChange={(e) => setVistoriaChecklist((prev) => ({
+                                            ...prev,
+                                            [key]: { status: e.target.value, obs: prev[key]?.obs || '' }
+                                          }))}
+                                          className="text-[10px] px-2 py-1 border rounded text-muted-foreground"
+                                        >
+                                          <option value="pendente">Pendente</option>
+                                          <option value="ok">OK</option>
+                                          <option value="defeito">Defeito</option>
+                                          <option value="observacao">Observação</option>
+                                        </select>
+                                      </div>
+                                      {(itemState.status === 'defeito' || itemState.status === 'observacao') && (
+                                        <Input
+                                          value={itemState.obs}
+                                          onChange={(e) => setVistoriaChecklist((prev) => ({
+                                            ...prev,
+                                            [key]: { status: itemState.status, obs: e.target.value }
+                                          }))}
+                                          placeholder="Descreva o defeito ou observação"
+                                          className="h-7 text-[10px]"
+                                        />
+                                      )}
                                     </div>
                                   );
                                 })}
@@ -1965,33 +2035,44 @@ function LocacoesPage() {
 
                 <section className="space-y-3">
                   <h2 className="font-bold border-b pb-1">4. CHECKLIST DE VISTORIA</h2>
-                  <div className="space-y-4">
-                    {[
-                      { categoria: 'estrutura', label: 'Estrutura', itens: ['Paredes', 'Teto', 'Piso', 'Portas', 'Janelas', 'Fechaduras'] },
-                      { categoria: 'hidrossanitario', label: 'Hidrossanitário', itens: ['Vazamentos', 'Pressão água', 'Vasos sanitários', 'Pias', 'Chuveiros', 'Ralos'] },
-                      { categoria: 'eletrico', label: 'Elétrico', itens: ['Interruptores', 'Tomadas', 'Lâmpadas', 'Disjuntores', 'Tomadas 220V', 'Aterramento'] },
-                      { categoria: 'acabamento', label: 'Acabamento', itens: ['Pintura', 'Revestimentos', 'Rodapés', 'Espelhos', 'Box', 'Armários'] },
-                      { categoria: 'externo', label: 'Área Externa', itens: ['Fachada', 'Varanda', 'Garagem', 'Jardim', 'Cerca/Muro', 'Portão'] },
-                    ].map(({ categoria, label }) => (
-                      <div key={categoria} className="border rounded-lg p-4">
-                        <h4 className="font-semibold mb-2 text-muted-foreground">{label}</h4>
-                        <div className="grid grid-cols-2 gap-3">
-                          {[
-                            'Paredes', 'Teto', 'Piso', 'Portas', 'Janelas', 'Fechaduras',
-                            'Vazamentos', 'Pressão água', 'Vasos sanitários', 'Pias', 'Chuveiros', 'Ralos',
-                            'Interruptores', 'Tomadas', 'Lâmpadas', 'Disjuntores', 'Tomadas 220V', 'Aterramento',
-                            'Pintura', 'Revestimentos', 'Rodapés', 'Espelhos', 'Box', 'Armários',
-                            'Fachada', 'Varanda', 'Garagem', 'Jardim', 'Cerca/Muro', 'Portão'
-                          ].map((item) => (
-                            <div key={`${categoria}-${item}`} className="flex items-center gap-2 text-xs">
-                              <input type="checkbox" disabled checked={false} className="size-4" />
-                              <label className="flex-1 text-xs">{item}</label>
+                  {loadingPrintVistoriaItens ? (
+                    <p className="text-sm">Carregando checklist...</p>
+                  ) : printVistoriaItens.length === 0 ? (
+                    <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+                      Esta vistoria foi registrada sem itens de checklist. Os estados antigos não podem ser recuperados porque não foram salvos pelo sistema.
+                    </p>
+                  ) : (
+                    <div className="space-y-4">
+                      {VISTORIA_CHECKLIST_CATEGORIAS.map(({ categoria, label }) => {
+                        const categoryItems = printVistoriaItens.filter((item) => item.item_categoria === categoria);
+                        if (categoryItems.length === 0) return null;
+                        return (
+                          <div key={categoria} className="border rounded-lg p-4">
+                            <h4 className="font-semibold mb-2 text-muted-foreground">{label}</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                              {categoryItems.map((item) => (
+                                <div key={item.id} className="rounded border p-2 text-xs">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <strong>{item.item_nome}</strong>
+                                    <span className={cn(
+                                      "font-bold uppercase",
+                                      item.status === "ok" && "text-green-700",
+                                      item.status === "defeito" && "text-red-700",
+                                      item.status === "observacao" && "text-amber-700",
+                                      item.status === "pendente" && "text-slate-500",
+                                    )}>
+                                      {item.status === "ok" ? "✓ OK" : item.status === "defeito" ? "Defeito" : item.status === "observacao" ? "Observação" : "Pendente"}
+                                    </span>
+                                  </div>
+                                  {item.observacao && <p className="mt-1 text-slate-700">{item.observacao}</p>}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </section>
 
                 {printVistoriaTarget.fotos && printVistoriaTarget.fotos.length > 0 && (
