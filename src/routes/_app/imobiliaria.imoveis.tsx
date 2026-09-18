@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, Eye, Loader2, Building, Home, Bed, Bath, Car, Maximize, Upload, Image as ImageIcon, Share2, Link2Off } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Eye, Loader2, Building, Home, Bed, Bath, Car, Maximize, Upload, Image as ImageIcon, Share2, Link2Off, ArrowLeft, ArrowRight } from "lucide-react";
 import { deleteR2, getSecureR2Url, uploadR2, validateFileSize, validateFileType } from "@/lib/r2";
 
 import { supabase } from "@/integrations/supabase/client.custom";
@@ -422,6 +422,27 @@ function ImoveisPage() {
     }
   };
 
+  const movePhoto = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= imovelFotos.length) return;
+    const reordered = [...imovelFotos];
+    [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+    const normalized = reordered.map((foto, ordem) => ({ ...foto, ordem }));
+    setImovelFotos(normalized);
+    try {
+      const persisted = normalized.filter((foto) => foto.id);
+      await Promise.all(persisted.map(async (foto) => {
+        const { error } = await supabase.from("imovel_fotos").update({ ordem: foto.ordem }).eq("id", foto.id!);
+        if (error) throw error;
+      }));
+      if (editTarget) await supabase.from("imoveis").update({ foto_url: normalized[0]?.object_key ?? null }).eq("id", editTarget.id);
+      qc.invalidateQueries({ queryKey: ["imoveis"] });
+    } catch (error: any) {
+      toast.error("Erro ao alterar posição: " + error.message);
+      setImovelFotos(imovelFotos);
+    }
+  };
+
   // CEP Lookup
   const handleCepBlur = async () => {
     const cep = form.getValues("cep")?.replace(/\D/g, "");
@@ -749,6 +770,10 @@ function ImoveisPage() {
                           {index === 0 && (
                             <Badge className="absolute left-2 top-2 text-[10px]">Capa</Badge>
                           )}
+                          <div className="absolute bottom-2 left-2 flex gap-1">
+                            <Button type="button" size="icon" variant="secondary" className="size-7" disabled={index === 0} onClick={() => void movePhoto(index, -1)} aria-label="Mover foto para a esquerda"><ArrowLeft className="size-3.5" /></Button>
+                            <Button type="button" size="icon" variant="secondary" className="size-7" disabled={index === imovelFotos.length - 1} onClick={() => void movePhoto(index, 1)} aria-label="Mover foto para a direita"><ArrowRight className="size-3.5" /></Button>
+                          </div>
                           <Button
                             type="button"
                             size="icon"

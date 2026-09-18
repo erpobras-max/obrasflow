@@ -118,6 +118,29 @@ export const readR2ServerFn = createServerFn({ method: "POST" })
     };
   });
 
+export const readPublicPropertyImageServerFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ token: z.string().uuid(), key: keySchema }))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
+    const { data: link } = await supabaseAdmin
+      .from("imovel_links_publicos")
+      .select("imovel_id,expira_em,revogado_em")
+      .eq("token", data.token)
+      .is("revogado_em", null)
+      .maybeSingle();
+    if (!link || (link.expira_em && new Date(link.expira_em) <= new Date())) throw new Error("Link público inválido.");
+    const { data: photo } = await supabaseAdmin
+      .from("imovel_fotos")
+      .select("id")
+      .eq("imovel_id", link.imovel_id)
+      .eq("object_key", data.key)
+      .maybeSingle();
+    if (!photo) throw new Error("Foto não pertence a este imóvel.");
+    const { readFromR2Server } = await import("./r2.server");
+    const object = await readFromR2Server(data.key);
+    return { bodyBase64: bytesToBase64(object.bytes), contentType: object.contentType };
+  });
+
 export const deleteR2ServerFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ key: keySchema }))
