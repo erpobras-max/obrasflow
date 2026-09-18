@@ -38,6 +38,12 @@ const TITLES: Record<string, string> = {
   "/medicoes": "Medições",
   "/documentos": "Documentos",
   "/financeiro": "Financeiro",
+  "/imobiliaria/financeiro": "Financeiro Imobiliário",
+  "/imobiliaria/dashboard": "Dashboard Imobiliário",
+  "/imobiliaria/clientes": "Clientes da Imobiliária",
+  "/imobiliaria/fiadores": "Fiadores",
+  "/imobiliaria/imoveis": "Imóveis",
+  "/imobiliaria/locacoes": "Locações",
   "/compras": "Compras",
   "/fiscal": "Fiscal",
   "/estoque": "Estoque",
@@ -265,4 +271,3 @@ export function AppHeader() {
     </header>
   );
 }
-
