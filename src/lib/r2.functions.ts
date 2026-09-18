@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware.custom";
+import { SUPABASE_ANON_KEY, SUPABASE_PROJECT_URL } from "@/integrations/supabase/client.custom";
 
 const folders = [
   "rh/atestados", "rh/documentos", "documentos/obras", "documentos/contratos",
@@ -121,21 +123,15 @@ export const readR2ServerFn = createServerFn({ method: "POST" })
 export const readPublicPropertyImageServerFn = createServerFn({ method: "POST" })
   .inputValidator(z.object({ token: z.string().uuid(), key: keySchema }))
   .handler(async ({ data }) => {
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
-    const { data: link } = await supabaseAdmin
-      .from("imovel_links_publicos")
-      .select("imovel_id,expira_em,revogado_em")
-      .eq("token", data.token)
-      .is("revogado_em", null)
-      .maybeSingle();
-    if (!link || (link.expira_em && new Date(link.expira_em) <= new Date())) throw new Error("Link público inválido.");
-    const { data: photo } = await supabaseAdmin
-      .from("imovel_fotos")
-      .select("id")
-      .eq("imovel_id", link.imovel_id)
-      .eq("object_key", data.key)
-      .maybeSingle();
-    if (!photo) throw new Error("Foto não pertence a este imóvel.");
+    const publicClient = createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: property, error } = await publicClient.rpc("obter_imovel_publico", { _token: data.token });
+    if (error || !property) throw new Error("Link público inválido.");
+    const photos = Array.isArray((property as any).fotos) ? (property as any).fotos : [];
+    if (!photos.some((photo: { object_key?: string }) => photo.object_key === data.key)) {
+      throw new Error("Foto não pertence a este imóvel.");
+    }
     const { readFromR2Server } = await import("./r2.server");
     const object = await readFromR2Server(data.key);
     return { bodyBase64: bytesToBase64(object.bytes), contentType: object.contentType };
