@@ -44,26 +44,38 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
     if (lookup.error || !userId) throw new Error(GENERIC_ERROR);
 
     const expectedRole = data.area === "client" ? "cliente" : "funcionario";
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from("perfis_usuarios")
-      .select("perfil,ativo")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const [{ data: profile, error: profileError }, { data: role, error: roleError }] =
+      await Promise.all([
+        supabaseAdmin
+          .from("perfis_usuarios")
+          .select("perfil,ativo")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", userId)
+          .eq("role", expectedRole)
+          .maybeSingle(),
+      ]);
 
-    if (profileError || !profile?.ativo || profile.perfil !== expectedRole) {
+    const hasExpectedRole = profile?.perfil === expectedRole || role?.role === expectedRole;
+    if (profileError || roleError || !profile?.ativo || !hasExpectedRole) {
       throw new Error(GENERIC_ERROR);
     }
 
     const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
     if (userError || !authUser.user?.email) throw new Error(GENERIC_ERROR);
 
-    const { data: link, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: "magiclink",
+    const { error: linkError } = await supabaseAdmin.auth.signInWithOtp({
       email: authUser.user.email,
+      options: { shouldCreateUser: false },
     });
 
-    const tokenHash = link?.properties?.hashed_token;
-    if (linkError || !tokenHash) throw new Error(GENERIC_ERROR);
+    if (linkError) throw new Error(GENERIC_ERROR);
 
-    return { tokenHash, type: "magiclink" as const };
+    const [localPart, domain] = authUser.user.email.split("@");
+    const visibleStart = localPart.slice(0, Math.min(2, localPart.length));
+    const maskedEmail = `${visibleStart}${"*".repeat(Math.max(3, localPart.length - visibleStart.length))}@${domain}`;
+    return { sent: true as const, maskedEmail };
   });

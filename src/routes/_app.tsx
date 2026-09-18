@@ -16,12 +16,15 @@ function AppLayout() {
 
   useEffect(() => {
     if (!loading && !user) navigate({ to: "/auth", replace: true });
+    else if (!loading && perfil?.ativo === false) {
+      void supabase.auth.signOut().then(() => navigate({ to: "/auth", replace: true }));
+    }
     else if (!loading && roles.length > 0 && roles.every((role) => role === "cliente")) {
       navigate({ to: "/portal", replace: true });
     } else if (!loading && roles.length > 0 && roles.every((role) => role === "funcionario")) {
       navigate({ to: "/ponto" as any, replace: true });
     }
-  }, [loading, user, roles, navigate]);
+  }, [loading, user, perfil?.ativo, roles, navigate]);
 
   if (loading || !user) {
     return (

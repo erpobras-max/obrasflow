@@ -40,7 +40,7 @@ interface RegistroPonto {
 
 function PontoPage() {
   const navigate = useNavigate();
-  const { loading, user, perfil } = useAuth();
+  const { loading, user, perfil, roles } = useAuth();
   const qc = useQueryClient();
   const [time, setTime] = useState(new Date());
 
@@ -54,10 +54,15 @@ function PontoPage() {
   useEffect(() => {
     if (!loading && !user) {
       navigate({ to: "/auth", replace: true });
-    } else if (!loading && perfil?.perfil !== "funcionario" && perfil?.perfil !== "admin" && perfil?.perfil !== "rh" && perfil?.perfil !== "diretor") {
+    } else if (!loading && perfil?.ativo === false) {
+      void supabase.auth.signOut().then(() => navigate({ to: "/auth", replace: true }));
+    } else if (
+      !loading &&
+      !roles.some((role) => ["funcionario", "admin", "rh", "diretor"].includes(role))
+    ) {
       navigate({ to: "/dashboard", replace: true });
     }
-  }, [loading, user, perfil, navigate]);
+  }, [loading, user, perfil?.ativo, roles, navigate]);
 
   // Busca dados do funcionário logado
   const { data: funcionario, isLoading: loadingFunc } = useQuery<Funcionario | null>({
