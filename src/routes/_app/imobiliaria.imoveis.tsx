@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Plus, Search, Pencil, Trash2, Eye, Loader2, Building, Home, Bed, Bath, Car, Maximize, Upload, Image as ImageIcon } from "lucide-react";
-import { getSecureR2Url, uploadR2, validateFileSize, validateFileType } from "@/lib/r2";
+import { deleteR2, getSecureR2Url, uploadR2, validateFileSize, validateFileType } from "@/lib/r2";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -70,9 +70,17 @@ interface ImovelRow {
   area_privativa: number | null;
   proprietario_id: string;
   foto_url: string | null;
+  imovel_fotos?: ImovelFoto[];
   imobiliaria_clientes: {
     nome: string;
   } | null;
+}
+
+interface ImovelFoto {
+  id?: string;
+  object_key: string;
+  ordem: number;
+  isNew?: boolean;
 }
 
 const EMPTY_FORM: ImovelFormValues = {
@@ -107,6 +115,16 @@ const fmtBRL = (val: number | null | undefined) => {
   return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 };
 
+const primaryPhoto = (imovel: ImovelRow) =>
+  [...(imovel.imovel_fotos ?? [])].sort((a, b) => a.ordem - b.ordem)[0]?.object_key ??
+  imovel.foto_url;
+
+const allPhotos = (imovel: ImovelRow) => {
+  const photos = [...(imovel.imovel_fotos ?? [])].sort((a, b) => a.ordem - b.ordem);
+  if (photos.length > 0) return photos;
+  return imovel.foto_url ? [{ object_key: imovel.foto_url, ordem: 0 }] : [];
+};
+
 function ImoveisPage() {
   const { roles } = useAuth();
   const qc = useQueryClient();
@@ -125,6 +143,8 @@ function ImoveisPage() {
   const [viewTarget, setViewTarget] = useState<ImovelRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ImovelRow | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [imovelFotos, setImovelFotos] = useState<ImovelFoto[]>([]);
+  const [deletingPhotoKey, setDeletingPhotoKey] = useState<string | null>(null);
 
   // Queries
   const { data: imoveis, isLoading } = useQuery({
@@ -136,6 +156,7 @@ function ImoveisPage() {
           id, codigo, titulo, descricao, tipo, status,
           valor_locacao, valor_venda, cidade, uf, quartos, banheiros, vagas, area_privativa,
           proprietario_id, foto_url,
+          imovel_fotos ( id, object_key, ordem ),
           imobiliaria_clientes ( nome )
         `)
         .is("deleted_at", null)
@@ -185,6 +206,7 @@ function ImoveisPage() {
   // Open Form for Create
   const handleCreate = () => {
     setEditTarget(null);
+    setImovelFotos([]);
     form.reset(EMPTY_FORM);
     setFormOpen(true);
   };
@@ -192,12 +214,16 @@ function ImoveisPage() {
   // Open Form for Edit
   const handleEdit = async (im: ImovelRow) => {
     try {
-      const { data, error } = await supabase
-        .from("imoveis")
-        .select("*")
-        .eq("id", im.id)
-        .single();
+      const [{ data, error }, { data: fotos, error: fotosError }] = await Promise.all([
+        supabase.from("imoveis").select("*").eq("id", im.id).single(),
+        supabase
+          .from("imovel_fotos")
+          .select("id,object_key,ordem")
+          .eq("imovel_id", im.id)
+          .order("ordem"),
+      ]);
       if (error) throw error;
+      if (fotosError) throw fotosError;
 
       setEditTarget(im);
       form.reset({
@@ -226,6 +252,7 @@ function ImoveisPage() {
         proprietario_id: data.proprietario_id,
         foto_url: data.foto_url ?? "",
       });
+      setImovelFotos((fotos ?? []) as ImovelFoto[]);
       setFormOpen(true);
     } catch (e: any) {
       toast.error("Erro ao carregar dados do imóvel: " + e.message);
@@ -237,7 +264,7 @@ function ImoveisPage() {
     try {
       const { data, error } = await supabase
         .from("imoveis")
-        .select("*, imobiliaria_clientes ( nome )")
+        .select("*, imobiliaria_clientes ( nome ), imovel_fotos ( id, object_key, ordem )")
         .eq("id", im.id)
         .single();
       if (error) throw error;
@@ -269,10 +296,14 @@ function ImoveisPage() {
   // Save Mutation
   const saveMutation = useMutation({
     mutationFn: async (values: ImovelFormValues) => {
+      const photoKeys = imovelFotos.map((foto) => foto.object_key);
       const payload = {
         ...values,
+        foto_url: photoKeys[0] ?? null,
         updated_at: new Date().toISOString(),
       };
+
+      let imovelId = editTarget?.id;
 
       if (editTarget) {
         const { error } = await supabase
@@ -281,12 +312,27 @@ function ImoveisPage() {
           .eq("id", editTarget.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("imoveis")
           .insert({
             ...payload,
             created_at: new Date().toISOString(),
-          });
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        imovelId = data.id;
+      }
+
+      const newPhotos = imovelFotos.filter((foto) => foto.isNew);
+      if (imovelId && newPhotos.length > 0) {
+        const { error } = await supabase.from("imovel_fotos").insert(
+          newPhotos.map((foto, index) => ({
+            imovel_id: imovelId,
+            object_key: foto.object_key,
+            ordem: imovelFotos.findIndex((item) => item.object_key === foto.object_key) ?? index,
+          })),
+        );
         if (error) throw error;
       }
     },
@@ -294,6 +340,7 @@ function ImoveisPage() {
       toast.success(editTarget ? "Imóvel atualizado" : "Imóvel cadastrado");
       qc.invalidateQueries({ queryKey: ["imoveis"] });
       setFormOpen(false);
+      setImovelFotos([]);
       form.reset(EMPTY_FORM);
     },
     onError: (e: any) => {
@@ -303,6 +350,39 @@ function ImoveisPage() {
 
   const onSubmit = (values: ImovelFormValues) => {
     saveMutation.mutate(values);
+  };
+
+  const closeForm = () => {
+    const unsavedKeys = imovelFotos.filter((foto) => foto.isNew).map((foto) => foto.object_key);
+    setFormOpen(false);
+    setImovelFotos([]);
+    void Promise.allSettled(unsavedKeys.map((key) => deleteR2(key)));
+  };
+
+  const removePhoto = async (foto: ImovelFoto) => {
+    setDeletingPhotoKey(foto.object_key);
+    try {
+      if (foto.id) {
+        const { error } = await supabase.from("imovel_fotos").delete().eq("id", foto.id);
+        if (error) throw error;
+      }
+      const nextPhotos = imovelFotos.filter((item) => item.object_key !== foto.object_key);
+      setImovelFotos(nextPhotos);
+      if (editTarget) {
+        const { error } = await supabase
+          .from("imoveis")
+          .update({ foto_url: nextPhotos[0]?.object_key ?? null })
+          .eq("id", editTarget.id);
+        if (error) throw error;
+      }
+      await deleteR2(foto.object_key);
+      qc.invalidateQueries({ queryKey: ["imoveis"] });
+      toast.success("Foto removida.");
+    } catch (error: any) {
+      toast.error("Erro ao remover foto: " + error.message);
+    } finally {
+      setDeletingPhotoKey(null);
+    }
   };
 
   // CEP Lookup
@@ -318,6 +398,40 @@ function ImoveisPage() {
           form.setValue("uf", (info.uf as any) || "");
         }
       } catch {}
+    }
+  };
+
+  const uploadPhotos = async (files: File[]) => {
+    if (imovelFotos.length + files.length > 10) {
+      toast.error(`Selecione no máximo ${10 - imovelFotos.length} foto(s).`);
+      return;
+    }
+    const invalid = files.find(
+      (file) => !validateFileType(file, "imagens") || !validateFileSize(file),
+    );
+    if (invalid) {
+      toast.error("Use apenas imagens JPEG, PNG ou WebP de até 10 MB cada.");
+      return;
+    }
+
+    setUploadingPhoto(true);
+    const uploaded: ImovelFoto[] = [];
+    try {
+      for (const file of files) {
+        const key = await uploadR2(file, "imobiliaria/imoveis");
+        uploaded.push({
+          object_key: key,
+          ordem: imovelFotos.length + uploaded.length,
+          isNew: true,
+        });
+      }
+      setImovelFotos((current) => [...current, ...uploaded]);
+      toast.success(`${uploaded.length} foto(s) enviada(s).`);
+    } catch (error: any) {
+      if (uploaded.length > 0) setImovelFotos((current) => [...current, ...uploaded]);
+      toast.error("Erro ao enviar fotos: " + error.message);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -396,12 +510,12 @@ function ImoveisPage() {
           {filteredImoveis.map((im) => (
             <Card key={im.id} className="overflow-hidden flex flex-col justify-between group hover:shadow-lg transition-shadow">
               {/* Photo Section */}
-              {im.foto_url && (
+              {primaryPhoto(im) && (
                 <div className="h-40 overflow-hidden bg-muted">
-                  <SecureR2Image objectKey={im.foto_url} alt={im.titulo} />
+                  <SecureR2Image objectKey={primaryPhoto(im)!} alt={im.titulo} />
                 </div>
               )}
-              <CardHeader className={cn("p-4 border-b", !im.foto_url && "pt-4")}>
+              <CardHeader className={cn("p-4 border-b", !primaryPhoto(im) && "pt-4")}>
                 <div className="flex justify-between items-start gap-2">
                   <div className="text-[10px] bg-slate-200 text-slate-800 font-bold px-2 py-0.5 rounded uppercase">
                     {im.codigo}
@@ -494,7 +608,7 @@ function ImoveisPage() {
       )}
 
       {/* Form Dialog */}
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog open={formOpen} onOpenChange={(open) => (open ? setFormOpen(true) : closeForm())}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
@@ -547,64 +661,74 @@ function ImoveisPage() {
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="foto_url"
-                  render={({ field }) => (
-                    <FormItem className="col-span-1 md:col-span-2">
-                      <FormLabel>Foto do Imóvel</FormLabel>
-                      <div className="flex flex-wrap items-center gap-4">
-                        <input
-                          id="imovel-foto-upload"
-                          type="file"
-                          accept="image/jpeg,image/png,image/webp"
-                          className="hidden"
-                          disabled={uploadingPhoto}
-                          onChange={async (e) => {
-                            const input = e.currentTarget;
-                            const file = input.files?.[0];
-                            if (!file) return;
-                            if (!validateFileType(file, "imagens")) {
-                              toast.error("Selecione uma imagem JPEG, PNG ou WebP.");
-                              input.value = "";
-                              return;
-                            }
-                            if (!validateFileSize(file)) {
-                              toast.error("A foto deve ter no máximo 10 MB.");
-                              input.value = "";
-                              return;
-                            }
-                            setUploadingPhoto(true);
-                            try {
-                              const key = await uploadR2(file, "imobiliaria/imoveis");
-                              field.onChange(key);
-                              toast.success("Foto enviada com sucesso!");
-                            } catch (err: any) {
-                              toast.error("Erro ao enviar foto: " + err.message);
-                            } finally {
-                              setUploadingPhoto(false);
-                              input.value = "";
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="gap-2"
-                          disabled={uploadingPhoto}
-                          onClick={() => document.getElementById("imovel-foto-upload")?.click()}
-                        >
-                          {uploadingPhoto ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-                          {uploadingPhoto ? "Enviando..." : "Selecionar foto"}
-                        </Button>
-                        {field.value && (
-                          <span className="max-w-sm truncate text-xs text-muted-foreground">Foto anexada: {field.value}</span>
-                        )}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
+                <div className="col-span-1 space-y-3 md:col-span-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <FormLabel>Fotos do imóvel</FormLabel>
+                      <p className="text-xs text-muted-foreground">
+                        Até 10 imagens JPEG, PNG ou WebP. A primeira será usada como capa.
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium text-muted-foreground">
+                      {imovelFotos.length}/10
+                    </span>
+                  </div>
+                  <input
+                    id="imovel-fotos-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    className="hidden"
+                    disabled={uploadingPhoto || imovelFotos.length >= 10}
+                    onChange={(event) => {
+                      const input = event.currentTarget;
+                      const files = Array.from(input.files ?? []);
+                      if (files.length > 0) void uploadPhotos(files);
+                      input.value = "";
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    disabled={uploadingPhoto || imovelFotos.length >= 10}
+                    onClick={() => document.getElementById("imovel-fotos-upload")?.click()}
+                  >
+                    {uploadingPhoto ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Upload className="size-4" />
+                    )}
+                    {uploadingPhoto ? "Enviando..." : "Adicionar fotos"}
+                  </Button>
+                  {imovelFotos.length > 0 && (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                      {imovelFotos.map((foto, index) => (
+                        <div key={foto.object_key} className="relative aspect-square overflow-hidden rounded-md border bg-muted">
+                          <SecureR2Image objectKey={foto.object_key} alt={`Foto ${index + 1} do imóvel`} />
+                          {index === 0 && (
+                            <Badge className="absolute left-2 top-2 text-[10px]">Capa</Badge>
+                          )}
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="destructive"
+                            className="absolute right-2 top-2 size-7"
+                            disabled={deletingPhotoKey === foto.object_key}
+                            onClick={() => void removePhoto(foto)}
+                            aria-label={`Excluir foto ${index + 1}`}
+                          >
+                            {deletingPhotoKey === foto.object_key ? (
+                              <Loader2 className="size-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="size-3.5" />
+                            )}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                   )}
-                />
+                </div>
 
                 <FormField
                   control={form.control}
@@ -953,7 +1077,7 @@ function ImoveisPage() {
               </div>
 
               <DialogFooter className="border-t pt-4">
-                <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>
+                <Button type="button" variant="outline" onClick={closeForm}>
                   Cancelar
                 </Button>
                 <Button type="submit" disabled={saveMutation.isPending}>
@@ -975,6 +1099,15 @@ function ImoveisPage() {
 
           {viewTarget && (
             <div className="space-y-4 text-sm mt-4">
+              {allPhotos(viewTarget).length > 0 && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {allPhotos(viewTarget).map((foto, index) => (
+                    <div key={foto.object_key} className="aspect-[4/3] overflow-hidden rounded-md border bg-muted">
+                      <SecureR2Image objectKey={foto.object_key} alt={`Foto ${index + 1} de ${viewTarget.titulo}`} />
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 border-b pb-4">
                 <div className="col-span-2">
                   <span className="font-semibold text-muted-foreground block text-[11px] uppercase">Título</span>

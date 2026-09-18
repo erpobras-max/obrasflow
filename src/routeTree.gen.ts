@@ -43,6 +43,7 @@ import { Route as AppComercialRouteImport } from './routes/_app/comercial'
 import { Route as AppVendasPedidosRouteImport } from './routes/_app/vendas.pedidos'
 import { Route as AppImobiliariaLocacoesRouteImport } from './routes/_app/imobiliaria.locacoes'
 import { Route as AppImobiliariaImoveisRouteImport } from './routes/_app/imobiliaria.imoveis'
+import { Route as AppImobiliariaFinanceiroRouteImport } from './routes/_app/imobiliaria.financeiro'
 import { Route as AppImobiliariaFiadoresRouteImport } from './routes/_app/imobiliaria/fiadores'
 import { Route as AppImobiliariaDashboardRouteImport } from './routes/_app/imobiliaria.dashboard'
 import { Route as AppImobiliariaClientesRouteImport } from './routes/_app/imobiliaria.clientes'
@@ -221,6 +222,12 @@ const AppImobiliariaImoveisRoute = AppImobiliariaImoveisRouteImport.update({
   path: '/imoveis',
   getParentRoute: () => AppImobiliariaRoute,
 } as any)
+const AppImobiliariaFinanceiroRoute =
+  AppImobiliariaFinanceiroRouteImport.update({
+    id: '/financeiro',
+    path: '/financeiro',
+    getParentRoute: () => AppImobiliariaRoute,
+  } as any)
 const AppImobiliariaFiadoresRoute = AppImobiliariaFiadoresRouteImport.update({
   id: '/fiadores',
   path: '/fiadores',
@@ -302,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
+  '/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
@@ -344,6 +352,7 @@ export interface FileRoutesByTo {
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
+  '/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
@@ -389,6 +398,7 @@ export interface FileRoutesById {
   '/_app/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/_app/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/_app/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
+  '/_app/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/_app/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/_app/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
   '/_app/vendas/pedidos': typeof AppVendasPedidosRoute
@@ -434,6 +444,7 @@ export interface FileRouteTypes {
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
+    | '/imobiliaria/financeiro'
     | '/imobiliaria/imoveis'
     | '/imobiliaria/locacoes'
     | '/vendas/pedidos'
@@ -476,6 +487,7 @@ export interface FileRouteTypes {
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
+    | '/imobiliaria/financeiro'
     | '/imobiliaria/imoveis'
     | '/imobiliaria/locacoes'
     | '/vendas/pedidos'
@@ -520,6 +532,7 @@ export interface FileRouteTypes {
     | '/_app/imobiliaria/clientes'
     | '/_app/imobiliaria/dashboard'
     | '/_app/imobiliaria/fiadores'
+    | '/_app/imobiliaria/financeiro'
     | '/_app/imobiliaria/imoveis'
     | '/_app/imobiliaria/locacoes'
     | '/_app/vendas/pedidos'
@@ -775,6 +788,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImobiliariaImoveisRouteImport
       parentRoute: typeof AppImobiliariaRoute
     }
+    '/_app/imobiliaria/financeiro': {
+      id: '/_app/imobiliaria/financeiro'
+      path: '/financeiro'
+      fullPath: '/imobiliaria/financeiro'
+      preLoaderRoute: typeof AppImobiliariaFinanceiroRouteImport
+      parentRoute: typeof AppImobiliariaRoute
+    }
     '/_app/imobiliaria/fiadores': {
       id: '/_app/imobiliaria/fiadores'
       path: '/fiadores'
@@ -858,6 +878,7 @@ interface AppImobiliariaRouteChildren {
   AppImobiliariaClientesRoute: typeof AppImobiliariaClientesRoute
   AppImobiliariaDashboardRoute: typeof AppImobiliariaDashboardRoute
   AppImobiliariaFiadoresRoute: typeof AppImobiliariaFiadoresRoute
+  AppImobiliariaFinanceiroRoute: typeof AppImobiliariaFinanceiroRoute
   AppImobiliariaImoveisRoute: typeof AppImobiliariaImoveisRoute
   AppImobiliariaLocacoesRoute: typeof AppImobiliariaLocacoesRoute
 }
@@ -866,6 +887,7 @@ const AppImobiliariaRouteChildren: AppImobiliariaRouteChildren = {
   AppImobiliariaClientesRoute: AppImobiliariaClientesRoute,
   AppImobiliariaDashboardRoute: AppImobiliariaDashboardRoute,
   AppImobiliariaFiadoresRoute: AppImobiliariaFiadoresRoute,
+  AppImobiliariaFinanceiroRoute: AppImobiliariaFinanceiroRoute,
   AppImobiliariaImoveisRoute: AppImobiliariaImoveisRoute,
   AppImobiliariaLocacoesRoute: AppImobiliariaLocacoesRoute,
 }

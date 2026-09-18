@@ -1364,6 +1364,7 @@ export type Database = {
       imob_indices_reajuste: {
         Row: {
           acumulado_12m: number | null
+          atualizado_em: string
           criado_em: string
           criado_por: string | null
           fonte: string
@@ -1376,6 +1377,7 @@ export type Database = {
         }
         Insert: {
           acumulado_12m?: number | null
+          atualizado_em?: string
           criado_em?: string
           criado_por?: string | null
           fonte?: string
@@ -1388,6 +1390,7 @@ export type Database = {
         }
         Update: {
           acumulado_12m?: number | null
+          atualizado_em?: string
           criado_em?: string
           criado_por?: string | null
           fonte?: string
@@ -1399,6 +1402,38 @@ export type Database = {
           variacao_percentual?: number | null
         }
         Relationships: []
+      }
+      imovel_fotos: {
+        Row: {
+          criado_em: string
+          id: string
+          imovel_id: string
+          object_key: string
+          ordem: number
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          imovel_id: string
+          object_key: string
+          ordem?: number
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          imovel_id?: string
+          object_key?: string
+          ordem?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imovel_fotos_imovel_id_fkey"
+            columns: ["imovel_id"]
+            isOneToOne: false
+            referencedRelation: "imoveis"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       medicoes: {
         Row: {

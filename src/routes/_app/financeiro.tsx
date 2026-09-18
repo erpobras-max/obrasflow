@@ -100,8 +100,12 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/_app/financeiro")({
-  component: FinanceiroPage,
+  component: FinanceiroCivilPage,
 });
+
+function FinanceiroCivilPage() {
+  return <FinanceiroPage forcedOrigin="erp" />;
+}
 
 interface ContaReceberRow {
   id: string;
@@ -183,15 +187,16 @@ const EMPTY_PAGAR = {
   numero_documento: "",
 };
 
-function FinanceiroPage() {
+export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobiliaria" }) {
   const { roles } = useAuth();
   const qc = useQueryClient();
   const isAdminOrDirector = roles.includes("admin") || roles.includes("diretor");
   const canAccessCivil = isAdminOrDirector || roles.includes("financeiro_civil") || (roles as string[]).includes("financeiro");
   const canAccessImobiliaria = isAdminOrDirector || roles.includes("financeiro_imobiliaria");
-  const scopedOrigin = canAccessCivil && canAccessImobiliaria
+  const roleScopedOrigin = canAccessCivil && canAccessImobiliaria
     ? null
     : canAccessImobiliaria ? "imobiliaria" : "erp";
+  const scopedOrigin = forcedOrigin ?? roleScopedOrigin;
   const podeEditar = canAccessCivil || canAccessImobiliaria;
   const podeExcluir = isAdminOrDirector;
 

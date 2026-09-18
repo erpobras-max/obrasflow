@@ -89,6 +89,7 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
       { key: "imobiliaria", label: "Fiadores", icon: UserCheck, to: "/imobiliaria/fiadores" },
       { key: "imobiliaria", label: "Imóveis", icon: Building2, to: "/imobiliaria/imoveis" },
       { key: "imobiliaria", label: "Locações", icon: ClipboardList, to: "/imobiliaria/locacoes" },
+      { key: "financeiro_imobiliaria", label: "Financeiro Imobiliário", icon: DollarSign, to: "/imobiliaria/financeiro" },
     ],
   },
 ];
@@ -179,4 +180,3 @@ export function AppSidebar({
     </aside>
   );
 }
-

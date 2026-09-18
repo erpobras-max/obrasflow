@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import {
   Home,
   DollarSign,
@@ -14,6 +15,7 @@ import {
   Plus,
   Trash2,
   Loader2,
+  RefreshCw,
 } from "lucide-react";
 import {
   PieChart,
@@ -44,6 +46,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+import { atualizarIndicesBcb } from "@/lib/indices.functions";
 
 export const Route = createFileRoute("/_app/imobiliaria/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard Imobiliária — ERP" }] }),
@@ -76,6 +80,11 @@ const fmtBRLRaw = (val: number | null | undefined) => {
 
 function ImobiliariaDashboardPage() {
   const qc = useQueryClient();
+  const { roles } = useAuth();
+  const podeGerenciarIndices =
+    roles.includes("admin") ||
+    roles.includes("diretor") ||
+    roles.includes("financeiro_imobiliaria");
 
   // Queries
   const { data: imoveis, isLoading: loadingImoveis } = useQuery({
@@ -260,7 +269,12 @@ function ImobiliariaDashboardPage() {
 
   // State para gestão de índices
   const [indiceDialogOpen, setIndiceDialogOpen] = useState(false);
-  const [indiceForm, setIndiceForm] = useState({ indice_tipo: "ipca" as string, periodo_ano: new Date().getFullYear(), valor_indice: "" as string });
+  const [indiceForm, setIndiceForm] = useState({
+    indice_tipo: "ipca" as string,
+    periodo_ano: new Date().getFullYear(),
+    periodo_mes: new Date().getMonth() + 1,
+    valor_indice: "" as string,
+  });
 
   const { data: indices } = useQuery({
     queryKey: ["imob_indices"],
@@ -268,11 +282,50 @@ function ImobiliariaDashboardPage() {
       const { data, error } = await supabase
         .from("imob_indices_reajuste")
         .select("*")
-        .order("periodo_ano", { ascending: false });
+        .order("periodo_ano", { ascending: false })
+        .order("periodo_mes", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  const atualizarIndicesFn = useServerFn(atualizarIndicesBcb);
+  const syncIndicesMutation = useMutation({
+    mutationFn: (force: boolean) => atualizarIndicesFn({ data: { force } }),
+    onSuccess: (result, force) => {
+      if (result.updated > 0) {
+        qc.invalidateQueries({ queryKey: ["imob_indices"] });
+      }
+      if (force) {
+        if (result.errors.length > 0) {
+          toast.warning(`Atualização parcial: ${result.errors.join("; ")}`);
+        } else if (result.skipped) {
+          toast.info("Os índices já estavam atualizados.");
+        } else {
+          toast.success("Índices atualizados pelo Banco Central.");
+        }
+      }
+    },
+    onError: (error: Error) => toast.error("Erro ao atualizar índices: " + error.message),
+  });
+
+  useEffect(() => {
+    if (!indices || syncIndicesMutation.isPending) return;
+    const tipos = new Set(indices.map((indice: any) => indice.indice_tipo));
+    const latest = indices.reduce((value: number, indice: any) => {
+      const time = new Date(indice.atualizado_em ?? indice.criado_em).getTime();
+      return Number.isFinite(time) ? Math.max(value, time) : value;
+    }, 0);
+    const stale = Date.now() - latest >= 24 * 60 * 60 * 1000;
+    if (tipos.size < 3 || stale) syncIndicesMutation.mutate(false);
+  }, [indices]);
+
+  const ultimaAtualizacaoIndices = useMemo(() => {
+    const timestamps = (indices ?? [])
+      .map((indice: any) => new Date(indice.atualizado_em ?? indice.criado_em).getTime())
+      .filter(Number.isFinite);
+    return timestamps.length > 0 ? new Date(Math.max(...timestamps)) : null;
+  }, [indices]);
 
   const deleteIndiceMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -291,16 +344,23 @@ function ImobiliariaDashboardPage() {
       const { error } = await supabase.from("imob_indices_reajuste").insert({
         indice_tipo: values.indice_tipo,
         periodo_ano: values.periodo_ano,
+        periodo_mes: values.periodo_mes,
         valor_indice: parseFloat(values.valor_indice),
         variacao_percentual: parseFloat(values.valor_indice),
         fonte: "Manual",
+        atualizado_em: new Date().toISOString(),
       });
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Índice adicionado com sucesso");
       setIndiceDialogOpen(false);
-      setIndiceForm({ indice_tipo: "ipca", periodo_ano: new Date().getFullYear(), valor_indice: "" });
+      setIndiceForm({
+        indice_tipo: "ipca",
+        periodo_ano: new Date().getFullYear(),
+        periodo_mes: new Date().getMonth() + 1,
+        valor_indice: "",
+      });
       qc.invalidateQueries({ queryKey: ["imob_indices"] });
     },
     onError: (e: any) => toast.error("Erro ao adicionar índice: " + e.message),
@@ -451,12 +511,35 @@ function ImobiliariaDashboardPage() {
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <Percent className="size-4 text-indigo-600" /> Índices de Reajuste
                 </CardTitle>
-                <CardDescription>Últimos valores registrados dos índices IPCA, IGP-M e INPC.</CardDescription>
+                <CardDescription>
+                  IPCA, IGP-M e INPC oficiais do Banco Central.
+                  {ultimaAtualizacaoIndices && (
+                    <> Última atualização: {ultimaAtualizacaoIndices.toLocaleString("pt-BR")}.</>
+                  )}
+                </CardDescription>
               </div>
-              <Button size="sm" onClick={() => setIndiceDialogOpen(true)} className="gap-2">
-                <Plus className="size-3.5" />
-                Adicionar Índice
-              </Button>
+              {podeGerenciarIndices && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => syncIndicesMutation.mutate(true)}
+                    disabled={syncIndicesMutation.isPending}
+                    className="gap-2"
+                  >
+                    {syncIndicesMutation.isPending ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                    Atualizar pelo BCB
+                  </Button>
+                  <Button size="sm" onClick={() => setIndiceDialogOpen(true)} className="gap-2">
+                    <Plus className="size-3.5" />
+                    Adicionar manualmente
+                  </Button>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {indices?.length === 0 ? (
@@ -470,8 +553,10 @@ function ImobiliariaDashboardPage() {
                       <tr className="border-b">
                         <th className="text-left font-medium text-muted-foreground pb-2">Índice</th>
                         <th className="text-right font-medium text-muted-foreground pb-2">Período</th>
-                        <th className="text-right font-medium text-muted-foreground pb-2">Valor (%)</th>
+                        <th className="text-right font-medium text-muted-foreground pb-2">Mensal (%)</th>
+                        <th className="text-right font-medium text-muted-foreground pb-2">Acumulado 12m</th>
                         <th className="text-right font-medium text-muted-foreground pb-2">Fonte</th>
+                        <th className="text-right font-medium text-muted-foreground pb-2">Atualizado em</th>
                         <th className="w-[60px]"></th>
                       </tr>
                     </thead>
@@ -483,25 +568,36 @@ function ImobiliariaDashboardPage() {
                               {INDICE_LABELS[ind.indice_tipo] ?? ind.indice_tipo}
                             </Badge>
                           </td>
-                          <td className="text-right py-2">{ind.periodo_ano}</td>
+                          <td className="text-right py-2">
+                            {String(ind.periodo_mes ?? 1).padStart(2, "0")}/{ind.periodo_ano}
+                          </td>
                           <td className="text-right py-2 font-semibold">
                             {ind.variacao_percentual != null
                               ? `${ind.variacao_percentual}%`
                               : fmtBRLRaw(ind.valor_indice * 100)}
                           </td>
+                          <td className="text-right py-2 font-semibold">
+                            {ind.acumulado_12m != null ? `${Number(ind.acumulado_12m).toFixed(2)}%` : "—"}
+                          </td>
                           <td className="text-right py-2 text-muted-foreground text-xs">
                             {ind.fonte}
                           </td>
+                          <td className="text-right py-2 text-muted-foreground text-xs">
+                            {new Date(ind.atualizado_em ?? ind.criado_em).toLocaleString("pt-BR")}
+                          </td>
                           <td className="text-right py-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-6 text-destructive hover:text-destructive"
-                              onClick={() => deleteIndiceMutation.mutate(ind.id)}
-                              disabled={deleteIndiceMutation.isPending}
-                            >
-                              <Trash2 className="size-3" />
-                            </Button>
+                            {podeGerenciarIndices && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-6 text-destructive hover:text-destructive"
+                                onClick={() => deleteIndiceMutation.mutate(ind.id)}
+                                disabled={deleteIndiceMutation.isPending}
+                                aria-label={`Excluir ${INDICE_LABELS[ind.indice_tipo] ?? ind.indice_tipo}`}
+                              >
+                                <Trash2 className="size-3" />
+                              </Button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -612,6 +708,19 @@ function ImobiliariaDashboardPage() {
                 value={indiceForm.periodo_ano}
                 onChange={(e) => setIndiceForm((f) => ({ ...f, periodo_ano: parseInt(e.target.value) || 0 }))}
                 placeholder="2025"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mês</label>
+              <Input
+                type="number"
+                min={1}
+                max={12}
+                value={indiceForm.periodo_mes}
+                onChange={(e) => setIndiceForm((formValue) => ({
+                  ...formValue,
+                  periodo_mes: Math.min(12, Math.max(1, parseInt(e.target.value) || 1)),
+                }))}
               />
             </div>
             <div className="space-y-2">
