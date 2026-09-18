@@ -121,8 +121,8 @@ function DashboardPage() {
 
       // 4. Fetch Stock Alerts count
       const { data: stockItems } = await supabase
-        .from("produto_estoque")
-        .select("id, saldo, produtos(estoque_min)");
+        .from("estoque_obra")
+        .select("id, quantidade, estoque_min");
 
       // 5. Fetch total unpaid overdue
       const { data: crOverdue } = await (supabase as any)
@@ -137,7 +137,7 @@ function DashboardPage() {
 
       // Calculations
       const stockAlertCount = (stockItems ?? []).filter(
-        (item: any) => Number(item.saldo) <= Number(item.produtos?.estoque_min ?? 0)
+        (item: any) => Number(item.quantidade) <= Number(item.estoque_min ?? 0)
       ).length;
 
       const totalReceberOverdue = (crOverdue ?? []).reduce((sum: number, item: any) => sum + item.valor_total, 0);
