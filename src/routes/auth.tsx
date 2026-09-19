@@ -151,12 +151,16 @@ function AuthPage() {
       setPendingAccess({ ...acesso, documento, area });
       setOtpCode("");
       toast.success(acesso.method === "sms" ? "Código enviado por SMS." : "Link de acesso enviado por e-mail.");
-    } catch {
+    } catch (error) {
       if (area === "general") await supabase.auth.signOut();
+      const serverMessage = error instanceof Error ? error.message : "";
+      const safeAccessMessage = serverMessage.includes("acesso por celular ainda não está configurado")
+        ? serverMessage
+        : "Não foi possível acessar esta área com o documento informado.";
       toast.error(
         area === "general"
           ? "Não foi possível entrar. Confira seu e-mail e senha."
-          : "Não foi possível acessar esta área com o documento informado.",
+          : safeAccessMessage,
       );
     } finally {
       setSubmitting(false);

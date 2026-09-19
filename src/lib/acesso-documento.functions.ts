@@ -12,6 +12,8 @@ const confirmationSchema = inputSchema.extend({
 
 const GENERIC_ERROR = "Não foi possível acessar esta área com o documento informado.";
 const INVALID_CODE_ERROR = "Código inválido ou expirado.";
+const SMS_NOT_CONFIGURED_ERROR =
+  "O acesso por celular ainda não está configurado. Cadastre um e-mail válido para este cliente ou configure o provedor de SMS.";
 
 type AccessArea = z.infer<typeof accessAreaSchema>;
 
@@ -35,11 +37,30 @@ function maskPhone(phone: string) {
 }
 
 function isRealEmail(email?: string | null) {
-  return Boolean(
-    email &&
-    !email.toLowerCase().endsWith("@obrasflow.com.br") &&
-    !email.toLowerCase().endsWith("@sms.obrasflow.local"),
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  const domain = normalized.split("@")[1] ?? "";
+  return (
+    ![
+      "obrasflow.com.br",
+      "sms.obrasflow.local",
+      "example.com",
+      "example.org",
+      "example.net",
+    ].includes(domain) &&
+    !domain.endsWith(".invalid") &&
+    !domain.endsWith(".test")
   );
+}
+
+function failAccess(stage: string, error?: unknown, publicMessage = GENERIC_ERROR): never {
+  const failure = error as { code?: string; status?: number } | undefined;
+  console.error("[acesso-documento]", {
+    stage,
+    code: failure?.code ?? null,
+    status: failure?.status ?? null,
+  });
+  throw new Error(publicMessage);
 }
 
 function documentVariants(documento: string) {
@@ -77,7 +98,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
       .eq("status", "ativo")
       .is("deleted_at", null)
       .maybeSingle();
-    if (civilLookup.error) throw new Error(GENERIC_ERROR);
+    if (civilLookup.error) failAccess("buscar_cliente_civil", civilLookup.error);
 
     if (civilLookup.data) {
       source = "clientes";
@@ -111,7 +132,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     celular?: string | null;
     telefone?: string | null;
   } | null;
-  if (lookup.error || !record) throw new Error(GENERIC_ERROR);
+  if (lookup.error || !record) failAccess("buscar_cadastro", lookup.error);
 
   const expectedRole = area === "client" ? "cliente" : "funcionario";
   const phone = normalizeBrazilianPhone(record.celular || record.telefone);
@@ -141,7 +162,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     };
     const { data: created, error: createError } =
       await supabaseAdmin.auth.admin.createUser(createPayload);
-    if (createError || !created.user) throw new Error(GENERIC_ERROR);
+    if (createError || !created.user) failAccess("criar_usuario", createError);
     userId = created.user.id;
   }
 
@@ -149,7 +170,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     source === "funcionarios"
       ? await supabaseAdmin.from("funcionarios").update({ user_id: userId }).eq("id", record.id)
       : await supabaseAdmin.from(source).update({ auth_user_id: userId }).eq("id", record.id);
-  if (linkResult.error) throw new Error(GENERIC_ERROR);
+  if (linkResult.error) failAccess("vincular_usuario", linkResult.error);
 
   const [{ data: profile, error: profileError }, { data: role, error: roleError }] =
     await Promise.all([
@@ -167,7 +188,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     ]);
 
   if (profileError || roleError || profile?.ativo === false) {
-    throw new Error(GENERIC_ERROR);
+    failAccess("validar_perfil", profileError || roleError);
   }
 
   if (!profile) {
@@ -178,14 +199,14 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
       perfil: expectedRole,
       ativo: true,
     });
-    if (error) throw new Error(GENERIC_ERROR);
+    if (error) failAccess("criar_perfil", error);
   }
 
   if (profile?.perfil !== expectedRole && role?.role !== expectedRole) {
     const { error } = await supabaseAdmin
       .from("user_roles")
       .upsert({ user_id: userId, role: expectedRole }, { onConflict: "user_id,role" });
-    if (error) throw new Error(GENERIC_ERROR);
+    if (error) failAccess("atribuir_cargo", error);
   }
 
   return { supabaseAdmin, userId, record };
@@ -196,7 +217,7 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { supabaseAdmin, userId, record } = await findAuthorizedAccess(data.area, data.documento);
     const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
-    if (userError || !authUser.user) throw new Error(GENERIC_ERROR);
+    if (userError || !authUser.user) failAccess("buscar_usuario_auth", userError);
 
     const email = isRealEmail(record.email) ? record.email! : authUser.user.email;
     if (isRealEmail(email)) {
@@ -205,32 +226,36 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
           email: email!.trim().toLowerCase(),
           email_confirm: true,
         });
-        if (updateError) throw new Error(GENERIC_ERROR);
+        if (updateError) failAccess("atualizar_email_auth", updateError);
       }
       const { error } = await supabaseAdmin.auth.signInWithOtp({
         email: email!,
         options: { shouldCreateUser: false },
       });
-      if (error) throw new Error(GENERIC_ERROR);
-      return { method: "email" as const, maskedTarget: maskEmail(email!) };
+      if (!error) return { method: "email" as const, maskedTarget: maskEmail(email!) };
+
+      const fallbackPhone = normalizeBrazilianPhone(record.celular || record.telefone);
+      if (!fallbackPhone) failAccess("enviar_email", error);
     }
 
     const phone = normalizeBrazilianPhone(record.celular || record.telefone);
-    if (!phone) throw new Error(GENERIC_ERROR);
+    if (!phone) failAccess("sem_canal_de_acesso");
 
     if (authUser.user.phone !== phone) {
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         phone,
         phone_confirm: true,
       });
-      if (updateError) throw new Error(GENERIC_ERROR);
+      if (updateError) failAccess("atualizar_telefone_auth", updateError);
     }
 
     const { error } = await supabaseAdmin.auth.signInWithOtp({
       phone,
       options: { shouldCreateUser: false, channel: "sms" },
     });
-    if (error) throw new Error(GENERIC_ERROR);
+    if (error) {
+      failAccess("enviar_sms", error, SMS_NOT_CONFIGURED_ERROR);
+    }
 
     return { method: "sms" as const, maskedTarget: maskPhone(phone) };
   });
