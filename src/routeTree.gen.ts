@@ -20,6 +20,7 @@ import { Route as PortalIndexRouteImport } from './routes/portal/index'
 import { Route as PortalFotosRouteImport } from './routes/portal/fotos'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro'
 import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
+import { Route as PortalContratosRouteImport } from './routes/portal/contratos'
 import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
 import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
 import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
@@ -107,6 +108,11 @@ const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
 const PortalDocumentosRoute = PortalDocumentosRouteImport.update({
   id: '/documentos',
   path: '/documentos',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalContratosRoute = PortalContratosRouteImport.update({
+  id: '/contratos',
+  path: '/contratos',
   getParentRoute: () => PortalRoute,
 } as any)
 const ImovelPublicoTokenRoute = ImovelPublicoTokenRouteImport.update({
@@ -311,6 +317,7 @@ export interface FileRoutesByFullPath {
   '/usuarios': typeof AppUsuariosRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
+  '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
@@ -356,6 +363,7 @@ export interface FileRoutesByTo {
   '/usuarios': typeof AppUsuariosRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
+  '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
@@ -404,6 +412,7 @@ export interface FileRoutesById {
   '/_app/usuarios': typeof AppUsuariosRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
+  '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
@@ -452,6 +461,7 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/assinar/$token'
     | '/imovel-publico/$token'
+    | '/portal/contratos'
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
@@ -497,6 +507,7 @@ export interface FileRouteTypes {
     | '/usuarios'
     | '/assinar/$token'
     | '/imovel-publico/$token'
+    | '/portal/contratos'
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
@@ -544,6 +555,7 @@ export interface FileRouteTypes {
     | '/_app/usuarios'
     | '/assinar/$token'
     | '/imovel-publico/$token'
+    | '/portal/contratos'
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
@@ -651,6 +663,13 @@ declare module '@tanstack/react-router' {
       path: '/documentos'
       fullPath: '/portal/documentos'
       preLoaderRoute: typeof PortalDocumentosRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/portal/contratos': {
+      id: '/portal/contratos'
+      path: '/contratos'
+      fullPath: '/portal/contratos'
+      preLoaderRoute: typeof PortalContratosRouteImport
       parentRoute: typeof PortalRoute
     }
     '/imovel-publico/$token': {
@@ -987,6 +1006,7 @@ const AppRouteChildren: AppRouteChildren = {
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface PortalRouteChildren {
+  PortalContratosRoute: typeof PortalContratosRoute
   PortalDocumentosRoute: typeof PortalDocumentosRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
   PortalFotosRoute: typeof PortalFotosRoute
@@ -994,6 +1014,7 @@ interface PortalRouteChildren {
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
+  PortalContratosRoute: PortalContratosRoute,
   PortalDocumentosRoute: PortalDocumentosRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
   PortalFotosRoute: PortalFotosRoute,

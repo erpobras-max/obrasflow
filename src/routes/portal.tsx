@@ -1,14 +1,29 @@
 import { createFileRoute, Outlet, useNavigate, Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Building2, LayoutDashboard, Image, Folder, DollarSign, LogOut } from "lucide-react";
+import {
+  Loader2,
+  Building2,
+  LayoutDashboard,
+  Image,
+  Folder,
+  DollarSign,
+  FileSignature,
+  LogOut,
+} from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { PortalContext } from "@/hooks/use-portal-context";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/portal")({
   component: PortalLayout,
@@ -35,7 +50,7 @@ function PortalLayout() {
     queryKey: ["portal-obras", user?.id],
     queryFn: async () => {
       if (!user) return [];
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("obras")
         .select("id, numero, nome")
         .order("created_at", { ascending: false });
@@ -78,6 +93,7 @@ function PortalLayout() {
 
   const menuItems = [
     { label: "Resumo", icon: LayoutDashboard, to: "/portal" },
+    { label: "Contratos", icon: FileSignature, to: "/portal/contratos" },
     { label: "Fotos", icon: Image, to: "/portal/fotos" },
     { label: "Documentos", icon: Folder, to: "/portal/documentos" },
     { label: "Financeiro", icon: DollarSign, to: "/portal/financeiro" },
@@ -93,7 +109,7 @@ function PortalLayout() {
               <Building2 className="size-4 text-primary-foreground" />
             </div>
             <span className="font-bold text-sm md:text-base hidden sm:inline-block">ERP Obras</span>
-            
+
             {obras && obras.length > 0 && (
               <div className="max-w-[200px] sm:max-w-[300px]">
                 <Select value={selectedObraId || ""} onValueChange={handleObraChange}>
@@ -119,9 +135,16 @@ function PortalLayout() {
                   {nomeUsuario.slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
-              <span className="text-xs font-medium hidden md:inline-block text-slate-700">{nomeUsuario}</span>
+              <span className="text-xs font-medium hidden md:inline-block text-slate-700">
+                {nomeUsuario}
+              </span>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleLogout} className="text-muted-foreground size-8">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="text-muted-foreground size-8"
+            >
               <LogOut className="size-4" />
             </Button>
           </div>
@@ -155,7 +178,7 @@ function PortalLayout() {
 
       {/* Main Content Area */}
       <main className="flex-1 container py-6 px-4 max-w-4xl mx-auto">
-        {selectedObraId ? (
+        {selectedObraId || path.startsWith("/portal/contratos") ? (
           <PortalContext.Provider value={{ obraId: selectedObraId }}>
             <Outlet />
           </PortalContext.Provider>
