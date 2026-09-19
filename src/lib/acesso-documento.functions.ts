@@ -66,21 +66,41 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
   const variants = documentVariants(documento);
-  const lookup =
-    area === "client"
-      ? await supabaseAdmin
-          .from("clientes")
-          .select("id,nome,auth_user_id,email,celular,telefone")
-          .in("cpf_cnpj", variants)
-          .eq("status", "ativo")
-          .is("deleted_at", null)
-          .maybeSingle()
-      : await supabaseAdmin
-          .from("funcionarios")
-          .select("id,nome,user_id,email,celular,telefone")
-          .in("cpf", variants)
-          .eq("status", "ativo")
-          .maybeSingle();
+  let source: "clientes" | "imobiliaria_clientes" | "funcionarios";
+  let lookup;
+
+  if (area === "client") {
+    const civilLookup = await supabaseAdmin
+      .from("clientes")
+      .select("id,nome,auth_user_id,email,celular,telefone")
+      .in("cpf_cnpj", variants)
+      .eq("status", "ativo")
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (civilLookup.error) throw new Error(GENERIC_ERROR);
+
+    if (civilLookup.data) {
+      source = "clientes";
+      lookup = civilLookup;
+    } else {
+      source = "imobiliaria_clientes";
+      lookup = await supabaseAdmin
+        .from("imobiliaria_clientes")
+        .select("id,nome,auth_user_id,email,celular,telefone")
+        .in("cpf_cnpj", variants)
+        .eq("status", "ativo")
+        .is("deleted_at", null)
+        .maybeSingle();
+    }
+  } else {
+    source = "funcionarios";
+    lookup = await supabaseAdmin
+      .from("funcionarios")
+      .select("id,nome,user_id,email,celular,telefone")
+      .in("cpf", variants)
+      .eq("status", "ativo")
+      .maybeSingle();
+  }
 
   const record = lookup.data as {
     id: string;
@@ -126,9 +146,9 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
   }
 
   const linkResult =
-    area === "client"
-      ? await supabaseAdmin.from("clientes").update({ auth_user_id: userId }).eq("id", record.id)
-      : await supabaseAdmin.from("funcionarios").update({ user_id: userId }).eq("id", record.id);
+    source === "funcionarios"
+      ? await supabaseAdmin.from("funcionarios").update({ user_id: userId }).eq("id", record.id)
+      : await supabaseAdmin.from(source).update({ auth_user_id: userId }).eq("id", record.id);
   if (linkResult.error) throw new Error(GENERIC_ERROR);
 
   const [{ data: profile, error: profileError }, { data: role, error: roleError }] =
@@ -180,6 +200,13 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
 
     const email = isRealEmail(record.email) ? record.email! : authUser.user.email;
     if (isRealEmail(email)) {
+      if (authUser.user.email?.trim().toLowerCase() !== email!.trim().toLowerCase()) {
+        const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+          email: email!.trim().toLowerCase(),
+          email_confirm: true,
+        });
+        if (updateError) throw new Error(GENERIC_ERROR);
+      }
       const { error } = await supabaseAdmin.auth.signInWithOtp({
         email: email!,
         options: { shouldCreateUser: false },

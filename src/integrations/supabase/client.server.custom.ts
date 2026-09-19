@@ -1,13 +1,15 @@
 // Custom server-side Supabase admin client (service role) pointing at the user's own project.
-import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_PROJECT_URL } from './client.custom';
+import { createClient } from "@supabase/supabase-js";
+import { env } from "cloudflare:workers";
+import { SUPABASE_PROJECT_URL } from "./client.custom";
 
 function createSupabaseAdminClient() {
-  const SUPABASE_SERVICE_ROLE_KEY = 
-    process.env.MY_SUPABASE_SERVICE_ROLE_KEY;
+  const workerEnv = env as unknown as { MY_SUPABASE_SERVICE_ROLE_KEY?: string };
+  const SUPABASE_SERVICE_ROLE_KEY =
+    workerEnv.MY_SUPABASE_SERVICE_ROLE_KEY || process.env.MY_SUPABASE_SERVICE_ROLE_KEY;
 
   if (!SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Variável MY_SUPABASE_SERVICE_ROLE_KEY não encontrada no process.env ou import.meta.env do servidor. Lembre-se de reiniciar o servidor (npm run dev / bun run dev) após alterar o arquivo .env.');
+    throw new Error("Variável MY_SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.");
   }
 
   return createClient(SUPABASE_PROJECT_URL, SUPABASE_SERVICE_ROLE_KEY, {
