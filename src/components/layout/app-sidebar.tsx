@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, HardHat, Briefcase, FileText, ClipboardList,
+  LayoutDashboard, HardHat, FileText, ClipboardList,
   ShoppingCart, Package, DollarSign, Receipt, Folder,
   Wrench, BarChart3, Users, Building2, Ruler, UserCheck, Search,
   Calculator, Upload, CalendarDays,
@@ -33,7 +33,6 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
     title: "Comercial",
     items: [
       { key: "comercial", label: "Clientes", icon: Users, to: "/comercial/clientes" },
-      { key: "comercial", label: "Oportunidades", icon: Briefcase, to: "/comercial/oportunidades" },
       { key: "comercial", label: "Propostas", icon: FileText, to: "/comercial/propostas" },
       { key: "comercial", label: "Contratos", icon: FileText, to: "/comercial/contratos" },
       { key: "comercial", label: "Pedidos de Venda", icon: FileText, to: "/vendas/pedidos" },

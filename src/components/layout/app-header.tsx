@@ -29,7 +29,6 @@ const TITLES: Record<string, string> = {
   "/usuarios": "Usuários",
   "/perfil": "Meu perfil",
   "/comercial/clientes": "Clientes",
-  "/comercial/oportunidades": "Oportunidades",
   "/comercial/propostas": "Propostas",
   "/comercial/contratos": "Contratos",
   "/comercial/licitacoes": "Licitações",
