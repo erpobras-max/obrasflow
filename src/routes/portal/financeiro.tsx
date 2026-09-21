@@ -6,6 +6,7 @@ import { format, parseISO } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { usePortalContext } from "@/hooks/use-portal-context";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,20 +36,38 @@ const fmtBRL = (v: number | null | undefined) => {
 
 function PortalFinanceiro() {
   const { obraId } = usePortalContext();
+  const { user } = useAuth();
 
   // Fetch financial transactions for this obra (only accounts receivable, which represent what the client pays)
   const { data: contasReceber, isLoading, error } = useQuery({
     queryKey: ["portal-obra-financeiro", obraId],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from("contas_receber")
         .select("id, descricao, valor_total, data_vencimento, data_recebimento, valor_recebido, status")
-        .eq("obra_id", obraId as string)
         .order("data_vencimento", { ascending: true });
+
+      if (obraId) {
+        query = query.eq("obra_id", obraId);
+      } else if (user?.id) {
+        const { data: imobCliente, error: clienteError } = await (supabase as any)
+          .from("imobiliaria_clientes")
+          .select("id")
+          .eq("auth_user_id", user.id)
+          .maybeSingle();
+        if (clienteError) throw clienteError;
+        if (!imobCliente) return [];
+        query = query.eq("imob_cliente_id", imobCliente.id);
+      } else {
+        return [];
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       return (data ?? []) as ContaReceberRow[];
     },
+    enabled: !!user,
   });
 
   // Calculate totals

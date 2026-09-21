@@ -117,21 +117,15 @@ export function AppHeader() {
       // 4. Estoque baixo
       const { data: estoque } = await (supabase as any)
         .from("estoque_obra")
-        .select(`
-          id,
-          saldo,
-          obra_id,
-          obras(nome),
-          material:materiais(id, codigo, descricao, unidade, estoque_min)
-        `);
+        .select("id, saldo, obra_id, material_id");
 
       const estoqueBaixo = (estoque ?? [])
-        .filter((item: any) => item.material && Number(item.saldo) <= Number(item.material.estoque_min || 0))
+        .filter((item: any) => Number(item.saldo) < 0)
         .map((item: any) => ({
           id: `estoque-${item.id}`,
           type: "estoque",
-          title: `Estoque crítico: ${item.material.descricao}`,
-          description: `Obra: ${item.obras?.nome || `Cód. Obra: ${item.obra_id}`} | Saldo: ${Number(item.saldo).toFixed(2)} ${item.material.unidade} (Mín: ${Number(item.material.estoque_min).toFixed(2)})`,
+          title: "Estoque com saldo negativo",
+          description: `Obra: ${item.obra_id} | Saldo: ${Number(item.saldo).toFixed(2)}`,
           link: `/estoque`,
           severity: "medium"
         }));
