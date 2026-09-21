@@ -51,7 +51,6 @@ import { Route as AppImobiliariaFiadoresRouteImport } from './routes/_app/imobil
 import { Route as AppImobiliariaDashboardRouteImport } from './routes/_app/imobiliaria.dashboard'
 import { Route as AppImobiliariaClientesRouteImport } from './routes/_app/imobiliaria.clientes'
 import { Route as AppComercialPropostasRouteImport } from './routes/_app/comercial.propostas'
-import { Route as AppComercialOportunidadesRouteImport } from './routes/_app/comercial.oportunidades'
 import { Route as AppComercialLicitacoesRouteImport } from './routes/_app/comercial.licitacoes'
 import { Route as AppComercialContratosRouteImport } from './routes/_app/comercial.contratos'
 import { Route as AppComercialClientesRouteImport } from './routes/_app/comercial.clientes'
@@ -266,12 +265,6 @@ const AppComercialPropostasRoute = AppComercialPropostasRouteImport.update({
   path: '/propostas',
   getParentRoute: () => AppComercialRoute,
 } as any)
-const AppComercialOportunidadesRoute =
-  AppComercialOportunidadesRouteImport.update({
-    id: '/oportunidades',
-    path: '/oportunidades',
-    getParentRoute: () => AppComercialRoute,
-  } as any)
 const AppComercialLicitacoesRoute = AppComercialLicitacoesRouteImport.update({
   id: '/licitacoes',
   path: '/licitacoes',
@@ -325,7 +318,6 @@ export interface FileRoutesByFullPath {
   '/comercial/clientes': typeof AppComercialClientesRoute
   '/comercial/contratos': typeof AppComercialContratosRoute
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
-  '/comercial/oportunidades': typeof AppComercialOportunidadesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
@@ -371,7 +363,6 @@ export interface FileRoutesByTo {
   '/comercial/clientes': typeof AppComercialClientesRoute
   '/comercial/contratos': typeof AppComercialContratosRoute
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
-  '/comercial/oportunidades': typeof AppComercialOportunidadesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
@@ -420,7 +411,6 @@ export interface FileRoutesById {
   '/_app/comercial/clientes': typeof AppComercialClientesRoute
   '/_app/comercial/contratos': typeof AppComercialContratosRoute
   '/_app/comercial/licitacoes': typeof AppComercialLicitacoesRoute
-  '/_app/comercial/oportunidades': typeof AppComercialOportunidadesRoute
   '/_app/comercial/propostas': typeof AppComercialPropostasRoute
   '/_app/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/_app/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
@@ -469,7 +459,6 @@ export interface FileRouteTypes {
     | '/comercial/clientes'
     | '/comercial/contratos'
     | '/comercial/licitacoes'
-    | '/comercial/oportunidades'
     | '/comercial/propostas'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
@@ -515,7 +504,6 @@ export interface FileRouteTypes {
     | '/comercial/clientes'
     | '/comercial/contratos'
     | '/comercial/licitacoes'
-    | '/comercial/oportunidades'
     | '/comercial/propostas'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
@@ -563,7 +551,6 @@ export interface FileRouteTypes {
     | '/_app/comercial/clientes'
     | '/_app/comercial/contratos'
     | '/_app/comercial/licitacoes'
-    | '/_app/comercial/oportunidades'
     | '/_app/comercial/propostas'
     | '/_app/imobiliaria/clientes'
     | '/_app/imobiliaria/dashboard'
@@ -882,13 +869,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppComercialPropostasRouteImport
       parentRoute: typeof AppComercialRoute
     }
-    '/_app/comercial/oportunidades': {
-      id: '/_app/comercial/oportunidades'
-      path: '/oportunidades'
-      fullPath: '/comercial/oportunidades'
-      preLoaderRoute: typeof AppComercialOportunidadesRouteImport
-      parentRoute: typeof AppComercialRoute
-    }
     '/_app/comercial/licitacoes': {
       id: '/_app/comercial/licitacoes'
       path: '/licitacoes'
@@ -917,7 +897,6 @@ interface AppComercialRouteChildren {
   AppComercialClientesRoute: typeof AppComercialClientesRoute
   AppComercialContratosRoute: typeof AppComercialContratosRoute
   AppComercialLicitacoesRoute: typeof AppComercialLicitacoesRoute
-  AppComercialOportunidadesRoute: typeof AppComercialOportunidadesRoute
   AppComercialPropostasRoute: typeof AppComercialPropostasRoute
 }
 
@@ -925,7 +904,6 @@ const AppComercialRouteChildren: AppComercialRouteChildren = {
   AppComercialClientesRoute: AppComercialClientesRoute,
   AppComercialContratosRoute: AppComercialContratosRoute,
   AppComercialLicitacoesRoute: AppComercialLicitacoesRoute,
-  AppComercialOportunidadesRoute: AppComercialOportunidadesRoute,
   AppComercialPropostasRoute: AppComercialPropostasRoute,
 }
 

@@ -76,7 +76,6 @@ interface ItemRow {
   subitem_codigo: string | null; unidade: string | null;
 }
 interface ClienteOpt { id: string; nome: string }
-interface OportOpt { id: string; titulo: string }
 interface CatalogoSubitem { id: string; codigo: string; descricao: string; unidade: string; valor_unitario: number }
 interface CatalogoItem { id: string; codigo: string; descricao: string; propostas_catalogo_subitens: CatalogoSubitem[] }
 interface CatalogoEtapa { id: string; nome: string; descricao: string | null; propostas_catalogo_itens: CatalogoItem[] }
@@ -138,16 +137,6 @@ function PropostasPage() {
         .from("clientes").select("id,nome").is("deleted_at", null).order("nome");
       if (error) throw error;
       return (data ?? []) as ClienteOpt[];
-    },
-  });
-
-  const { data: oportunidades } = useQuery({
-    queryKey: ["oport-opt"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("oportunidades").select("id,titulo").order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as OportOpt[];
     },
   });
 
@@ -296,7 +285,6 @@ function PropostasPage() {
           onOpenChange={(o) => { setFormOpen(o); if (!o) setEditTarget(null); }}
           target={editTarget}
           clientes={clientes ?? []}
-          oportunidades={oportunidades ?? []}
           onSuccess={() => qc.invalidateQueries({ queryKey: ["propostas"] })}
         />
 
@@ -325,13 +313,12 @@ function PropostasPage() {
 }
 
 function PropostaFormDialog({
-  open, onOpenChange, target, clientes, oportunidades, onSuccess,
+  open, onOpenChange, target, clientes, onSuccess,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   target: PropostaRow | null;
   clientes: ClienteOpt[];
-  oportunidades: OportOpt[];
   onSuccess: () => void;
 }) {
   const isEdit = !!target;
@@ -456,7 +443,6 @@ function PropostaFormDialog({
         }));
         form.reset({
           cliente_id: target.cliente_id,
-          oportunidade_id: target.oportunidade_id,
           titulo: target.titulo,
           descricao: target.descricao ?? "",
           status: target.status,
@@ -477,7 +463,6 @@ function PropostaFormDialog({
     mutationFn: async (values: PropostaFormValues) => {
       const head = {
         cliente_id: values.cliente_id,
-        oportunidade_id: values.oportunidade_id || null,
         titulo: values.titulo,
         descricao: values.descricao || null,
         status: values.status,
@@ -555,22 +540,6 @@ function PropostaFormDialog({
                     <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {clientes.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="oportunidade_id" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Oportunidade</FormLabel>
-                  <Select
-                    value={field.value ?? "_none"}
-                    onValueChange={(v) => field.onChange(v === "_none" ? null : v)}
-                  >
-                    <FormControl><SelectTrigger><SelectValue placeholder="—" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      <SelectItem value="_none">— nenhuma —</SelectItem>
-                      {oportunidades.map((o) => (<SelectItem key={o.id} value={o.id}>{o.titulo}</SelectItem>))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
