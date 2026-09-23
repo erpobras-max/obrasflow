@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { uploadR2, getR2Url } from "@/lib/r2";
+import { uploadR2 } from "@/lib/r2";
+import { companyLogoKey, normalizeCompanyLogo } from "@/lib/empresa-logo";
+import { EmpresaLogo } from "@/components/empresa-logo";
 import { Building2, Loader2, Save, Search, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
 
@@ -61,6 +63,7 @@ function EmpresaConfigPage() {
   const [buscandoCnpj, setBuscandoCnpj] = useState(false);
   const [buscandoCep, setBuscandoCep] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const hydrated = useRef(false);
 
   useEffect(() => {
     if (!loading && perfil && !["admin", "diretor", "rh"].includes(perfil.perfil)) {
@@ -82,7 +85,8 @@ function EmpresaConfigPage() {
   });
 
   useEffect(() => {
-    if (!config) return;
+    if (!config || hydrated.current) return;
+    hydrated.current = true;
     setForm({
       razaoSocial: config.razao_social ?? "",
       nomeFantasia: config.nome_fantasia ?? "",
@@ -93,7 +97,7 @@ function EmpresaConfigPage() {
       telefone: formatTelefone(config.telefone ?? ""),
       celular: formatTelefone(config.celular ?? ""),
       website: config.website ?? "",
-      logoUrl: config.logo_url ?? "",
+      logoUrl: normalizeCompanyLogo(config.logo_url ?? ""),
       cep: formatCep(config.cep ?? ""),
       logradouro: config.logradouro ?? "",
       numero: config.numero ?? "",
@@ -110,6 +114,30 @@ function EmpresaConfigPage() {
 
   const alterar = (campo: keyof typeof empty, valor: string) =>
     setForm((atual) => ({ ...atual, [campo]: valor }));
+
+  const enviarLogo = async (file: File) => {
+    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+      toast.error("Envie uma imagem PNG, JPEG ou WebP.");
+      return;
+    }
+    setUploadingLogo(true);
+    try {
+      const key = await uploadR2(file, "outros");
+      const logoUrl = `r2://${key}`;
+      const { data, error } = await supabase.from("configuracoes_empresa")
+        .update({ logo_url: logoUrl, updated_at: new Date().toISOString() })
+        .eq("id", 1).select("id,logo_url").single();
+      if (error) throw error;
+      if (data.logo_url !== logoUrl) throw new Error("A gravação da logo não foi confirmada.");
+      alterar("logoUrl", logoUrl);
+      await qc.invalidateQueries({ queryKey: ["configuracoes-empresa"] });
+      toast.success("Logo enviada e salva.");
+    } catch (error) {
+      toast.error("Falha ao salvar a logo: " + (error instanceof Error ? error.message : (error as { message?: string })?.message ?? "Tente novamente."));
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   const preencherCnpj = async () => {
     const documento = onlyDigits(form.cnpj);
@@ -187,7 +215,7 @@ function EmpresaConfigPage() {
         telefone: onlyDigits(form.telefone) || null,
         celular: onlyDigits(form.celular) || null,
         website: form.website.trim() || null,
-        logo_url: form.logoUrl?.trim() || null,
+        logo_url: normalizeCompanyLogo(form.logoUrl) || null,
         cep: onlyDigits(form.cep) || null,
         logradouro: form.logradouro.trim() || null,
         numero: form.numero.trim() || null,
@@ -229,7 +257,7 @@ function EmpresaConfigPage() {
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10"><Building2 className="size-5 text-primary" /></div>
             <div className="min-w-0 flex-1"><CardTitle className="text-base">Identificação e situação cadastral</CardTitle><CardDescription>Consulte o CNPJ para preencher os dados públicos disponíveis e revise-os antes de salvar.</CardDescription></div>
-            {form.logoUrl && <img src={form.logoUrl} alt="Logo da empresa" className="h-14 max-w-40 rounded border bg-white object-contain p-1" />}
+            <EmpresaLogo value={form.logoUrl} className="h-14 max-w-40 rounded border bg-white object-contain p-1" />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -256,12 +284,12 @@ function EmpresaConfigPage() {
         <CardContent className="grid gap-4 md:grid-cols-2">
           <Campo label="E-mail" id="email"><Input id="email" type="email" value={form.email} onChange={(e) => alterar("email", e.target.value)} /></Campo>
           <Campo label="Website" id="site"><Input id="site" placeholder="https://" value={form.website} onChange={(e) => alterar("website", e.target.value)} /></Campo>
-          <Campo label="Logo (URL)" id="logo"><Input id="logo" placeholder="https://..." value={form.logoUrl||""} onChange={(e) => alterar("logoUrl", e.target.value)} /></Campo>
+          <Campo label="Logo" id="logo"><Input id="logo" placeholder="https://..." readOnly={Boolean(companyLogoKey(form.logoUrl))} value={companyLogoKey(form.logoUrl) ? "Logo armazenada no sistema" : form.logoUrl} onChange={(e) => alterar("logoUrl", e.target.value)} /></Campo>
           <Campo label="Logo (upload)" id="logo-upload">
             <div className="flex items-center gap-3">
-              <input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; setUploadingLogo(true); try { const key = await uploadR2(f, "outros"); const url = getR2Url(key); alterar("logoUrl", url); const { error } = await supabase.from("configuracoes_empresa").update({ logo_url: url, updated_at: new Date().toISOString() }).eq("id", 1); if (error) throw error; await qc.invalidateQueries({ queryKey: ["configuracoes-empresa"] }); toast.success("Logo enviada e salva."); } catch (err: any) { toast.error("Falha ao salvar a logo: " + err.message); } finally { setUploadingLogo(false); e.target.value = ""; } }} />
+              <input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ""; if (file) void enviarLogo(file); }} />
               <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById("logo-upload")?.click()} disabled={uploadingLogo}>{uploadingLogo ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />} {uploadingLogo ? "Enviando..." : "Enviar logo"}</Button>
-              {form.logoUrl && <><img src={form.logoUrl} alt="Logo preview" className="h-10 w-auto rounded shadow-sm object-contain border" /><a href={form.logoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline ml-1">Ver</a></>}
+              <EmpresaLogo value={form.logoUrl} className="h-16 max-w-48 rounded border bg-white p-2 object-contain" link />
             </div>
           </Campo>
           <Campo label="Telefone" id="telefone"><Input id="telefone" value={form.telefone} onChange={(e) => alterar("telefone", formatTelefone(e.target.value))} /></Campo>

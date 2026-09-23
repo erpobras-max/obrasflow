@@ -1,3 +1,4 @@
+import { EmpresaLogo } from "@/components/empresa-logo";
 import { useQuery } from "@tanstack/react-query";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,7 @@ export function PropostaImpressao({proposta,open,onOpenChange}:{proposta:Propost
       <header className="border-b-2 border-slate-800 pb-5">
        <div className="flex items-start justify-between gap-8">
         <div className="flex items-start gap-3">
-         {empresa?.logo_url && <img src={empresa.logo_url} alt="Logo" className="h-14 w-auto object-contain rounded shadow-sm" />}
+         {empresa?.logo_url && <EmpresaLogo value={empresa.logo_url} className="h-14 w-auto object-contain rounded shadow-sm" />}
          <div>
           <h1 className="text-lg font-bold">{empresa?.nome_fantasia||empresa?.razao_social||"Empresa"}</h1>
           <p>{empresa?.razao_social}</p>
