@@ -260,6 +260,39 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
     return { method: "sms" as const, maskedTarget: maskPhone(phone) };
   });
 
+async function gerarSenhaDeAcessoDireto(userId: string) {
+  const { env } = await import("cloudflare:workers");
+  const secret = (env as unknown as { MY_SUPABASE_SERVICE_ROLE_KEY?: string }).MY_SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) throw new Error(GENERIC_ERROR);
+  const input = new TextEncoder().encode(`${userId}:${secret}`);
+  const digest = await crypto.subtle.digest("SHA-256", input);
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `ObrasFlow-${hex}!a1`;
+}
+
+export const acessarDiretoPorDocumento = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => inputSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { supabaseAdmin, userId } = await findAuthorizedAccess(data.area, data.documento);
+    const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (userError || !authUser.user?.email) failAccess("buscar_usuario_auth", userError);
+
+    const password = await gerarSenhaDeAcessoDireto(userId);
+    const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+    if (passwordError) failAccess("preparar_acesso_direto", passwordError);
+
+    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
+      email: authUser.user.email,
+      password,
+    });
+    if (sessionError || !sessionData.session) failAccess("criar_sessao_direta", sessionError);
+
+    return {
+      accessToken: sessionData.session.access_token,
+      refreshToken: sessionData.session.refresh_token,
+    };
+  });
+
 export const confirmarAcessoPorDocumento = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => confirmationSchema.parse(input))
   .handler(async ({ data }) => {
