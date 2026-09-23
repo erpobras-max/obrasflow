@@ -1,3 +1,4 @@
+import { EmpresaLogo } from "@/components/empresa-logo";
 import { useQuery } from "@tanstack/react-query";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ export function ContratoImpressao({ contrato, open, onOpenChange }: { contrato: 
             <header className="border-b-2 border-slate-800 pb-5">
               <div className="flex items-start justify-between gap-8">
                 <div className="flex items-start gap-3">
-                  {documento?.empresa?.logo_url && <img src={documento.empresa.logo_url} alt="Logo" className="h-12 w-auto object-contain rounded shadow-sm" />}
+                  {documento?.empresa?.logo_url && <EmpresaLogo value={documento.empresa.logo_url} className="h-12 w-auto object-contain rounded shadow-sm" />}
                   <div>
                     <h1 className="text-lg font-bold">{documento?.empresa?.nome_fantasia || documento?.empresa?.razao_social || "Empresa"}</h1>
                     <p>{documento?.empresa?.razao_social}</p>
