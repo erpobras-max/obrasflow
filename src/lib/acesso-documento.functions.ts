@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { accessDiagnostic } from "./acesso-diagnostico";
 
 const accessAreaSchema = z.enum(["client", "employee"]);
 const inputSchema = z.object({
@@ -10,7 +11,6 @@ const confirmationSchema = inputSchema.extend({
   codigo: z.string().regex(/^\d{6}$/),
 });
 
-const GENERIC_ERROR = "Não foi possível acessar esta área com o documento informado.";
 const INVALID_CODE_ERROR = "Código inválido ou expirado.";
 const SMS_NOT_CONFIGURED_ERROR =
   "O acesso por celular ainda não está configurado. Cadastre um e-mail válido para este cliente ou configure o provedor de SMS.";
@@ -53,14 +53,23 @@ function isRealEmail(email?: string | null) {
   );
 }
 
-function failAccess(stage: string, error?: unknown, publicMessage = GENERIC_ERROR): never {
+class AccessFailure extends Error {
+  constructor(readonly diagnostic: ReturnType<typeof accessDiagnostic> & { reference: string }) {
+    super(diagnostic.message);
+  }
+}
+
+function failAccess(stage: string, error?: unknown, publicMessage?: string): never {
   const failure = error as { code?: string; status?: number } | undefined;
+  const reference = crypto.randomUUID();
+  const diagnostic = accessDiagnostic(stage, error);
   console.error("[acesso-documento]", {
+    reference,
     stage,
     code: failure?.code ?? null,
     status: failure?.status ?? null,
   });
-  throw new Error(publicMessage);
+  throw new AccessFailure({ ...diagnostic, message: publicMessage ?? diagnostic.message, reference });
 }
 
 function documentVariants(documento: string) {
@@ -82,10 +91,15 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     (area === "employee" && documento.length !== 11) ||
     (area === "client" && ![11, 14].includes(documento.length))
   ) {
-    throw new Error(GENERIC_ERROR);
+    failAccess("documento_invalido");
   }
 
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
+  try {
+    void supabaseAdmin.auth;
+  } catch (error) {
+    failAccess("configurar_servidor", error);
+  }
   const variants = documentVariants(documento);
   let source: "clientes" | "imobiliaria_clientes" | "funcionarios";
   let lookup;
@@ -132,23 +146,25 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     celular?: string | null;
     telefone?: string | null;
   } | null;
-  if (lookup.error || !record) failAccess("buscar_cadastro", lookup.error);
+  if (lookup.error) failAccess("buscar_cadastro", lookup.error);
+  if (!record) failAccess("cadastro_nao_encontrado");
 
   const expectedRole = area === "client" ? "cliente" : "funcionario";
   const phone = normalizeBrazilianPhone(record.celular || record.telefone);
   const profileEmail =
     record.email?.trim().toLowerCase() ||
     (phone ? `${phone.replace(/\D/g, "")}@sms.obrasflow.local` : null);
-  if (!profileEmail && !phone) throw new Error(GENERIC_ERROR);
+  if (!profileEmail && !phone) failAccess("sem_contato");
 
   let userId = area === "client" ? record.auth_user_id : record.user_id;
 
   if (!userId && profileEmail) {
-    const { data: existingProfile } = await supabaseAdmin
+    const { data: existingProfile, error: existingProfileError } = await supabaseAdmin
       .from("perfis_usuarios")
       .select("user_id")
       .eq("email", profileEmail)
       .maybeSingle();
+    if (existingProfileError) failAccess("buscar_perfil_existente", existingProfileError);
     userId = existingProfile?.user_id || null;
   }
 
@@ -187,9 +203,10 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
         .maybeSingle(),
     ]);
 
-  if (profileError || roleError || profile?.ativo === false) {
+  if (profileError || roleError) {
     failAccess("validar_perfil", profileError || roleError);
   }
+  if (profile?.ativo === false) failAccess("perfil_inativo");
 
   if (!profile) {
     const { error } = await supabaseAdmin.from("perfis_usuarios").insert({
@@ -263,7 +280,7 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
 async function gerarSenhaDeAcessoDireto(userId: string) {
   const { env } = await import("cloudflare:workers");
   const secret = (env as unknown as { MY_SUPABASE_SERVICE_ROLE_KEY?: string }).MY_SUPABASE_SERVICE_ROLE_KEY;
-  if (!secret) throw new Error(GENERIC_ERROR);
+  if (!secret) failAccess("configurar_servidor");
   const input = new TextEncoder().encode(`${userId}:${secret}`);
   const digest = await crypto.subtle.digest("SHA-256", input);
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -273,24 +290,34 @@ async function gerarSenhaDeAcessoDireto(userId: string) {
 export const acessarDiretoPorDocumento = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => inputSchema.parse(input))
   .handler(async ({ data }) => {
-    const { supabaseAdmin, userId } = await findAuthorizedAccess(data.area, data.documento);
-    const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
-    if (userError || !authUser.user?.email) failAccess("buscar_usuario_auth", userError);
+    try {
+      const { supabaseAdmin, userId } = await findAuthorizedAccess(data.area, data.documento);
+      const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (userError || !authUser.user) failAccess("buscar_usuario_auth", userError);
+      if (!authUser.user.email) failAccess("auth_sem_email");
 
-    const password = await gerarSenhaDeAcessoDireto(userId);
-    const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-    if (passwordError) failAccess("preparar_acesso_direto", passwordError);
+      const password = await gerarSenhaDeAcessoDireto(userId);
+      const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
+      if (passwordError) failAccess("preparar_acesso_direto", passwordError);
 
-    const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
-      email: authUser.user.email,
-      password,
-    });
-    if (sessionError || !sessionData.session) failAccess("criar_sessao_direta", sessionError);
+      const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
+        email: authUser.user.email,
+        password,
+      });
+      if (sessionError || !sessionData.session) failAccess("criar_sessao_direta", sessionError);
 
-    return {
-      accessToken: sessionData.session.access_token,
-      refreshToken: sessionData.session.refresh_token,
-    };
+      return {
+        ok: true as const,
+        accessToken: sessionData.session.access_token,
+        refreshToken: sessionData.session.refresh_token,
+      };
+    } catch (error) {
+      if (error instanceof AccessFailure) return { ok: false as const, error: error.diagnostic };
+      const reference = crypto.randomUUID();
+      const diagnostic = accessDiagnostic("processar_acesso", error);
+      console.error("[acesso-documento]", { reference, ...diagnostic });
+      return { ok: false as const, error: { ...diagnostic, reference } };
+    }
   });
 
 export const confirmarAcessoPorDocumento = createServerFn({ method: "POST" })
