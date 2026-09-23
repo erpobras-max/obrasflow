@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { acessarDiretoPorDocumento } from "@/lib/acesso-documento.functions";
+import { accessDiagnostic } from "@/lib/acesso-diagnostico";
 import { onlyDigits, validarCPF, validarCpfCnpj } from "@/lib/validacao-documento";
 
 const schema = z.object({
@@ -92,6 +93,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const [area, setArea] = useState<AccessArea>("general");
   const [submitting, setSubmitting] = useState(false);
+  const [accessError, setAccessError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [pendingAccess, setPendingAccess] = useState<{
     method: "email" | "sms";
@@ -121,6 +123,7 @@ function AuthPage() {
 
   const onSubmit = async (values: FormData) => {
     setSubmitting(true);
+    setAccessError(null);
 
     try {
       if (area === "general") {
@@ -158,19 +161,30 @@ function AuthPage() {
       const tokens = await acessarDiretoPorDocumento({
         data: { area, documento },
       });
+      if (tokens.ok === false) {
+        const { message, code, stage, reference } = tokens.error;
+        setAccessError(`${message} Código: ${code}. Etapa: ${stage}. Referência: ${reference}.`);
+        toast.error(message);
+        return;
+      }
+      // Compatibility with an older server during a rolling deployment.
+      if (!tokens.accessToken || !tokens.refreshToken) throw new Error("Resposta de acesso incompleta.");
       const { data, error } = await supabase.auth.setSession({
         access_token: tokens.accessToken,
         refresh_token: tokens.refreshToken,
       });
-      if (error || !data.user) throw new Error("Sessão inválida.");
+      if (error || !data.user) {
+        const diagnostic = accessDiagnostic("salvar_sessao", error);
+        setAccessError(`${diagnostic.message} Código: ${diagnostic.code}. Etapa: ${diagnostic.stage}.`);
+        toast.error(diagnostic.message);
+        return;
+      }
       toast.success("Acesso liberado.");
       navigate({ to: area === "client" ? "/portal" : "/ponto", replace: true });
     } catch (error) {
       if (area === "general") await supabase.auth.signOut();
-      const serverMessage = error instanceof Error ? error.message : "";
-      const safeAccessMessage = serverMessage.includes("acesso por celular ainda não está configurado")
-        ? serverMessage
-        : "Não foi possível acessar esta área com o documento informado.";
+      const safeAccessMessage = "Não foi possível concluir a comunicação com o servidor de acesso. Recarregue a página e tente novamente. Código: ACESSO_COMUNICACAO.";
+      if (area !== "general") setAccessError(safeAccessMessage);
       toast.error(
         area === "general"
           ? "Não foi possível entrar. Confira seu e-mail e senha."
@@ -319,6 +333,11 @@ function AuthPage() {
               </div>
             ) : (
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              {accessError && area !== "general" && (
+                <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900 break-words">
+                  {accessError}
+                </div>
+              )}
             <div className="space-y-2">
               <Label htmlFor="identificador">{isGeneral ? "E-mail" : documentLabel}</Label>
               <Input
