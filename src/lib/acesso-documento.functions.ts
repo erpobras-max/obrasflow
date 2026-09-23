@@ -285,8 +285,8 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
   });
 
 async function gerarSenhaDeAcessoDireto(userId: string) {
-  const { env } = await import("cloudflare:workers");
-  const secret = (env as unknown as { MY_SUPABASE_SERVICE_ROLE_KEY?: string }).MY_SUPABASE_SERVICE_ROLE_KEY?.trim();
+  const { getSupabaseServiceRoleKey } = await import("@/integrations/supabase/client.server.custom");
+  const secret = getSupabaseServiceRoleKey();
   if (!secret) failAccess("configurar_servidor");
   const input = new TextEncoder().encode(`${userId}:${secret}`);
   const digest = await crypto.subtle.digest("SHA-256", input);
