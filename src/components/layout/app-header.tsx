@@ -64,10 +64,11 @@ export function AppHeader() {
       const today = new Date().toISOString().slice(0, 10);
       
       // 1. Obras atrasadas
-      const { data: obras } = await (supabase as any)
+      const { data: obras, error: obrasError } = await (supabase as any)
         .from("obras")
         .select("id, numero, nome, status, data_fim_prevista")
-        .neq("status", "finalizada");
+        .not("status", "in", "(concluida,cancelada)");
+      if (obrasError) throw obrasError;
       
       const obrasAtrasadas = (obras ?? [])
         .filter((o: any) => o.data_fim_prevista && o.data_fim_prevista < today)
@@ -117,15 +118,15 @@ export function AppHeader() {
       // 4. Estoque baixo
       const { data: estoque } = await (supabase as any)
         .from("estoque_obra")
-        .select("id, saldo, obra_id, material_id");
+        .select("id, quantidade, obra_id, produto_id, estoque_min");
 
       const estoqueBaixo = (estoque ?? [])
-        .filter((item: any) => Number(item.saldo) < 0)
+        .filter((item: any) => Number(item.quantidade) <= Number(item.estoque_min ?? 0))
         .map((item: any) => ({
           id: `estoque-${item.id}`,
           type: "estoque",
-          title: "Estoque com saldo negativo",
-          description: `Obra: ${item.obra_id} | Saldo: ${Number(item.saldo).toFixed(2)}`,
+          title: Number(item.quantidade) < 0 ? "Estoque com saldo negativo" : "Estoque baixo",
+          description: `Obra: ${item.obra_id} | Saldo: ${Number(item.quantidade).toFixed(2)}`,
           link: `/estoque`,
           severity: "medium"
         }));

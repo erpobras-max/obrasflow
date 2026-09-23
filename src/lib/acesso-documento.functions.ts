@@ -94,10 +94,17 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     failAccess("documento_invalido");
   }
 
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server.custom");
+  const { createSupabaseAdminClient } = await import("@/integrations/supabase/client.server.custom");
+  let supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>;
   try {
-    void supabaseAdmin.auth;
+    supabaseAdmin = createSupabaseAdminClient();
   } catch (error) {
+    const failure = error instanceof Error ? error : new Error("Unknown initialization failure");
+    // Constructor errors only: strip URLs, credentials and personal values from server diagnostics.
+    console.error("[supabase-initialization]", {
+      name: failure.name,
+      reason: failure.message.replace(/https?:\/\/\S+|[\w.+-]+@[\w.-]+|[A-Za-z0-9_./+=-]{24,}/g, "[redacted]"),
+    });
     failAccess("configurar_servidor", error);
   }
   const variants = documentVariants(documento);
@@ -279,7 +286,7 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
 
 async function gerarSenhaDeAcessoDireto(userId: string) {
   const { env } = await import("cloudflare:workers");
-  const secret = (env as unknown as { MY_SUPABASE_SERVICE_ROLE_KEY?: string }).MY_SUPABASE_SERVICE_ROLE_KEY;
+  const secret = (env as unknown as { MY_SUPABASE_SERVICE_ROLE_KEY?: string }).MY_SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!secret) failAccess("configurar_servidor");
   const input = new TextEncoder().encode(`${userId}:${secret}`);
   const digest = await crypto.subtle.digest("SHA-256", input);
