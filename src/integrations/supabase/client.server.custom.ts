@@ -3,10 +3,30 @@ import { createClient } from "@supabase/supabase-js";
 import { env } from "cloudflare:workers";
 import { SUPABASE_PROJECT_URL } from "./client.custom";
 
+type WorkerBindings = {
+  MY_SUPABASE_SERVICE_ROLE_KEY?: string;
+};
+
+/**
+ * O adaptador Nitro/Vite executa o SSR como um serviço interno. Na versão
+ * atual, esse serviço não recebe o segundo argumento `env`, mas o entrypoint
+ * principal do Nitro preserva os bindings em `globalThis.__env__` antes de
+ * encaminhar a requisição. Consulte esse ambiente primeiro e mantenha os
+ * fallbacks para desenvolvimento local e futuras versões do adaptador.
+ */
+export function getSupabaseServiceRoleKey(): string | undefined {
+  const runtimeEnv = (globalThis as typeof globalThis & { __env__?: WorkerBindings }).__env__;
+  const moduleEnv = env as unknown as WorkerBindings;
+
+  return (
+    runtimeEnv?.MY_SUPABASE_SERVICE_ROLE_KEY ||
+    moduleEnv.MY_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.MY_SUPABASE_SERVICE_ROLE_KEY
+  )?.trim();
+}
+
 export function createSupabaseAdminClient() {
-  const workerEnv = env as unknown as { MY_SUPABASE_SERVICE_ROLE_KEY?: string };
-  const SUPABASE_SERVICE_ROLE_KEY =
-    (workerEnv.MY_SUPABASE_SERVICE_ROLE_KEY || process.env.MY_SUPABASE_SERVICE_ROLE_KEY)?.trim();
+  const SUPABASE_SERVICE_ROLE_KEY = getSupabaseServiceRoleKey();
 
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     throw Object.assign(new Error("Credencial administrativa ausente no servidor."), { code: "SERVER_KEY_MISSING" });
