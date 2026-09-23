@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client.custom";
-import { confirmarAcessoPorDocumento, iniciarAcessoPorDocumento } from "@/lib/acesso-documento.functions";
+import { acessarDiretoPorDocumento } from "@/lib/acesso-documento.functions";
 import { onlyDigits, validarCPF, validarCpfCnpj } from "@/lib/validacao-documento";
 
 const schema = z.object({
@@ -73,8 +73,19 @@ async function loadUserAccess(userId: string) {
   ]));
 }
 
-function sanitizeDocumentInput(value: string, maxLength: number) {
-  return value.replace(/[^\d-]/g, "").slice(0, maxLength);
+function formatDocumentInput(value: string, area: AccessArea) {
+  const digits = onlyDigits(value).slice(0, area === "client" ? 14 : 11);
+  if (area === "client" && digits.length > 11) {
+    return digits
+      .replace(/^(\d{2})(\d)/, "$1.$2")
+      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
+      .replace(/\.(\d{3})(\d)/, ".$1/$2")
+      .replace(/(\d{4})(\d)/, "$1-$2");
+  }
+  return digits
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
 }
 
 function AuthPage() {
@@ -144,13 +155,16 @@ function AuthPage() {
         return;
       }
 
-      const acesso = await iniciarAcessoPorDocumento({
+      const tokens = await acessarDiretoPorDocumento({
         data: { area, documento },
       });
-
-      setPendingAccess({ ...acesso, documento, area });
-      setOtpCode("");
-      toast.success(acesso.method === "sms" ? "Código enviado por SMS." : "Link de acesso enviado por e-mail.");
+      const { data, error } = await supabase.auth.setSession({
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+      });
+      if (error || !data.user) throw new Error("Sessão inválida.");
+      toast.success("Acesso liberado.");
+      navigate({ to: area === "client" ? "/portal" : "/ponto", replace: true });
     } catch (error) {
       if (area === "general") await supabase.auth.signOut();
       const serverMessage = error instanceof Error ? error.message : "";
@@ -167,36 +181,9 @@ function AuthPage() {
     }
   };
 
-  const confirmSmsCode = async () => {
-    if (!pendingAccess || pendingAccess.method !== "sms" || otpCode.length !== 6) return;
-    setSubmitting(true);
-    try {
-      const tokens = await confirmarAcessoPorDocumento({
-        data: {
-          area: pendingAccess.area,
-          documento: pendingAccess.documento,
-          codigo: otpCode,
-        },
-      });
-      const { data, error } = await supabase.auth.setSession({
-        access_token: tokens.accessToken,
-        refresh_token: tokens.refreshToken,
-      });
-      if (error || !data.user) throw new Error("Código inválido.");
-      toast.success("Bem-vindo!");
-      navigate({ to: pendingAccess.area === "client" ? "/portal" : "/ponto", replace: true });
-    } catch {
-      toast.error("Código inválido ou expirado. Solicite um novo código e tente novamente.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
-  const resetDocumentAccess = () => {
-    setPendingAccess(null);
-    setOtpCode("");
-    form.reset({ identificador: "", password: "" });
-  };
+  const resetDocumentAccess = () => form.reset({ identificador: "", password: "" });
+  const confirmSmsCode = async () => undefined;
 
   const currentCopy = AREA_COPY[area];
   const isGeneral = area === "general";
@@ -347,7 +334,7 @@ function AuthPage() {
                   "identificador",
                   isGeneral
                     ? event.target.value
-                    : sanitizeDocumentInput(event.target.value, area === "client" ? 17 : 14),
+                    : formatDocumentInput(event.target.value, area),
                   { shouldValidate: true },
                 )}
               />
@@ -410,7 +397,7 @@ function AuthPage() {
               ) : !pendingAccess ? (
                 <div className="mt-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
                   <ShieldCheck className="mt-0.5 size-4 shrink-0" />
-                  O documento localiza uma conta autorizada. Enviaremos um link ao e-mail cadastrado ou um código ao celular quando não houver e-mail.
+                  O documento localiza uma conta autorizada e libera diretamente o portal correspondente.
                 </div>
               ) : null
             )}
