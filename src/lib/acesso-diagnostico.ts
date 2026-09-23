@@ -20,6 +20,7 @@ const stages: Record<string, string> = {
 };
 
 const causes: Record<string, string> = {
+  SERVER_KEY_MISSING: "A credencial administrativa do Supabase não foi encontrada no ambiente do Worker.",
   "42501": "O banco negou permissão nesta operação. O administrador precisa revisar as permissões e a credencial do servidor.",
   "23505": "Já existe um registro com os mesmos dados. O administrador precisa revisar os vínculos duplicados.",
   "23503": "O cadastro aponta para um registro que não existe mais. Solicite a revisão do vínculo.",

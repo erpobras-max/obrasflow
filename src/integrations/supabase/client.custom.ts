@@ -1,6 +1,7 @@
 // Browser client: this module is also imported by the SSR bundle.
 // Keep it free of Node-only globals such as process.env.
 import { createClient } from "@supabase/supabase-js";
+import { createClockSkewFetch } from "./retry-clock-skew";
 
 // Estes identificadores são públicos e podem ficar no bundle do navegador.
 // Variáveis de build continuam tendo prioridade quando estiverem configuradas.
@@ -16,6 +17,7 @@ export const SUPABASE_ANON_KEY = SUPABASE_PUBLISHABLE_KEY;
 
 function createSupabaseClient() {
   return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    global: { fetch: createClockSkewFetch((input, init) => fetch(input, init)) },
     auth: {
       storage: typeof window !== "undefined" ? localStorage : undefined,
       persistSession: true,
