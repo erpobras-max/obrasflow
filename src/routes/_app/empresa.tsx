@@ -228,7 +228,8 @@ function EmpresaConfigPage() {
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10"><Building2 className="size-5 text-primary" /></div>
-            <div><CardTitle className="text-base">Identificação e situação cadastral</CardTitle><CardDescription>Consulte o CNPJ para preencher os dados públicos disponíveis e revise-os antes de salvar.</CardDescription></div>
+            <div className="min-w-0 flex-1"><CardTitle className="text-base">Identificação e situação cadastral</CardTitle><CardDescription>Consulte o CNPJ para preencher os dados públicos disponíveis e revise-os antes de salvar.</CardDescription></div>
+            {form.logoUrl && <img src={form.logoUrl} alt="Logo da empresa" className="h-14 max-w-40 rounded border bg-white object-contain p-1" />}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -258,7 +259,7 @@ function EmpresaConfigPage() {
           <Campo label="Logo (URL)" id="logo"><Input id="logo" placeholder="https://..." value={form.logoUrl||""} onChange={(e) => alterar("logoUrl", e.target.value)} /></Campo>
           <Campo label="Logo (upload)" id="logo-upload">
             <div className="flex items-center gap-3">
-              <input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; setUploadingLogo(true); try { const key = await uploadR2(f, "outros"); const url = getR2Url(key); alterar("logoUrl", url); toast.success("Logo enviado."); } catch (err: any) { toast.error("Falha no upload: " + err.message); } finally { setUploadingLogo(false); e.target.value = ""; } }} />
+              <input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={async (e) => { const f = e.target.files?.[0]; if (!f) return; setUploadingLogo(true); try { const key = await uploadR2(f, "outros"); const url = getR2Url(key); alterar("logoUrl", url); const { error } = await supabase.from("configuracoes_empresa").update({ logo_url: url, updated_at: new Date().toISOString() }).eq("id", 1); if (error) throw error; await qc.invalidateQueries({ queryKey: ["configuracoes-empresa"] }); toast.success("Logo enviada e salva."); } catch (err: any) { toast.error("Falha ao salvar a logo: " + err.message); } finally { setUploadingLogo(false); e.target.value = ""; } }} />
               <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById("logo-upload")?.click()} disabled={uploadingLogo}>{uploadingLogo ? <Loader2 className="size-4 animate-spin" /> : <ImagePlus className="size-4" />} {uploadingLogo ? "Enviando..." : "Enviar logo"}</Button>
               {form.logoUrl && <><img src={form.logoUrl} alt="Logo preview" className="h-10 w-auto rounded shadow-sm object-contain border" /><a href={form.logoUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline ml-1">Ver</a></>}
             </div>
