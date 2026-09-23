@@ -291,7 +291,9 @@ async function gerarSenhaDeAcessoDireto(userId: string) {
   const input = new TextEncoder().encode(`${userId}:${secret}`);
   const digest = await crypto.subtle.digest("SHA-256", input);
   const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return `ObrasFlow-${hex}!a1`;
+  // O Supabase Auth usa bcrypt, que aceita no máximo 72 bytes de senha.
+  // O hash SHA-256 completo fazia a senha ultrapassar esse limite.
+  return `ObrasFlow-${hex.slice(0, 32)}!a1`;
 }
 
 export const acessarDiretoPorDocumento = createServerFn({ method: "POST" })
