@@ -114,6 +114,20 @@ interface RegistroPontoRow {
   created_at: string;
 }
 
+interface SolicitacaoAjustePontoRow {
+  id: string;
+  funcionario_id: string;
+  data: string;
+  hora_entrada: string | null;
+  hora_saida_almoco: string | null;
+  hora_retorno_almoco: string | null;
+  hora_saida: string | null;
+  motivo: string;
+  status: "pendente" | "aprovado" | "rejeitado";
+  resposta: string | null;
+  created_at: string;
+}
+
 interface FeriasRow {
   id: string;
   funcionario_id: string;
@@ -499,6 +513,18 @@ function RhPage() {
     enabled: !!pontoFuncId,
   });
 
+  const { data: solicitacoesAjuste = [] } = useQuery({
+    queryKey: ["solicitacoes-ajuste-ponto"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("solicitacoes_ajuste_ponto")
+        .select("*")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as SolicitacaoAjustePontoRow[];
+    },
+  });
+
   const { data: todasFerias } = useQuery({
     queryKey: ["ferias"],
     queryFn: async () => {
@@ -737,6 +763,23 @@ function RhPage() {
       toast.success("Ponto registrado");
       qc.invalidateQueries({ queryKey: ["ponto"] });
       setPontoModal(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const revisarAjusteMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: "aprovado" | "rejeitado" }) => {
+      const { error } = await (supabase as any).rpc("revisar_solicitacao_ajuste_ponto", {
+        p_solicitacao_id: id,
+        p_status: status,
+        p_resposta: status === "aprovado" ? "Ajuste conferido e aplicado pelo RH." : "Solicitação rejeitada pelo RH.",
+      });
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      toast.success(variables.status === "aprovado" ? "Ajuste aprovado e aplicado" : "Solicitação rejeitada");
+      qc.invalidateQueries({ queryKey: ["solicitacoes-ajuste-ponto"] });
+      qc.invalidateQueries({ queryKey: ["ponto"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1470,6 +1513,50 @@ function RhPage() {
         {/* ABA: PONTO */}
         {/* ═══════════════════════════════ */}
         <TabsContent value="ponto" className="space-y-4">
+          {solicitacoesAjuste.filter(s => s.status === "pendente").length > 0 && (
+            <Card className="border-amber-200 bg-amber-50/40">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileClock className="size-4 text-amber-700" />
+                  Ajustes aguardando análise
+                  <Badge variant="outline" className="border-amber-200 bg-white text-amber-800">
+                    {solicitacoesAjuste.filter(s => s.status === "pendente").length}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {solicitacoesAjuste.filter(s => s.status === "pendente").slice(0, 6).map(solicitacao => {
+                  const func = funcionarios?.find(f => f.id === solicitacao.funcionario_id);
+                  return (
+                    <div key={solicitacao.id} className="flex flex-col gap-3 rounded-lg border bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold">{func?.nome ?? "Funcionário"}</span>
+                          <Badge variant="outline">{fmtDate(solicitacao.data)}</Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{solicitacao.motivo}</p>
+                        <p className="mt-1 font-mono text-xs text-slate-500">
+                          {fmtTime(solicitacao.hora_entrada)} · {fmtTime(solicitacao.hora_saida_almoco)} · {fmtTime(solicitacao.hora_retorno_almoco)} · {fmtTime(solicitacao.hora_saida)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <Button size="sm" variant="outline" className="border-red-200 text-red-700 hover:bg-red-50"
+                          disabled={revisarAjusteMutation.isPending}
+                          onClick={() => revisarAjusteMutation.mutate({ id: solicitacao.id, status: "rejeitado" })}>
+                          <X className="mr-1.5 size-4" /> Rejeitar
+                        </Button>
+                        <Button size="sm" className="bg-emerald-700 text-white hover:bg-emerald-800"
+                          disabled={revisarAjusteMutation.isPending}
+                          onClick={() => revisarAjusteMutation.mutate({ id: solicitacao.id, status: "aprovado" })}>
+                          <CheckCircle2 className="mr-1.5 size-4" /> Aprovar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          )}
           <TooltipProvider>
             <div className="flex flex-wrap gap-3 items-center justify-between">
             <div className="flex gap-3 flex-wrap">
