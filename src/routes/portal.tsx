@@ -92,7 +92,7 @@ function PortalLayout() {
   const nomeUsuario = perfil?.nome ?? user.email?.split("@")[0] ?? "Cliente";
 
   const menuItems = [
-    ...(selectedObraId ? [{ label: "Resumo", icon: LayoutDashboard, to: "/portal" }] : []),
+    { label: "Obras", icon: LayoutDashboard, to: "/portal" },
     { label: "Contratos", icon: FileSignature, to: "/portal/contratos" },
     ...(selectedObraId
       ? [
@@ -182,7 +182,9 @@ function PortalLayout() {
 
       {/* Main Content Area */}
       <main className="flex-1 container py-6 px-4 max-w-4xl mx-auto">
-        {selectedObraId || path.startsWith("/portal/contratos") || path.startsWith("/portal/financeiro") ? (
+        {selectedObraId ||
+        path.startsWith("/portal/contratos") ||
+        path.startsWith("/portal/financeiro") ? (
           <PortalContext.Provider value={{ obraId: selectedObraId }}>
             <Outlet />
           </PortalContext.Provider>

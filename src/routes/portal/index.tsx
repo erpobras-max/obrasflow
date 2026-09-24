@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Calendar, Clock, MapPin, ChevronRight, CheckCircle2, Circle } from "lucide-react";
+import { Activity, Calendar, ClipboardList, Clock, Loader2, MapPin, Users } from "lucide-react";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -17,10 +17,14 @@ export const Route = createFileRoute("/portal/")({
 function PortalIndex() {
   const { obraId } = usePortalContext();
 
-  const { data: obra, isLoading, error } = useQuery({
+  const {
+    data: obra,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["portal-obra-detalhe", obraId],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("obras")
         .select("*")
         .eq("id", obraId as string)
@@ -28,6 +32,32 @@ function PortalIndex() {
       if (error) throw error;
       return data;
     },
+    enabled: !!obraId,
+  });
+
+  const { data: atualizacoes = [], isLoading: loadingAtualizacoes } = useQuery({
+    queryKey: ["portal-obra-andamento", obraId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("diarios_obra")
+        .select("id,data,atividades,ocorrencias,observacoes,clima,temperatura,efetivo,created_at")
+        .eq("obra_id", obraId as string)
+        .order("data", { ascending: false })
+        .limit(6);
+      if (error) throw error;
+      return (data ?? []) as Array<{
+        id: string;
+        data: string;
+        atividades: string | null;
+        ocorrencias: string | null;
+        observacoes: string | null;
+        clima: string | null;
+        temperatura: number | null;
+        efetivo: Array<{ funcao: string; quantidade: number }> | null;
+        created_at: string;
+      }>;
+    },
+    enabled: !!obraId,
   });
 
   if (isLoading) {
@@ -49,8 +79,8 @@ function PortalIndex() {
     );
   }
 
-  const progresso = obra.progresso ?? 0;
-  
+  const progresso = Math.min(100, Math.max(0, Number(obra.progresso ?? 0)));
+
   // Calculate remaining days
   let diasRestantes = 0;
   let prazoTexto = "Não definido";
@@ -60,43 +90,6 @@ function PortalIndex() {
     diasRestantes = differenceInDays(fim, hoje);
     prazoTexto = format(fim, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   }
-
-  // Predefined construction stages with weights to distribute overall progress
-  const stagesDefinition = [
-    { name: "Fundações e Infraestrutura", weight: 15 },
-    { name: "Estrutura e Alvenaria", weight: 30 },
-    { name: "Instalações Hidráulicas e Elétricas", weight: 20 },
-    { name: "Revestimentos e Acabamentos", weight: 25 },
-    { name: "Pintura e Limpeza Final", weight: 10 },
-  ];
-
-  // Distribute overall progress across stages
-  let accumulatedWeight = 0;
-  const stages = stagesDefinition.map((s) => {
-    let stageProgress = 0;
-    const minOverall = accumulatedWeight;
-    const maxOverall = accumulatedWeight + s.weight;
-    accumulatedWeight += s.weight;
-
-    if (progresso >= maxOverall) {
-      stageProgress = 100;
-    } else if (progresso <= minOverall) {
-      stageProgress = 0;
-    } else {
-      // Linear interpolation inside this stage
-      stageProgress = Math.round(((progresso - minOverall) / s.weight) * 100);
-    }
-
-    let status: "pending" | "progress" | "completed" = "pending";
-    if (stageProgress === 100) status = "completed";
-    else if (stageProgress > 0) status = "progress";
-
-    return {
-      name: s.name,
-      progress: stageProgress,
-      status,
-    };
-  });
 
   // Circular progress dimensions
   const radius = 50;
@@ -112,11 +105,16 @@ function PortalIndex() {
           Obra: <span className="font-semibold">{obra.nome}</span> (Ref: #{obra.numero})
         </p>
         <div className="flex flex-wrap gap-2 mt-4">
-          <Badge className={`${STATUS_OBRA_BADGE[obra.status as keyof typeof STATUS_OBRA_BADGE]} border-none`}>
+          <Badge
+            className={`${STATUS_OBRA_BADGE[obra.status as keyof typeof STATUS_OBRA_BADGE]} border-none`}
+          >
             {STATUS_OBRA_LABEL[obra.status as keyof typeof STATUS_OBRA_LABEL] || obra.status}
           </Badge>
           {obra.cidade && (
-            <Badge variant="secondary" className="bg-white/20 text-white hover:bg-white/30 border-none flex items-center gap-1">
+            <Badge
+              variant="secondary"
+              className="bg-white/20 text-white hover:bg-white/30 border-none flex items-center gap-1"
+            >
               <MapPin className="size-3" />
               {obra.cidade} - {obra.uf}
             </Badge>
@@ -157,7 +155,9 @@ function PortalIndex() {
               </svg>
               <div className="absolute text-center">
                 <span className="text-3xl font-extrabold text-slate-800">{progresso}%</span>
-                <p className="text-[10px] text-muted-foreground uppercase font-semibold mt-0.5">concluído</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-semibold mt-0.5">
+                  concluído
+                </p>
               </div>
             </div>
           </CardContent>
@@ -181,8 +181,8 @@ function PortalIndex() {
                   {obra.data_inicio_real
                     ? format(parseISO(obra.data_inicio_real), "dd/MM/yyyy")
                     : obra.data_inicio_prevista
-                    ? format(parseISO(obra.data_inicio_prevista), "dd/MM/yyyy") + " (Previsto)"
-                    : "Não informado"}
+                      ? format(parseISO(obra.data_inicio_prevista), "dd/MM/yyyy") + " (Previsto)"
+                      : "Não informado"}
                 </p>
               </div>
             </div>
@@ -201,7 +201,13 @@ function PortalIndex() {
               <div>
                 <p className="text-xs text-muted-foreground">Prazo Restante</p>
                 <p className="text-lg font-bold text-slate-800">
-                  {diasRestantes > 0 ? `${diasRestantes} dias úteis` : diasRestantes === 0 ? "Entrega programada para hoje" : "Obra em fase final"}
+                  {diasRestantes > 0
+                    ? `${diasRestantes} dias`
+                    : diasRestantes === 0
+                      ? "Entrega programada para hoje"
+                      : obra.status === "concluida"
+                        ? "Obra concluída"
+                        : `Prazo previsto encerrado há ${Math.abs(diasRestantes)} dias`}
                 </p>
               </div>
             </div>
@@ -209,50 +215,94 @@ function PortalIndex() {
         </Card>
       </div>
 
-      {/* Construction Stages Grid */}
-      <div className="space-y-3">
-        <h2 className="text-lg font-bold text-slate-800">Etapas de Construção</h2>
-        <div className="grid gap-3">
-          {stages.map((stage, idx) => (
-            <div
-              key={idx}
-              className="bg-white p-4 rounded-xl border flex items-center justify-between shadow-sm hover:shadow transition-shadow"
-            >
-              <div className="flex items-center gap-3">
-                {stage.status === "completed" ? (
-                  <CheckCircle2 className="size-5 text-emerald-500 shrink-0" />
-                ) : stage.status === "progress" ? (
-                  <div className="relative size-5 flex items-center justify-center shrink-0">
-                    <div className="absolute size-5 rounded-full border-2 border-primary/20"></div>
-                    <div className="absolute size-3 rounded-full bg-primary animate-pulse"></div>
-                  </div>
-                ) : (
-                  <Circle className="size-5 text-slate-300 shrink-0" />
-                )}
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-800">{stage.name}</h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {stage.status === "completed"
-                      ? "Concluída com sucesso"
-                      : stage.status === "progress"
-                      ? `Em andamento (${stage.progress}%)`
-                      : "Aguardando início das etapas anteriores"}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-bold ${
-                  stage.status === "completed" ? "text-emerald-600" : stage.status === "progress" ? "text-primary" : "text-slate-400"
-                }`}>
-                  {stage.progress}%
-                </span>
-                <ChevronRight className="size-4 text-slate-300" />
-              </div>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-lg text-slate-800">
+                <Activity className="size-5 text-primary" />
+                Últimas atualizações da obra
+              </CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Registros reais informados pela equipe no diário da obra.
+              </p>
             </div>
-          ))}
-        </div>
-      </div>
+            <Badge variant="secondary">{atualizacoes.length} registros recentes</Badge>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loadingAtualizacoes ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="size-6 animate-spin text-primary" />
+            </div>
+          ) : atualizacoes.length === 0 ? (
+            <div className="rounded-xl border border-dashed py-10 text-center">
+              <ClipboardList className="mx-auto mb-3 size-9 text-slate-300" />
+              <h3 className="text-sm font-semibold text-slate-700">
+                Nenhuma atualização publicada
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Os registros feitos pela equipe aparecerão aqui automaticamente.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-0">
+              {atualizacoes.map((registro, index) => {
+                const totalEfetivo = (registro.efetivo ?? []).reduce(
+                  (total, item) => total + Number(item.quantidade || 0),
+                  0,
+                );
+                return (
+                  <div key={registro.id} className="relative flex gap-4 pb-6 last:pb-0">
+                    {index < atualizacoes.length - 1 && (
+                      <div className="absolute left-[15px] top-8 h-[calc(100%-1rem)] w-px bg-slate-200" />
+                    )}
+                    <div className="relative z-10 mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <ClipboardList className="size-4" />
+                    </div>
+                    <div className="min-w-0 flex-1 rounded-xl border bg-slate-50/60 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-800">
+                          {format(parseISO(registro.data), "dd 'de' MMMM 'de' yyyy", {
+                            locale: ptBR,
+                          })}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                          {registro.clima && (
+                            <span className="rounded-full bg-white px-2 py-1 ring-1 ring-slate-200">
+                              {registro.clima}
+                              {registro.temperatura != null ? ` · ${registro.temperatura}°C` : ""}
+                            </span>
+                          )}
+                          {totalEfetivo > 0 && (
+                            <span className="flex items-center gap-1 rounded-full bg-white px-2 py-1 ring-1 ring-slate-200">
+                              <Users className="size-3" /> {totalEfetivo} profissionais
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-700">
+                        {registro.atividades || "Atualização de andamento registrada pela equipe."}
+                      </p>
+                      {registro.ocorrencias && (
+                        <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                          <span className="font-semibold">Ocorrências:</span> {registro.ocorrencias}
+                        </p>
+                      )}
+                      {registro.observacoes && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          <span className="font-semibold text-slate-600">Observações:</span>{" "}
+                          {registro.observacoes}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
