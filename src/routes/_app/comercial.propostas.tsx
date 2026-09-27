@@ -9,7 +9,7 @@ import { Plus, Pencil, Trash2, FileText, Printer, Settings2, CheckCircle2, XCirc
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import {
-  propostaSchema, type PropostaFormValues, type StatusProposta,
+  propostaSchema, type PropostaFormValues, type PropostaItemValues, type StatusProposta,
   STATUS_PROPOSTA_LABEL, STATUS_PROPOSTA_BADGE, statusPropostaEnum,
 } from "@/lib/clientes.schema";
 import { cn, formatBRLInput } from "@/lib/utils";
@@ -100,6 +100,36 @@ const EMPTY: PropostaFormValues = {
   observacoes: "",
   itens: [],
 };
+
+const mensagensValidacao = (erro: unknown): string[] => {
+  if (!erro || typeof erro !== "object") return [];
+  const registro = erro as Record<string, unknown>;
+  const atual = typeof registro.message === "string" ? [registro.message] : [];
+  return [
+    ...atual,
+    ...Object.entries(registro)
+      .filter(([chave]) => chave !== "message" && chave !== "ref" && chave !== "type")
+      .flatMap(([, valor]) => mensagensValidacao(valor)),
+  ];
+};
+
+const normalizarItem = (item: Partial<PropostaItemValues>): PropostaItemValues => ({
+  descricao: String(item.descricao ?? "").trim(),
+  unidade: String(item.unidade || "un").trim(),
+  quantidade: Number(item.quantidade ?? 1),
+  valor_unitario: Number(item.valor_unitario ?? 0),
+  referencia_id: item.referencia_id || null,
+  fonte_referencia: item.fonte_referencia || null,
+  tipo_referencia: item.tipo_referencia || null,
+  codigo_referencia: item.codigo_referencia?.trim() || null,
+  referencia_uf: item.referencia_uf?.trim().toUpperCase() || null,
+  referencia_mes: item.referencia_mes?.trim() || null,
+  etapa_codigo: item.etapa_codigo?.trim() || null,
+  etapa_nome: item.etapa_nome?.trim() || null,
+  item_codigo: item.item_codigo?.trim() || null,
+  item_nome: item.item_nome?.trim() || null,
+  subitem_codigo: item.subitem_codigo?.trim() || null,
+});
 
 function PropostasPage() {
   const { perfil } = useAuth();
@@ -327,14 +357,14 @@ function PropostaFormDialog({
     resolver: zodResolver(propostaSchema),
     defaultValues: EMPTY,
   });
-  const itens = useFieldArray({ control: form.control, name: "itens" });
+  const itens = useFieldArray({ control: form.control, name: "itens", keyName: "_formId" });
   const [etapaDisponivel, setEtapaDisponivel] = useState("");
   const [subetapasSelecionadas, setSubetapasSelecionadas] = useState<SubetapaSelecionada[]>([]);
   const [referenciaOpen, setReferenciaOpen] = useState(false);
   const [calculadoraOpen, setCalculadoraOpen] = useState(false);
 
   const adicionarReferencia = (referencia: ReferenciaCustoSelecionada) => {
-    const novoItem = {
+    const novoItem = normalizarItem({
       descricao: referencia.descricao,
       unidade: "un",
       quantidade: 1,
@@ -345,9 +375,10 @@ function PropostaFormDialog({
       codigo_referencia: referencia.codigo,
       referencia_uf: referencia.uf,
       referencia_mes: referencia.competencia,
-    };
+    });
     if (itens.fields.length === 0 || (itens.fields.length === 1 && !form.getValues("itens.0.descricao"))) itens.replace([novoItem]);
     else itens.append(novoItem);
+    form.clearErrors("itens");
   };
   const { data: catalogoEtapas = [] } = useQuery({
     queryKey: ["catalogo-etapas-proposta"],
@@ -384,7 +415,7 @@ function PropostaFormDialog({
   const incluirSubetapaCatalogo = (subetapa: SubetapaSelecionada) => {
     if (subetapasSelecionadas.some((selecionada) => selecionada.chave === subetapa.chave)) return;
     setSubetapasSelecionadas((atuais) => [...atuais, subetapa]);
-    const linha = {
+    const linha = normalizarItem({
       descricao: subetapa.descricao,
       unidade: subetapa.unidade,
       quantidade: 1,
@@ -394,9 +425,10 @@ function PropostaFormDialog({
       item_codigo: subetapa.itemCodigo,
       item_nome: subetapa.itemNome,
       subitem_codigo: subetapa.subitemCodigo,
-    };
+    });
     if (itens.fields.length === 0 || (itens.fields.length === 1 && !form.getValues("itens.0.descricao"))) itens.replace([linha]);
     else itens.append(linha);
+    form.clearErrors("itens");
   };
   const removerSubetapaCatalogo = (subetapa: SubetapaSelecionada) => {
     setSubetapasSelecionadas((atuais) => atuais.filter((atual) => atual.chave !== subetapa.chave));
@@ -456,6 +488,8 @@ function PropostaFormDialog({
     } else {
       form.reset(EMPTY);
     }
+    setEtapaDisponivel("");
+    setSubetapasSelecionadas([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, target?.id]);
 
@@ -515,6 +549,12 @@ function PropostaFormDialog({
     },
     onError: (e: Error) => toast.error(e.message),
   });
+  const errosItensRaiz = form.formState.errors.itens;
+  const errosItens = Array.isArray(errosItensRaiz)
+    ? errosItensRaiz.flatMap((erro, indice) =>
+        mensagensValidacao(erro).map((mensagem) => `Item ${indice + 1}: ${mensagem}`),
+      )
+    : mensagensValidacao(errosItensRaiz);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -524,7 +564,16 @@ function PropostaFormDialog({
           <DialogDescription>Cabeçalho e itens da proposta comercial</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit(
+              (v) => mutation.mutate(v),
+              (erros) => {
+                const mensagens = mensagensValidacao(erros);
+                toast.error(mensagens[0] || "Revise os campos obrigatórios da proposta.");
+              },
+            )}
+            className="space-y-4"
+          >
             <FormField control={form.control} name="titulo" render={({ field }) => (
               <FormItem>
                 <FormLabel>Título *</FormLabel>
@@ -749,10 +798,12 @@ function PropostaFormDialog({
                   </TableBody>
                 </Table>
               </div>
-              {form.formState.errors.itens && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.itens.message ?? "Verifique os itens"}
-                </p>
+              {errosItens.length > 0 && (
+                <div className="space-y-1 text-xs text-destructive">
+                  {errosItens.map((mensagem, indice) => (
+                    <p key={`${mensagem}-${indice}`}>{mensagem}</p>
+                  ))}
+                </div>
               )}
               <div className="flex justify-end text-sm font-semibold pr-12">
                 Total: <span className="font-mono ml-2">{fmtBRL(total)}</span>
