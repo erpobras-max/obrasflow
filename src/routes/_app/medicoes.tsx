@@ -66,6 +66,14 @@ interface MedicaoItemRow {
 }
 interface ObraOpt { id: string; numero: string; nome: string }
 interface ContratoOpt { id: string; numero: string; titulo: string }
+interface EscopoItem {
+  proposta_item_id: string;
+  etapa_codigo: string | null; etapa_nome: string | null;
+  item_codigo: string | null; item_nome: string | null;
+  subitem_codigo: string | null; descricao: string; unidade: string | null;
+  quantidade: number; valor_unitario: number;
+  percentual_executado: number; percentual_saldo: number;
+}
 
 const fmtBRL = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -278,7 +286,59 @@ function MedicaoFormDialog({
   });
   const { fields, append, remove, replace } = useFieldArray({ control: form.control, name: "itens" });
   const [referenciaOpen, setReferenciaOpen] = useState(false);
+  const [valorContratadoTotal, setValorContratadoTotal] = useState(0);
+  const [carregandoEscopo, setCarregandoEscopo] = useState(false);
+  const [escopoConcluido, setEscopoConcluido] = useState(false);
   const itensWatch = form.watch("itens");
+
+  const buscarEscopo = async (obraId: string) => {
+    const { data, error } = await supabase.rpc("escopo_obra", { p_obra_id: obraId });
+    if (error) throw error;
+    return (data ?? []) as EscopoItem[];
+  };
+
+  const carregarEscopoNovaObra = async (obraId: string) => {
+    setCarregandoEscopo(true);
+    try {
+      const escopo = await buscarEscopo(obraId);
+      setValorContratadoTotal(escopo.reduce(
+        (total, item) => total + Number(item.quantidade ?? 0) * Number(item.valor_unitario ?? 0), 0,
+      ));
+      const pendentes = escopo
+        .filter((item) => Number(item.percentual_saldo ?? 0) > 0)
+        .map((item) => {
+          const anterior = Number(item.percentual_executado ?? 0);
+          return {
+            descricao: item.descricao,
+            unidade: item.unidade ?? "",
+            qtd_contratada: Number(item.quantidade),
+            qtd_executada: 0,
+            valor_unitario: Number(item.valor_unitario),
+            proposta_item_id: item.proposta_item_id,
+            etapa_codigo: item.etapa_codigo,
+            etapa_nome: item.etapa_nome,
+            item_codigo: item.item_codigo,
+            item_nome: item.item_nome,
+            subitem_codigo: item.subitem_codigo,
+            percentual_anterior_item: anterior,
+            percentual_executado: anterior,
+          };
+        });
+      const concluido = escopo.length > 0 && pendentes.length === 0;
+      setEscopoConcluido(concluido);
+      replace(concluido ? [] : (pendentes.length ? pendentes : EMPTY.itens));
+      if (escopo.length > 0 && pendentes.length === 0) {
+        toast.info("Todos os itens desta obra já foram executados em 100%.");
+      }
+    } catch (e) {
+      toast.error(`Não foi possível carregar os itens da obra: ${(e as Error).message}`);
+      replace(EMPTY.itens);
+      setValorContratadoTotal(0);
+      setEscopoConcluido(false);
+    } finally {
+      setCarregandoEscopo(false);
+    }
+  };
 
   const adicionarReferencia = (referencia: ReferenciaCustoSelecionada) => {
     const novoItem = {
@@ -302,9 +362,11 @@ function MedicaoFormDialog({
     () => (itensWatch ?? []).reduce(
       (s, it) => {
         const contratado = Number(it?.qtd_contratada) || 0;
-        const percentual = Number(it?.percentual_executado) || 0;
-        const executado = percentual > 0
-          ? contratado * percentual / 100
+        const percentualAtual = Number(it?.percentual_executado) || 0;
+        const percentualAnterior = Number(it?.percentual_anterior_item) || 0;
+        const percentualMedicao = Math.max(0, percentualAtual - percentualAnterior);
+        const executado = percentualMedicao > 0
+          ? contratado * percentualMedicao / 100
           : Number(it?.qtd_executada) || 0;
         return s + executado * (Number(it?.valor_unitario) || 0);
       },
@@ -319,17 +381,27 @@ function MedicaoFormDialog({
     ),
     [itensWatch],
   );
-  const percentualCalc = valorContratadoCalc > 0
-    ? Math.min(100, totalCalc / valorContratadoCalc * 100)
+  const baseContratadaCalculo = valorContratadoTotal > 0 ? valorContratadoTotal : valorContratadoCalc;
+  const percentualCalc = baseContratadaCalculo > 0
+    ? Math.min(100, totalCalc / baseContratadaCalculo * 100)
     : 0;
 
   useEffect(() => {
     if (!open) return;
     if (target) {
       (async () => {
-        const { data } = await supabase.from("medicoes_itens")
-          .select("*").eq("medicao_id", target.id).order("created_at");
-        const itens = ((data ?? []) as MedicaoItemRow[]).map((i) => ({
+        try {
+          const [{ data, error }, escopo] = await Promise.all([
+            supabase.from("medicoes_itens").select("*").eq("medicao_id", target.id).order("created_at"),
+            buscarEscopo(target.obra_id),
+          ]);
+          if (error) throw error;
+          const escopoMap = new Map(escopo.map((item) => [item.proposta_item_id, item]));
+          setValorContratadoTotal(escopo.reduce(
+            (total, item) => total + Number(item.quantidade ?? 0) * Number(item.valor_unitario ?? 0), 0,
+          ));
+          setEscopoConcluido(false);
+          const itens = ((data ?? []) as MedicaoItemRow[]).map((i) => ({
           descricao: i.descricao, unidade: i.unidade ?? "",
           qtd_contratada: Number(i.qtd_contratada),
           qtd_executada: Number(i.qtd_executada),
@@ -344,27 +416,43 @@ function MedicaoFormDialog({
           etapa_codigo: i.etapa_codigo, etapa_nome: i.etapa_nome,
           item_codigo: i.item_codigo, item_nome: i.item_nome,
           subitem_codigo: i.subitem_codigo,
-          percentual_executado: Number(i.percentual_executado ?? 0),
-        }));
-        form.reset({
-          obra_id: target.obra_id,
-          contrato_id: target.contrato_id,
-          periodo_inicio: target.periodo_inicio,
-          periodo_fim: target.periodo_fim,
-          percentual_total: Number(target.percentual_total),
-          status: target.status,
-          observacoes: target.observacoes ?? "",
-          itens: itens.length ? itens : EMPTY.itens,
-        });
+          percentual_anterior_item: i.proposta_item_id
+            ? Math.max(0, Number(escopoMap.get(i.proposta_item_id)?.percentual_executado ?? 0) - Number(i.percentual_executado ?? 0))
+            : 0,
+          percentual_executado: i.proposta_item_id
+            ? Number(escopoMap.get(i.proposta_item_id)?.percentual_executado ?? i.percentual_executado ?? 0)
+            : Number(i.percentual_executado ?? 0),
+          }));
+          form.reset({
+            obra_id: target.obra_id,
+            contrato_id: target.contrato_id,
+            periodo_inicio: target.periodo_inicio,
+            periodo_fim: target.periodo_fim,
+            percentual_total: Number(target.percentual_total),
+            status: target.status,
+            observacoes: target.observacoes ?? "",
+            itens: itens.length ? itens : EMPTY.itens,
+          });
+        } catch (e) {
+          toast.error(`Não foi possível carregar a medição: ${(e as Error).message}`);
+        }
       })();
     } else {
       form.reset(EMPTY);
+      setValorContratadoTotal(0);
+      setEscopoConcluido(false);
     }
   }, [open, target, form]);
 
   const onSubmit = async (values: MedicaoFormValues) => {
     if (somenteLeitura) return;
     try {
+      const houveAvanco = values.itens.some((item) => item.proposta_item_id
+        ? Number(item.percentual_executado || 0) > Number(item.percentual_anterior_item || 0)
+        : Number(item.qtd_executada || 0) > 0);
+      if (!houveAvanco) {
+        throw new Error("Informe o avanço de pelo menos um item nesta medição.");
+      }
       const baseMed = {
         obra_id: values.obra_id,
         contrato_id: values.contrato_id || null,
@@ -389,9 +477,14 @@ function MedicaoFormDialog({
       }
 
       const itens = values.itens.map((i) => {
-        const percentual = Number(i.percentual_executado || 0);
-        const qtdExecutada = percentual > 0
-          ? Number(i.qtd_contratada || 0) * percentual / 100
+        const percentualAcumulado = Number(i.percentual_executado || 0);
+        const percentualAnterior = Number(i.percentual_anterior_item || 0);
+        if (percentualAcumulado < percentualAnterior) {
+          throw new Error(`O item "${i.descricao}" não pode ficar abaixo de ${percentualAnterior.toLocaleString("pt-BR")}% já executado.`);
+        }
+        const percentualMedicao = percentualAcumulado - percentualAnterior;
+        const qtdExecutada = percentualMedicao > 0
+          ? Number(i.qtd_contratada || 0) * percentualMedicao / 100
           : Number(i.qtd_executada || 0);
         return {
           medicao_id: medicaoId,
@@ -411,7 +504,7 @@ function MedicaoFormDialog({
           etapa_codigo: i.etapa_codigo || null, etapa_nome: i.etapa_nome || null,
           item_codigo: i.item_codigo || null, item_nome: i.item_nome || null,
           subitem_codigo: i.subitem_codigo || null,
-          percentual_executado: percentual,
+          percentual_executado: percentualMedicao,
         };
       });
       const { error: iErr } = await (supabase as any).from("medicoes_itens").insert(itens);
@@ -442,7 +535,10 @@ function MedicaoFormDialog({
               <FormField control={form.control} name="obra_id" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Obra *</FormLabel>
-                  <Select value={field.value || ""} onValueChange={field.onChange}>
+                  <Select value={field.value || ""} onValueChange={(value) => {
+                    field.onChange(value);
+                    if (!target) void carregarEscopoNovaObra(value);
+                  }} disabled={!!target || carregandoEscopo}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Selecione…" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {obras.map((o) => <SelectItem key={o.id} value={o.id}>{o.numero} — {o.nome}</SelectItem>)}
@@ -497,11 +593,13 @@ function MedicaoFormDialog({
                 <label className="text-sm font-semibold">Itens medidos *</label>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" size="sm" variant="outline" className="gap-1"
+                    disabled={escopoConcluido}
                     onClick={() => setReferenciaOpen(true)}>
                     <Database className="size-3.5" /> SINAPI/SICRO
                   </Button>
                   <Button type="button" size="sm" variant="outline" className="gap-1"
-                    onClick={() => append({ descricao: "", unidade: "", qtd_contratada: 0, qtd_executada: 0, valor_unitario: 0 })}>
+                    disabled={escopoConcluido}
+                    onClick={() => append({ descricao: "", unidade: "", qtd_contratada: 0, qtd_executada: 0, valor_unitario: 0, percentual_anterior_item: 0, percentual_executado: 0 })}>
                     <Plus className="size-3.5" /> Adicionar
                   </Button>
                 </div>
@@ -509,7 +607,10 @@ function MedicaoFormDialog({
               <div className="space-y-2">
                 {fields.map((f, idx) => {
                   const it = itensWatch?.[idx];
-                  const sub = (Number(it?.qtd_contratada) || 0) * (Number(it?.percentual_executado) || 0) / 100 * (Number(it?.valor_unitario) || 0);
+                  const percentualAnterior = Number(it?.percentual_anterior_item) || 0;
+                  const percentualAtual = Number(it?.percentual_executado) || 0;
+                  const percentualMedicao = Math.max(0, percentualAtual - percentualAnterior);
+                  const sub = (Number(it?.qtd_contratada) || 0) * percentualMedicao / 100 * (Number(it?.valor_unitario) || 0);
                   return (
                     <div key={f.id} className="rounded-md border p-2"><div className="text-[10px] font-semibold text-muted-foreground mb-1">{[it?.etapa_codigo, it?.etapa_nome, it?.item_codigo, it?.item_nome].filter(Boolean).join(" · ") || "Item"}</div><div className="grid grid-cols-[minmax(0,1fr)_60px_60px_60px_70px_70px_60px_auto] gap-1 items-end">
                       <FormField control={form.control} name={`itens.${idx}.descricao`} render={({ field }) => (
@@ -519,17 +620,17 @@ function MedicaoFormDialog({
                         <FormItem className="!mb-0"><FormControl><Input placeholder="un" {...field} className="h-7 text-xs w-14" /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.qtd_contratada`} render={({ field }) => (
-                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">Contrat</FormLabel><FormControl><Input type="number" step="0.01" placeholder="T" {...field} disabled={!!it?.qtd_executada && Number(it.qtd_executada) > 0} className="h-7 text-xs" /></FormControl></FormItem>
+                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">Contrat</FormLabel><FormControl><Input type="number" step="0.01" placeholder="T" {...field} disabled={!!it?.proposta_item_id || (!!it?.qtd_executada && Number(it.qtd_executada) > 0)} className="h-7 text-xs" /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.qtd_executada`} render={({ field }) => (
-                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">Exec</FormLabel><FormControl><Input type="number" step="0.01" placeholder="J" {...field} disabled={!!field.value && Number(field.value) > 0} className="h-7 text-xs" /></FormControl></FormItem>
+                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">Exec</FormLabel><FormControl><Input type="number" step="0.01" placeholder="J" {...field} disabled={!!it?.proposta_item_id || (!!field.value && Number(field.value) > 0)} className="h-7 text-xs" /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.percentual_executado`} render={({ field }) => (
-                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">%</FormLabel><FormControl><Input type="number" min="0" max="100" step="0.01" placeholder="%" {...field} onChange={(event) => {
-                          const percentual = Number(event.target.value || 0);
+                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">% acum.</FormLabel><FormControl><Input type="number" min={percentualAnterior} max="100" step="0.01" placeholder="%" {...field} onChange={(event) => {
+                          const percentual = Math.min(100, Math.max(percentualAnterior, Number(event.target.value || 0)));
                           field.onChange(percentual);
                           const contratado = Number(form.getValues(`itens.${idx}.qtd_contratada`) || 0);
-                          form.setValue(`itens.${idx}.qtd_executada`, contratado * percentual / 100, { shouldDirty: true });
+                          form.setValue(`itens.${idx}.qtd_executada`, contratado * (percentual - percentualAnterior) / 100, { shouldDirty: true });
                         }} className="h-7 text-xs" /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.valor_unitario`} render={({ field }) => (
@@ -537,11 +638,20 @@ function MedicaoFormDialog({
                       )} />
                       <div className="h-7 flex items-center justify-end text-xs font-mono">{fmtBRL(sub)}</div>
                       <Button type="button" size="icon" variant="ghost" className="text-destructive"
+                        disabled={!!it?.proposta_item_id}
+                        title={it?.proposta_item_id ? "Item contratado não pode ser removido" : "Remover item"}
                         onClick={() => remove(idx)}><X className="size-4" /></Button>
-                    </div></div>
+                    </div>
+                    {percentualAnterior > 0 && <p className="mt-1 text-[10px] text-muted-foreground">Executado anteriormente: {percentualAnterior.toLocaleString("pt-BR")}% · Avanço nesta medição: {percentualMedicao.toLocaleString("pt-BR")}%</p>}
+                    </div>
                   );
                 })}
               </div>
+              {escopoConcluido && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  Todos os itens contratados desta obra já atingiram 100%. Não há saldo disponível para uma nova medição.
+                </div>
+              )}
               <div className="flex justify-end mt-3 text-sm">
                 <span className="text-muted-foreground mr-2">Total:</span>
                 <span className="font-mono font-semibold">{fmtBRL(totalCalc)}</span>
@@ -562,7 +672,7 @@ function MedicaoFormDialog({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={submitting}>{submitting ? "Salvando…" : "Salvar"}</Button>
+              <Button type="submit" disabled={submitting || carregandoEscopo || escopoConcluido}>{submitting ? "Salvando…" : "Salvar"}</Button>
             </DialogFooter>
           </form>
         </Form>

@@ -2290,6 +2290,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      escopo_obra: {
+        Args: { p_obra_id: string }
+        Returns: {
+          descricao: string
+          etapa_codigo: string | null
+          etapa_nome: string | null
+          item_codigo: string | null
+          item_nome: string | null
+          percentual_executado: number
+          percentual_saldo: number
+          proposta_item_id: string
+          quantidade: number
+          subitem_codigo: string | null
+          unidade: string | null
+          valor_unitario: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

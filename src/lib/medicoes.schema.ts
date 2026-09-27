@@ -27,6 +27,7 @@ export const medicaoItemSchema = z.object({
   etapa_codigo: z.string().nullable().optional(), etapa_nome: z.string().nullable().optional(),
   item_codigo: z.string().nullable().optional(), item_nome: z.string().nullable().optional(),
   subitem_codigo: z.string().nullable().optional(),
+  percentual_anterior_item: z.coerce.number().min(0).max(100).optional(),
   percentual_executado: z.coerce.number().min(0).max(100).default(0),
   descricao: z.string().trim().min(1, "Descrição obrigatória").max(300),
   unidade: z.string().trim().max(20).optional().or(z.literal("")),
