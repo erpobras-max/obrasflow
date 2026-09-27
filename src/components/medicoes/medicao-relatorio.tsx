@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import * as XLSX from "xlsx";
 import { FileSpreadsheet, Printer } from "lucide-react";
@@ -5,6 +6,7 @@ import { FileSpreadsheet, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EmpresaLogo } from "@/components/empresa-logo";
 
 type Medicao = {
   id: string;
@@ -34,6 +36,7 @@ type Obra = {
   numero: string;
   nome: string;
   cliente_id: string;
+  responsavel_id: string | null;
   orcamento: number;
   logradouro: string | null;
   numero_endereco: string | null;
@@ -44,6 +47,13 @@ type Obra = {
 };
 
 type Cliente = { id: string; nome: string };
+
+type Empresa = {
+  razao_social: string | null;
+  nome_fantasia: string | null;
+  cnpj: string | null;
+  logo_url: string | null;
+};
 
 type HistoricoMedicao = {
   id: string;
@@ -76,6 +86,7 @@ export function MedicaoRelatorio({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const reportRef = useRef<HTMLElement>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["medicao-relatorio", medicao?.id],
     enabled: !!medicao && open,
@@ -89,7 +100,7 @@ export function MedicaoRelatorio({
 
       const { data: obra, error: obraError } = await supabase
         .from("obras")
-        .select("id,numero,nome,cliente_id,orcamento,logradouro,numero_endereco,complemento,bairro,cidade,uf")
+        .select("id,numero,nome,cliente_id,responsavel_id,orcamento,logradouro,numero_endereco,complemento,bairro,cidade,uf")
         .eq("id", medicao!.obra_id)
         .single();
       if (obraError) throw obraError;
@@ -108,18 +119,59 @@ export function MedicaoRelatorio({
         .maybeSingle();
       if (clienteError) throw clienteError;
 
+      const { data: empresa, error: empresaError } = await supabase
+        .from("configuracoes_empresa")
+        .select("razao_social,nome_fantasia,cnpj,logo_url")
+        .eq("id", 1)
+        .maybeSingle();
+      if (empresaError) throw empresaError;
+
+      let responsavel: { nome: string } | null = null;
+      if (obra.responsavel_id) {
+        const { data: responsaveis, error: responsavelError } = await supabase
+          .rpc("listar_responsaveis_tecnicos" as never);
+        if (responsavelError) throw responsavelError;
+        responsavel = (responsaveis ?? []).find(
+          (perfil: { user_id: string }) => perfil.user_id === obra.responsavel_id,
+        ) ?? null;
+      }
+
       return {
         itens: (itens ?? []) as Item[],
         historico: (historico ?? []) as HistoricoMedicao[],
         obra: obra as Obra,
         cliente: cliente as Cliente | null,
+        empresa: empresa as Empresa | null,
+        responsavel,
       };
     },
   });
 
+  const imprimirRelatorio = () => {
+    if (!reportRef.current) return;
+    const printWindow = window.open("", "_blank", "width=1200,height=900");
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+    printWindow.opener = null;
+    printWindow.onload = () => {
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 250);
+    };
+    const estilos = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((element) => element.outerHTML)
+      .join("\n");
+    printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${medicao?.numero ?? "Medição"}</title>${estilos}<style>body{margin:0;background:#fff}.medicao-print-sheet{max-width:none!important;width:100%!important;box-shadow:none!important}@page{size:landscape;margin:10mm}</style></head><body>${reportRef.current.outerHTML}</body></html>`);
+    printWindow.document.close();
+  };
+
   const gerarExcel = () => {
     if (!medicao || !data) return;
-    const valorAnterior = Number(data.obra.orcamento ?? 0) * Number(medicao.percentual_anterior ?? 0) / 100;
+    const valorContratado = Number(data.obra.orcamento ?? 0) > 0
+      ? Number(data.obra.orcamento)
+      : data.itens.reduce((total, item) => total + Number(item.qtd_contratada ?? 0) * Number(item.valor_unitario ?? 0), 0);
+    const valorAnterior = valorContratado * Number(medicao.percentual_anterior ?? 0) / 100;
     const percentualAcumulado = Number(medicao.percentual_anterior ?? 0) + Number(medicao.percentual_total ?? 0);
     const endereco = [
       data.obra.logradouro,
@@ -130,14 +182,16 @@ export function MedicaoRelatorio({
       data.obra.uf,
     ].filter(Boolean).join(", ") || "—";
 
+    const nomeEmpresa = data.empresa?.nome_fantasia || data.empresa?.razao_social || "Empresa";
     const linhas: (string | number)[][] = [
       ["CRONOGRAMA FÍSICO-FINANCEIRO"],
+      ["Empresa", nomeEmpresa],
       ["Medição", medicao.numero, "", "Obra", data.obra.nome],
       ["Cliente", data.cliente?.nome ?? "—", "", "Local", endereco],
       ["Período", dateBR(medicao.periodo_inicio) + " a " + dateBR(medicao.periodo_fim)],
       [],
       ["Resumo financeiro"],
-      ["Valor contratado", Number(data.obra.orcamento ?? 0)],
+      ["Valor contratado", valorContratado],
       ["Executado anteriormente", valorAnterior],
       ["Valor desta medição", Number(medicao.valor_total ?? 0)],
       ["Valor acumulado", valorAnterior + Number(medicao.valor_total ?? 0)],
@@ -177,47 +231,52 @@ export function MedicaoRelatorio({
       }, { acumulado: 0, linhas: [] }).linhas,
     ];
 
+    const itensInicioRow = 17;
+    const totalRow = itensInicioRow + data.itens.length + 1;
+    const historicoTituloRow = totalRow + 3;
+    const historicoInicioRow = historicoTituloRow + 2;
+
     const sheet = XLSX.utils.aoa_to_sheet(linhas);
     sheet["!merges"] = [
       { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-      { s: { r: 1, c: 1 }, e: { r: 1, c: 2 } },
-      { s: { r: 1, c: 4 }, e: { r: 1, c: 6 } },
+      { s: { r: 1, c: 1 }, e: { r: 1, c: 6 } },
       { s: { r: 2, c: 1 }, e: { r: 2, c: 2 } },
       { s: { r: 2, c: 4 }, e: { r: 2, c: 6 } },
-      { s: { r: 3, c: 1 }, e: { r: 3, c: 6 } },
-      { s: { r: 5, c: 0 }, e: { r: 5, c: 6 } },
-      { s: { r: linhas.length - 2, c: 0 }, e: { r: linhas.length - 2, c: 5 } },
-      { s: { r: 20 + data.historico.length, c: 0 }, e: { r: 20 + data.historico.length, c: 6 } },
-      { s: { r: linhas.length - data.historico.length - 2, c: 0 }, e: { r: linhas.length - data.historico.length - 2, c: 6 } },
+      { s: { r: 3, c: 1 }, e: { r: 3, c: 2 } },
+      { s: { r: 3, c: 4 }, e: { r: 3, c: 6 } },
+      { s: { r: 4, c: 1 }, e: { r: 4, c: 6 } },
+      { s: { r: 6, c: 0 }, e: { r: 6, c: 6 } },
+      { s: { r: totalRow, c: 0 }, e: { r: totalRow, c: 5 } },
+      { s: { r: totalRow + 1, c: 1 }, e: { r: totalRow + 1, c: 6 } },
+      { s: { r: historicoTituloRow, c: 0 }, e: { r: historicoTituloRow, c: 6 } },
     ];
     sheet["!cols"] = [
       { wch: 10 }, { wch: 45 }, { wch: 10 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 18 },
     ];
 
-    const moneyRows = [6, 7, 8, 9, totalRow];
+    const moneyRows = [7, 8, 9, 10, totalRow];
     moneyRows.forEach((row) => {
       const cell = XLSX.utils.encode_cell({ r: row, c: row === totalRow ? 6 : 1 });
       if (sheet[cell]) sheet[cell].z = '"R$" #,##0.00';
     });
-    [10, 11].forEach((row) => {
+    [11, 12].forEach((row) => {
       const cell = XLSX.utils.encode_cell({ r: row, c: 1 });
       if (sheet[cell]) sheet[cell].z = "0.00%";
     });
     data.itens.forEach((_, index) => {
-      const row = 16 + index;
+      const row = itensInicioRow + index;
       [5, 6].forEach((column) => {
         const cell = XLSX.utils.encode_cell({ r: row, c: column });
         if (sheet[cell]) sheet[cell].z = '"R$" #,##0.00';
       });
     });
 
-    const historicoInicio = historicoInicioRow;
     data.historico.forEach((_, index) => {
       [2, 3].forEach((column) => {
-        const cell = XLSX.utils.encode_cell({ r: historicoInicio + index, c: column });
+        const cell = XLSX.utils.encode_cell({ r: historicoInicioRow + index, c: column });
         if (sheet[cell]) sheet[cell].z = "0.00%";
       });
-      const cell = XLSX.utils.encode_cell({ r: historicoInicio + index, c: 4 });
+      const cell = XLSX.utils.encode_cell({ r: historicoInicioRow + index, c: 4 });
       if (sheet[cell]) sheet[cell].z = '"R$" #,##0.00';
     });
 
@@ -226,7 +285,12 @@ export function MedicaoRelatorio({
     XLSX.writeFile(workbook, "cronograma_" + cleanFileName(medicao.numero) + ".xlsx");
   };
 
-  const valorAnterior = data ? Number(data.obra.orcamento ?? 0) * Number(medicao?.percentual_anterior ?? 0) / 100 : 0;
+  const valorContratado = data
+    ? (Number(data.obra.orcamento ?? 0) > 0
+        ? Number(data.obra.orcamento)
+        : data.itens.reduce((total, item) => total + Number(item.qtd_contratada ?? 0) * Number(item.valor_unitario ?? 0), 0))
+    : 0;
+  const valorAnterior = valorContratado * Number(medicao?.percentual_anterior ?? 0) / 100;
   const percentualAcumulado = Number(medicao?.percentual_anterior ?? 0) + Number(medicao?.percentual_total ?? 0);
   const endereco = data ? [
     data.obra.logradouro,
@@ -246,7 +310,7 @@ export function MedicaoRelatorio({
         </DialogHeader>
 
         <div className="flex flex-wrap gap-2 print:hidden">
-          <Button onClick={() => window.print()} disabled={!data}>
+          <Button onClick={imprimirRelatorio} disabled={!data}>
             <Printer className="size-4" /> Imprimir / Salvar PDF
           </Button>
           <Button variant="outline" onClick={gerarExcel} disabled={!data}>
@@ -259,21 +323,21 @@ export function MedicaoRelatorio({
         ) : error || !data ? (
           <p className="py-10 text-center text-sm text-destructive">Não foi possível carregar os dados da medição.</p>
         ) : (
-          <article className="medicao-print-sheet mx-auto w-full max-w-[1123px] bg-white p-8 text-[11px] text-slate-900 shadow print:max-w-none print:p-8 print:shadow-none">
-            <style>{`@media print {
-              body * { visibility: hidden !important; }
-              .medicao-print-sheet, .medicao-print-sheet * { visibility: visible !important; }
-              .medicao-print-sheet { position: absolute; inset: 0; width: 100%; }
-              @page { size: landscape; margin: 10mm; }
-            }`}</style>
+          <article ref={reportRef} className="medicao-print-sheet mx-auto w-full max-w-[1123px] bg-white p-8 text-[11px] text-slate-900 shadow">
 
             <header className="border-b-2 border-slate-800 pb-4">
               <div className="flex items-start justify-between gap-8">
-                <div>
-                  <h1 className="text-xl font-bold tracking-wide">CRONOGRAMA FÍSICO-FINANCEIRO</h1>
-                  <p className="mt-1 text-slate-600">Boletim de medição para acompanhamento e pagamento</p>
+                <div className="flex items-start gap-4">
+                  {data.empresa?.logo_url && <EmpresaLogo value={data.empresa.logo_url} className="h-14 max-w-44 object-contain" />}
+                  <div>
+                    <p className="text-base font-bold">{data.empresa?.nome_fantasia || data.empresa?.razao_social || "Empresa"}</p>
+                    {data.empresa?.razao_social && data.empresa.razao_social !== data.empresa.nome_fantasia && <p className="text-slate-600">{data.empresa.razao_social}</p>}
+                    {data.empresa?.cnpj && <p className="text-slate-600">CNPJ: {data.empresa.cnpj}</p>}
+                  </div>
                 </div>
                 <div className="text-right">
+                  <h1 className="text-xl font-bold tracking-wide">CRONOGRAMA FÍSICO-FINANCEIRO</h1>
+                  <p className="mt-1 text-slate-600">Boletim de medição para acompanhamento e pagamento</p>
                   <p><b>MEDIÇÃO:</b> {medicao.numero}</p>
                   <p><b>EMISSÃO:</b> {new Date().toLocaleDateString("pt-BR")}</p>
                 </div>
@@ -288,7 +352,7 @@ export function MedicaoRelatorio({
             </section>
 
             <section className="mt-4 grid grid-cols-3 gap-3">
-              <div className="rounded border p-3"><p className="text-[10px] uppercase text-slate-500">Valor contratado</p><p className="mt-1 text-base font-bold">{brl(data.obra.orcamento)}</p></div>
+              <div className="rounded border p-3"><p className="text-[10px] uppercase text-slate-500">Valor contratado</p><p className="mt-1 text-base font-bold">{brl(valorContratado)}</p></div>
               <div className="rounded border p-3"><p className="text-[10px] uppercase text-slate-500">Valor desta medição</p><p className="mt-1 text-base font-bold">{brl(medicao.valor_total)}</p></div>
               <div className="rounded border p-3"><p className="text-[10px] uppercase text-slate-500">Valor acumulado</p><p className="mt-1 text-base font-bold">{brl(valorAnterior + Number(medicao.valor_total ?? 0))}</p></div>
               <div className="rounded border p-3"><p className="text-[10px] uppercase text-slate-500">Executado anteriormente</p><p className="mt-1 text-base font-bold">{percent(medicao.percentual_anterior)}</p></div>
@@ -390,7 +454,10 @@ export function MedicaoRelatorio({
             )}
 
             <footer className="mt-14 grid grid-cols-2 gap-16 text-center">
-              <div className="border-t pt-2">Responsável técnico</div>
+              <div className="border-t pt-2">
+                <p>{data.responsavel?.nome || "Responsável técnico não informado"}</p>
+                <p className="text-[10px] text-slate-500">Responsável técnico</p>
+              </div>
               <div className="border-t pt-2">{data.cliente?.nome ?? "Cliente"}</div>
             </footer>
           </article>

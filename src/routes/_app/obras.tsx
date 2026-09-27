@@ -149,10 +149,9 @@ function ObrasPage() {
   });
 
   const { data: usuarios } = useQuery({
-    queryKey: ["usuarios-opt"],
+    queryKey: ["responsaveis-tecnicos-opt"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("perfis_usuarios").select("user_id,nome").eq("ativo", true).order("nome");
+      const { data, error } = await supabase.rpc("listar_responsaveis_tecnicos" as never);
       if (error) throw error;
       return (data ?? []) as UsuarioOpt[];
     },

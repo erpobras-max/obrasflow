@@ -74,7 +74,7 @@ const EMPTY: MedicaoFormValues = {
   obra_id: "", contrato_id: null,
   periodo_inicio: "", periodo_fim: "",
   percentual_total: 0, status: "rascunho", observacoes: "",
-  itens: [{ descricao: "", unidade: "", qtd_contratada: 0, qtd_executada: 0, valor_unitario: 0 }],
+  itens: [{ descricao: "", unidade: "", qtd_contratada: 0, qtd_executada: 0, valor_unitario: 0, percentual_executado: 0 }],
 };
 
 function MedicoesPage() {
@@ -286,6 +286,7 @@ function MedicaoFormDialog({
       unidade: referencia.unidade,
       qtd_contratada: 1,
       qtd_executada: 0,
+      percentual_executado: 0,
       valor_unitario: referencia.valorUnitario,
       referencia_id: referencia.id,
       fonte_referencia: referencia.fonte,
@@ -299,11 +300,28 @@ function MedicaoFormDialog({
   };
   const totalCalc = useMemo(
     () => (itensWatch ?? []).reduce(
-      (s, it) => s + (Number(it?.qtd_contratada) || 0) * (Number(it?.percentual_executado) || 0) / 100 * (Number(it?.valor_unitario) || 0),
+      (s, it) => {
+        const contratado = Number(it?.qtd_contratada) || 0;
+        const percentual = Number(it?.percentual_executado) || 0;
+        const executado = percentual > 0
+          ? contratado * percentual / 100
+          : Number(it?.qtd_executada) || 0;
+        return s + executado * (Number(it?.valor_unitario) || 0);
+      },
       0,
     ),
     [itensWatch],
   );
+  const valorContratadoCalc = useMemo(
+    () => (itensWatch ?? []).reduce(
+      (s, it) => s + (Number(it?.qtd_contratada) || 0) * (Number(it?.valor_unitario) || 0),
+      0,
+    ),
+    [itensWatch],
+  );
+  const percentualCalc = valorContratadoCalc > 0
+    ? Math.min(100, totalCalc / valorContratadoCalc * 100)
+    : 0;
 
   useEffect(() => {
     if (!open) return;
@@ -352,7 +370,7 @@ function MedicaoFormDialog({
         contrato_id: values.contrato_id || null,
         periodo_inicio: values.periodo_inicio,
         periodo_fim: values.periodo_fim,
-        percentual_total: values.percentual_total,
+        percentual_total: Number(percentualCalc.toFixed(2)),
         status: values.status,
         observacoes: values.observacoes || null,
       };
@@ -370,26 +388,32 @@ function MedicaoFormDialog({
         medicaoId = data!.id;
       }
 
-      const itens = values.itens.map((i) => ({
-        medicao_id: medicaoId,
-        descricao: i.descricao,
-        unidade: i.unidade || null,
-        qtd_contratada: i.qtd_contratada,
-        qtd_executada: i.qtd_executada,
-        valor_unitario: i.valor_unitario,
-        valor_total: Number((i.qtd_executada || 0) * (i.valor_unitario || 0)),
-        referencia_id: i.referencia_id || null,
-        fonte_referencia: i.fonte_referencia || null,
-        tipo_referencia: i.tipo_referencia || null,
-        codigo_referencia: i.codigo_referencia || null,
-        referencia_uf: i.referencia_uf || null,
-        referencia_mes: i.referencia_mes || null,
-        proposta_item_id: i.proposta_item_id || null,
-        etapa_codigo: i.etapa_codigo || null, etapa_nome: i.etapa_nome || null,
-        item_codigo: i.item_codigo || null, item_nome: i.item_nome || null,
-        subitem_codigo: i.subitem_codigo || null,
-        percentual_executado: Number(i.percentual_executado || 0),
-      }));
+      const itens = values.itens.map((i) => {
+        const percentual = Number(i.percentual_executado || 0);
+        const qtdExecutada = percentual > 0
+          ? Number(i.qtd_contratada || 0) * percentual / 100
+          : Number(i.qtd_executada || 0);
+        return {
+          medicao_id: medicaoId,
+          descricao: i.descricao,
+          unidade: i.unidade || null,
+          qtd_contratada: i.qtd_contratada,
+          qtd_executada: qtdExecutada,
+          valor_unitario: i.valor_unitario,
+          valor_total: Number(qtdExecutada * (i.valor_unitario || 0)),
+          referencia_id: i.referencia_id || null,
+          fonte_referencia: i.fonte_referencia || null,
+          tipo_referencia: i.tipo_referencia || null,
+          codigo_referencia: i.codigo_referencia || null,
+          referencia_uf: i.referencia_uf || null,
+          referencia_mes: i.referencia_mes || null,
+          proposta_item_id: i.proposta_item_id || null,
+          etapa_codigo: i.etapa_codigo || null, etapa_nome: i.etapa_nome || null,
+          item_codigo: i.item_codigo || null, item_nome: i.item_nome || null,
+          subitem_codigo: i.subitem_codigo || null,
+          percentual_executado: percentual,
+        };
+      });
       const { error: iErr } = await (supabase as any).from("medicoes_itens").insert(itens);
       if (iErr) throw iErr;
 
@@ -463,7 +487,7 @@ function MedicaoFormDialog({
               <div className="space-y-2">
                 <label className="text-sm font-medium leading-none">% executado nesta medição</label>
                 <div className="rounded-md border bg-muted px-3 py-2 text-sm font-medium">
-                  {target ? `${Number(target.percentual_total).toLocaleString("pt-BR")}% (calculado automaticamente)` : "Será calculado a partir dos itens medidos"}
+                  {percentualCalc.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% (calculado automaticamente)
                 </div>
               </div>
             </div>
@@ -501,7 +525,12 @@ function MedicaoFormDialog({
                         <FormItem className="!mb-0"><FormLabel className="text-[10px]">Exec</FormLabel><FormControl><Input type="number" step="0.01" placeholder="J" {...field} disabled={!!field.value && Number(field.value) > 0} className="h-7 text-xs" /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.percentual_executado`} render={({ field }) => (
-                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">%</FormLabel><FormControl><Input type="number" min="0" max="100" step="0.01" placeholder="%" {...field} className="h-7 text-xs" /></FormControl></FormItem>
+                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">%</FormLabel><FormControl><Input type="number" min="0" max="100" step="0.01" placeholder="%" {...field} onChange={(event) => {
+                          const percentual = Number(event.target.value || 0);
+                          field.onChange(percentual);
+                          const contratado = Number(form.getValues(`itens.${idx}.qtd_contratada`) || 0);
+                          form.setValue(`itens.${idx}.qtd_executada`, contratado * percentual / 100, { shouldDirty: true });
+                        }} className="h-7 text-xs" /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.valor_unitario`} render={({ field }) => (
                         <FormItem className="!mb-0"><FormLabel className="text-[10px]">Unit.</FormLabel><FormControl><Input type="number" step="0.01" placeholder="R$" {...field} className="h-7 text-xs" /></FormControl></FormItem>
