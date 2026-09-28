@@ -21,6 +21,7 @@ import {
   STATUS_LOCACAO_BADGE,
 } from "@/lib/imobiliaria.schema";
 import { cn } from "@/lib/utils";
+import { imprimirElemento } from "@/lib/impressao";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1498,63 +1499,7 @@ function LocacoesPage() {
               <TabsContent value="pdf" className="space-y-4 mt-4">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-semibold text-muted-foreground uppercase">Pré-visualização do Contrato</span>
-                  <Button size="sm" onClick={() => {
-                    const printContent = document.getElementById("contrato-impressao")?.innerHTML;
-                    if (printContent) {
-                      const win = window.open("", "_blank");
-                      if (win) {
-                        win.document.write(`
-                          <html>
-                            <head>
-                              <title>Contrato de Locação - #${viewTarget.contrato_numero}</title>
-                              <style>
-                                body {
-                                  font-family: 'Times New Roman', Times, serif;
-                                  font-size: 12pt;
-                                  line-height: 1.6;
-                                  padding: 40px;
-                                  color: black;
-                                  background: white;
-                                }
-                                h1, h2, h3 {
-                                  text-align: center;
-                                }
-                                .text-justify {
-                                  text-align: justify;
-                                }
-                                .margin-y {
-                                  margin-top: 20px;
-                                  margin-bottom: 20px;
-                                }
-                                .signatures {
-                                  margin-top: 50px;
-                                  display: grid;
-                                  grid-template-columns: 1fr 1fr;
-                                  gap: 50px 30px;
-                                }
-                                .signature-line {
-                                  border-top: 1px solid black;
-                                  text-align: center;
-                                  padding-top: 5px;
-                                  margin-top: 40px;
-                                }
-                              </style>
-                            </head>
-                            <body>
-                              ${printContent}
-                              <script>
-                                window.onload = function() {
-                                  window.print();
-                                  window.close();
-                                }
-                              </script>
-                            </body>
-                          </html>
-                        `);
-                        win.document.close();
-                      }
-                    }
-                  }} className="gap-2">
+                  <Button size="sm" onClick={() => imprimirElemento(document.getElementById("contrato-impressao"), `Contrato de locação ${viewTarget.contrato_numero}`)} className="gap-2">
                     <Calendar className="size-3.5" />
                     Gerar PDF / Imprimir
                   </Button>
@@ -1567,7 +1512,7 @@ function LocacoesPage() {
 
                 <div 
                   id="contrato-impressao" 
-                  className="bg-white text-black p-8 rounded-lg border shadow-sm font-serif text-[11px] leading-relaxed max-h-[400px] overflow-y-auto"
+                  className="print-sheet bg-white text-black p-8 rounded-lg border shadow-sm font-serif text-[11px] leading-relaxed max-h-[400px] overflow-y-auto"
                 >
                   <h2 className="text-center font-bold text-sm uppercase tracking-wide">INSTRUMENTO PARTICULAR DE CONTRATO DE LOCAÇÃO</h2>
                   
@@ -1994,12 +1939,12 @@ function LocacoesPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="print:hidden mb-4 flex justify-end">
-            <Button onClick={() => window.print()} className="gap-2">
+            <Button onClick={() => imprimirElemento(document.getElementById("print-vistoria-content"), "Laudo de vistoria")} className="gap-2">
               <Printer className="size-4" />
               Imprimir / Salvar PDF
             </Button>
           </div>
-          <div id="print-vistoria-content" className="bg-white text-black p-8 rounded-lg border shadow-sm font-serif text-[11px] leading-relaxed max-h-[70vh] overflow-y-auto">
+          <div id="print-vistoria-content" className="print-sheet bg-white text-black p-8 rounded-lg border shadow-sm font-serif text-[11px] leading-relaxed max-h-[70vh] overflow-y-auto">
             {printVistoriaTarget && (
               <div className="space-y-6">
                 <header className="border-b-2 pb-4 text-center">
@@ -2131,7 +2076,7 @@ function LocacoesPage() {
           </div>
           <DialogFooter className="print:hidden">
             <Button variant="outline" onClick={() => setPrintVistoriaTarget(null)}>Fechar</Button>
-            <Button onClick={() => window.print()}>
+            <Button onClick={() => imprimirElemento(document.getElementById("print-vistoria-content"), "Laudo de vistoria")}>
               <Printer className="size-4 mr-2" />
               Imprimir / Salvar PDF
             </Button>

@@ -1,10 +1,12 @@
 import { EmpresaLogo } from "@/components/empresa-logo";
 import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client.custom";
+import { imprimirElemento } from "@/lib/impressao";
 
 type Proposta = { id:string; numero:string; titulo:string; descricao:string|null; condicoes_pagamento:string|null; observacoes:string|null; validade:string|null; valor_total:number; cliente_id:string };
 type Linha = { id:string; descricao:string; unidade:string|null; quantidade:number; valor_unitario:number; etapa_codigo:string|null; etapa_nome:string|null; item_codigo:string|null; item_nome:string|null; subitem_codigo:string|null };
@@ -13,6 +15,7 @@ const brl=(v:number)=>Number(v||0).toLocaleString("pt-BR",{style:"currency",curr
 const enderecoEmpresa=(e:Empresa|null|undefined)=>e?[e.logradouro,e.numero,e.complemento,e.bairro,e.cidade,e.uf,e.cep].filter(Boolean).join(", ")||e.endereco:"";
 
 export function PropostaImpressao({proposta,open,onOpenChange}:{proposta:Proposta|null;open:boolean;onOpenChange:(open:boolean)=>void}) {
+ const printRef=useRef<HTMLElement>(null);
  const {data,isLoading}=useQuery({
   queryKey:["proposta-impressao",proposta?.id],enabled:!!proposta&&open,
   queryFn:async()=>{
@@ -31,9 +34,9 @@ export function PropostaImpressao({proposta,open,onOpenChange}:{proposta:Propost
   <Dialog open={open} onOpenChange={onOpenChange}>
    <DialogContent className="max-h-[95vh] max-w-5xl overflow-y-auto print:max-w-none print:border-0 print:p-0">
     <DialogHeader className="print:hidden"><DialogTitle>Proposta pronta para envio</DialogTitle><DialogDescription>Use Imprimir para salvar em PDF ou enviar ao cliente.</DialogDescription></DialogHeader>
-    <div className="print:hidden"><Button onClick={()=>window.print()}><Printer className="size-4"/> Imprimir / Salvar PDF</Button></div>
+    <div className="print:hidden"><Button onClick={()=>imprimirElemento(printRef.current,`Proposta ${proposta?.numero||""}`)}><Printer className="size-4"/> Imprimir / Salvar PDF</Button></div>
     {isLoading||!proposta ? <div className="space-y-3"><Skeleton className="h-20 w-full"/><Skeleton className="h-64 w-full"/></div> : (
-     <article className="proposal-print-sheet mx-auto w-full max-w-[794px] bg-white p-8 text-[12px] text-slate-900 shadow print:max-w-none print:p-10 print:shadow-none">
+     <article ref={printRef} className="print-sheet proposal-print-sheet mx-auto w-full max-w-[794px] bg-white p-8 text-[12px] text-slate-900 shadow print:max-w-none print:p-10 print:shadow-none">
       <style>{`@media print { @page{size:A4;margin:12mm} html,body{background:#fff!important}.proposal-print-sheet{position:relative!important;display:block!important;width:100%!important;max-width:none!important;margin:0!important;box-shadow:none!important} }`}</style>
       <header className="border-b-2 border-slate-800 pb-5">
        <div className="flex items-start justify-between gap-8">

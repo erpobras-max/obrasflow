@@ -1,10 +1,13 @@
 import { EmpresaLogo } from "@/components/empresa-logo";
 import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { supabase } from "@/integrations/supabase/client.custom";
+import { imprimirElemento } from "@/lib/impressao";
+import { formatarDocumento } from "@/lib/documento";
 import {
   AssinaturasContrato,
   AssinaturasImpressao,
@@ -22,6 +25,7 @@ const endereco = (dados: Pick<Empresa, "logradouro" | "numero" | "complemento" |
   dados ? [dados.logradouro, dados.numero, "complemento" in dados ? dados.complemento : null, dados.bairro, dados.cidade, dados.uf, dados.cep].filter(Boolean).join(", ") || ("endereco" in dados ? dados.endereco : "") || "—" : "—";
 
 export function ContratoImpressao({ contrato, open, onOpenChange }: { contrato: Contrato | null; open: boolean; onOpenChange: (open: boolean) => void }) {
+  const printRef = useRef<HTMLElement>(null);
   const { data: documento, isLoading } = useQuery({
     queryKey: ["contrato-impressao", contrato?.id],
     enabled: Boolean(contrato && open),
@@ -62,13 +66,13 @@ export function ContratoImpressao({ contrato, open, onOpenChange }: { contrato: 
           <DialogDescription>Use a impressão do navegador para salvar uma cópia em PDF ou enviar para assinatura.</DialogDescription>
         </DialogHeader>
         <div className="print:hidden flex flex-wrap items-center gap-3">
-          <Button onClick={() => window.print()}><Printer className="size-4" /> Imprimir / Salvar PDF</Button>
+          <Button onClick={() => imprimirElemento(printRef.current, `Contrato ${contrato?.numero || ""}`)}><Printer className="size-4" /> Imprimir / Salvar PDF</Button>
         </div>
         {contrato && <AssinaturasContrato contratoId={contrato.id} signatarios={signatarios} />}
         {isLoading || !contrato ? (
           <div className="space-y-3"><Skeleton className="h-20 w-full" /><Skeleton className="h-72 w-full" /></div>
         ) : (
-          <article className="contract-print-sheet mx-auto w-full max-w-[794px] bg-white p-8 text-[12px] text-slate-900 shadow print:max-w-none print:p-10 print:shadow-none">
+          <article ref={printRef} className="print-sheet contract-print-sheet mx-auto w-full max-w-[794px] bg-white p-8 text-[12px] text-slate-900 shadow print:max-w-none print:p-10 print:shadow-none">
             <style>{`@media print { @page { size:A4; margin:12mm; } html,body { background:#fff!important; } .contract-print-sheet { position:relative!important; display:block!important; width:100%!important; max-width:none!important; margin:0!important; box-shadow:none!important; } }`}</style>
             <header className="border-b-2 border-slate-800 pb-5">
               <div className="flex items-start justify-between gap-8">
@@ -87,8 +91,8 @@ export function ContratoImpressao({ contrato, open, onOpenChange }: { contrato: 
             </header>
             <h2 className="mt-6 text-center text-base font-bold uppercase">Contrato de prestação de serviços</h2>
             <section className="mt-5 space-y-3 leading-6">
-              <p><b>CONTRATANTE:</b> {documento?.cliente?.nome || "Cliente"}, documento {documento?.cliente?.cpf_cnpj || "não informado"}, com endereço em {endereco(documento?.cliente)}.</p>
-              <p><b>CONTRATADA:</b> {documento?.empresa?.razao_social || "Empresa"}, CNPJ {documento?.empresa?.cnpj || "não informado"}, com endereço em {endereco(documento?.empresa)}.</p>
+              <p><b>CONTRATANTE:</b> {documento?.cliente?.nome || "Cliente"}, {formatarDocumento(documento?.cliente?.cpf_cnpj)}, com endereço em {endereco(documento?.cliente)}.</p>
+              <p><b>CONTRATADA:</b> {documento?.empresa?.razao_social || "Empresa"}, {formatarDocumento(documento?.empresa?.cnpj)}, com endereço em {endereco(documento?.empresa)}.</p>
               <h3 className="pt-2 font-bold uppercase">Cláusula primeira — objeto</h3>
               <p><b>1.1.</b> O presente contrato tem por objeto a prestação de serviços de mão de obra descritos em <b>{contrato.objeto || contrato.titulo}</b>, conforme os projetos, memoriais e demais documentos aceitos pelas partes.</p>
               <p><b>1.2.</b> Os serviços serão executados em conformidade com este contrato, os projetos aplicáveis e as normas técnicas pertinentes.</p>

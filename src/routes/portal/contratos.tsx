@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState, type RefObject } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client.custom";
+import { imprimirElemento } from "@/lib/impressao";
 
 export const Route = createFileRoute("/portal/contratos")({ component: PortalContratos });
 
@@ -96,6 +97,7 @@ function PortalContratos() {
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [signature, setSignature] = useState<string | null>(null);
   const [resetKey, setResetKey] = useState(0);
+  const printRef = useRef<HTMLElement>(null);
 
   const {
     data: contratos = [],
@@ -235,7 +237,7 @@ function PortalContratos() {
             <DialogDescription>Revise todo o documento antes de assinar.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2 print:hidden">
-            <Button variant="outline" onClick={() => window.print()}>
+            <Button variant="outline" onClick={() => imprimirElemento(printRef.current, `Contrato ${selected?.numero || ""}`)}>
               <Printer className="size-4" /> Imprimir / Salvar PDF
             </Button>
             {selected && !selected.assinado && (
@@ -244,7 +246,7 @@ function PortalContratos() {
               </Button>
             )}
           </div>
-          {selected && <ContractDocument contract={selected} />}
+          {selected && <ContractDocument contract={selected} printRef={printRef} />}
         </DialogContent>
       </Dialog>
 
@@ -276,11 +278,11 @@ function PortalContratos() {
   );
 }
 
-function ContractDocument({ contract }: { contract: ContratoPortal }) {
+function ContractDocument({ contract, printRef }: { contract: ContratoPortal; printRef: RefObject<HTMLElement | null> }) {
   const companyName =
     contract.empresa?.nome_fantasia || contract.empresa?.razao_social || "Empresa contratada";
   return (
-    <article className="portal-contract-print mx-auto w-full max-w-[794px] bg-white p-5 text-[12px] leading-6 text-slate-900 shadow-sm sm:p-8 print:max-w-none print:p-8 print:shadow-none">
+    <article ref={printRef} className="print-sheet portal-contract-print mx-auto w-full max-w-[794px] bg-white p-5 text-[12px] leading-6 text-slate-900 shadow-sm sm:p-8 print:max-w-none print:p-8 print:shadow-none">
       <style>{`@media print { @page { size:A4; margin:12mm } html,body { background:#fff!important } .portal-contract-print { position:relative!important; display:block!important; width:100%!important; max-width:none!important; margin:0!important; box-shadow:none!important } }`}</style>
       <header className="flex items-start justify-between gap-6 border-b-2 border-slate-800 pb-5">
         <div>

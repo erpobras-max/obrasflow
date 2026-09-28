@@ -13,7 +13,9 @@ AS $$
     WHERE token = _token AND usado_em IS NULL AND revogado_em IS NULL AND expira_em > now()
   ), empresa AS (
     SELECT jsonb_build_object(
-      'razao_social', razao_social, 'nome_fantasia', nome_fantasia, 'cnpj', cnpj
+      'razao_social', razao_social, 'nome_fantasia', nome_fantasia, 'cnpj', cnpj,
+      'logradouro', logradouro, 'numero', numero, 'complemento', complemento,
+      'bairro', bairro, 'cidade', cidade, 'uf', uf, 'cep', cep
     ) AS dados
     FROM public.configuracoes_empresa WHERE id = 1
   )
@@ -32,7 +34,11 @@ AS $$
           'objeto', c.objeto, 'valor_total', c.valor_total,
           'data_inicio', c.data_inicio, 'data_fim', c.data_fim,
           'observacoes', c.observacoes,
-          'contratante', jsonb_build_object('nome', cli.nome, 'documento', cli.cpf_cnpj),
+          'contratante', jsonb_build_object(
+            'nome', cli.nome, 'documento', cli.cpf_cnpj, 'logradouro', cli.logradouro,
+            'numero', cli.numero, 'complemento', cli.complemento, 'bairro', cli.bairro,
+            'cidade', cli.cidade, 'uf', cli.uf, 'cep', cli.cep
+          ),
           'contratada', (SELECT dados FROM empresa LIMIT 1)
         )
         FROM public.contratos c
