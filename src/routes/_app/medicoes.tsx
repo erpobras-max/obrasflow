@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Database, FileOutput, Plus, Pencil, Trash2, Ruler, X } from "lucide-react";
@@ -276,9 +276,7 @@ function MedicaoFormDialog({
   contratos: ContratoOpt[];
   onSuccess: () => void;
 }) {
-  const bloqueado = !!target && (target.status === "aprovada" || target.status === "faturada");
-  const apenasVisual = !!target && ((target as any).itens?.some((i: any) => Number(i.qtd_executada) > 0) ?? false);
-  const somenteLeitura = bloqueado || apenasVisual;
+  const somenteLeitura = !!target && target.status === "faturada";
   const { user } = useAuth();
   const form = useForm<MedicaoFormValues>({
     resolver: zodResolver(medicaoSchema),
@@ -445,7 +443,10 @@ function MedicaoFormDialog({
   }, [open, target, form]);
 
   const onSubmit = async (values: MedicaoFormValues) => {
-    if (somenteLeitura) return;
+    if (somenteLeitura) {
+      toast.info("Medições faturadas não podem ser alteradas.");
+      return;
+    }
     try {
       const houveAvanco = values.itens.some((item) => item.proposta_item_id
         ? Number(item.percentual_executado || 0) > Number(item.percentual_anterior_item || 0)
@@ -518,6 +519,19 @@ function MedicaoFormDialog({
     }
   };
 
+  const onInvalid = (errors: FieldErrors<MedicaoFormValues>) => {
+    const itemError = errors.itens?.find?.((item) => item?.descricao?.message || item?.qtd_contratada?.message || item?.valor_unitario?.message);
+    const message = errors.obra_id?.message
+      || errors.periodo_inicio?.message
+      || errors.periodo_fim?.message
+      || errors.itens?.root?.message
+      || itemError?.descricao?.message
+      || itemError?.qtd_contratada?.message
+      || itemError?.valor_unitario?.message
+      || "Revise os campos obrigatórios da medição.";
+    toast.error(String(message));
+  };
+
   const submitting = form.formState.isSubmitting;
 
   return (
@@ -530,7 +544,7 @@ function MedicaoFormDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               <FormField control={form.control} name="obra_id" render={({ field }) => (
                 <FormItem>
@@ -672,7 +686,7 @@ function MedicaoFormDialog({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={submitting || carregandoEscopo || escopoConcluido}>{submitting ? "Salvando…" : "Salvar"}</Button>
+              <Button type="submit" disabled={submitting || carregandoEscopo || escopoConcluido || somenteLeitura}>{somenteLeitura ? "Medição faturada" : (submitting ? "Salvando…" : "Salvar")}</Button>
             </DialogFooter>
           </form>
         </Form>

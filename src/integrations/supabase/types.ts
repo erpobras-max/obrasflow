@@ -365,6 +365,7 @@ export type Database = {
           status: Database["public"]["Enums"]["status_conta_receber"]
           updated_at: string
           valor_recebido: number | null
+          valor_aditivo: number
           valor_total: number
         }
         Insert: {
@@ -389,6 +390,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_conta_receber"]
           updated_at?: string
           valor_recebido?: number | null
+          valor_aditivo?: number
           valor_total: number
         }
         Update: {
@@ -413,6 +415,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["status_conta_receber"]
           updated_at?: string
           valor_recebido?: number | null
+          valor_aditivo?: number
           valor_total?: number
         }
         Relationships: [

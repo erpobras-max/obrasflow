@@ -37,6 +37,8 @@ import {
   STATUS_RECEBER_BADGE,
   STATUS_PAGAR_LABEL,
   STATUS_PAGAR_BADGE,
+  FORMA_PAGAMENTO_RECEITA_LABEL,
+  type FormaPagamentoReceita,
 } from "@/lib/financeiro.schema";
 import { cn, formatBRLInput } from "@/lib/utils";
 
@@ -113,10 +115,12 @@ interface ContaReceberRow {
   cliente_id: string;
   descricao: string;
   valor_total: number; // centavos
+  valor_aditivo: number; // centavos
   data_vencimento: string;
   status: StatusReceber;
   data_recebimento: string | null;
   valor_recebido: number | null; // centavos
+  forma_pagamento: FormaPagamentoReceita | null;
   nota_fiscal_url: string | null;
   comprovante_url: string | null;
   observacoes: string | null;
@@ -157,10 +161,12 @@ const EMPTY_RECEBER = {
   cliente_id: "",
   descricao: "",
   valor_total: 0,
+  valor_aditivo: 0,
   data_vencimento: new Date().toISOString().slice(0, 10),
   status: "aberta" as StatusReceber,
   data_recebimento: "",
   valor_recebido: 0,
+  forma_pagamento: "",
   nota_fiscal_url: "",
   comprovante_url: "",
   observacoes: "",
@@ -210,6 +216,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
   const [receivedTarget, setReceivedTarget] = useState<ContaReceberRow | null>(null);
   const [receivedDate, setReceivedDate] = useState("");
   const [receivedVal, setReceivedVal] = useState(0);
+  const [receivedPaymentMethod, setReceivedPaymentMethod] = useState<FormaPagamentoReceita | "">("");
   const [receivedFile, setReceivedFile] = useState<File | null>(null);
   const [uploadingReceived, setUploadingReceived] = useState(false);
 
@@ -709,12 +716,21 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
   const openReceberStatusModal = (cr: ContaReceberRow) => {
     setReceivedTarget(cr);
     setReceivedDate(new Date().toISOString().slice(0, 10));
-    setReceivedVal(cr.valor_total / 100);
+    setReceivedVal((cr.valor_total + (cr.valor_aditivo || 0)) / 100);
+    setReceivedPaymentMethod(cr.forma_pagamento || "");
     setReceivedFile(null);
   };
 
   const submitRecebimento = async () => {
     if (!receivedTarget) return;
+    if (!receivedDate) {
+      toast.error("Informe a data do pagamento.");
+      return;
+    }
+    if (!receivedPaymentMethod) {
+      toast.error("Informe a forma de pagamento.");
+      return;
+    }
     setUploadingReceived(true);
     try {
       let comprovanteUrl = receivedTarget.comprovante_url;
@@ -730,6 +746,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
           status: "recebida",
           data_recebimento: receivedDate,
           valor_recebido: Math.round(receivedVal * 100),
+          forma_pagamento: receivedPaymentMethod,
           comprovante_url: comprovanteUrl,
         })
         .eq("id", receivedTarget.id);
@@ -800,10 +817,13 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
       "Obra": obrasMap[cr.obra_id || ""] || "Geral",
       "Cliente": clientesMap[cr.cliente_id || ""] || "—",
       "Valor Total (R$)": cr.valor_total / 100,
+      "Aditivo (R$)": (cr.valor_aditivo || 0) / 100,
+      "Total com Aditivo (R$)": (cr.valor_total + (cr.valor_aditivo || 0)) / 100,
       "Vencimento": cr.data_vencimento ? new Date(cr.data_vencimento + "T00:00").toLocaleDateString("pt-BR") : "",
       "Status": STATUS_RECEBER_LABEL[cr.status] || cr.status,
       "Data de Recebimento": cr.data_recebimento ? new Date(cr.data_recebimento + "T00:00").toLocaleDateString("pt-BR") : "—",
       "Valor Recebido (R$)": cr.valor_recebido ? cr.valor_recebido / 100 : 0,
+      "Forma de Pagamento": cr.forma_pagamento ? FORMA_PAGAMENTO_RECEITA_LABEL[cr.forma_pagamento] : "—",
       "Observações": cr.observacoes || "",
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
@@ -1338,7 +1358,12 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono font-semibold text-green-700">
-                        {fmtBRL(cr.valor_total)}
+                        <div>{fmtBRL(cr.valor_total + (cr.valor_aditivo || 0))}</div>
+                        {cr.valor_aditivo > 0 && (
+                          <div className="text-[10px] font-normal text-muted-foreground">
+                            Previsto {fmtBRL(cr.valor_total)} + aditivo {fmtBRL(cr.valor_aditivo)}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -1938,7 +1963,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
-              <label className="text-sm font-medium">Data do Recebimento</label>
+              <label className="text-sm font-medium">Data do Pagamento</label>
               <Input
                 type="date"
                 value={receivedDate}
@@ -1946,21 +1971,25 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
               />
             </div>
             <div>
-              <label className="text-sm font-medium">Valor Recebido (R$)</label>
+              <label className="text-sm font-medium">Forma de Pagamento</label>
+              <Select value={receivedPaymentMethod} onValueChange={(value) => setReceivedPaymentMethod(value as FormaPagamentoReceita)}>
+                <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(FORMA_PAGAMENTO_RECEITA_LABEL).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">Total Real Recebido (R$)</label>
               <Input
                 type="text"
                 value={formatBRLInput(receivedVal)}
-                onChange={(e) => {
-                  const rawVal = e.target.value;
-                  const cleanDigits = rawVal.replace(/\D/g, "");
-                  if (!cleanDigits) {
-                    setReceivedVal(0);
-                    return;
-                  }
-                  const val = parseInt(cleanDigits, 10) / 100;
-                  setReceivedVal(val);
-                }}
+                readOnly
+                className="bg-muted font-semibold"
               />
+              <p className="mt-1 text-xs text-muted-foreground">Valor previsto + aditivo.</p>
             </div>
             <div>
               <label className="text-sm font-medium block mb-1">Comprovante de Recebimento</label>
@@ -2198,6 +2227,10 @@ function ReceberFormDialog({
   });
 
   const watchObraId = form.watch("obra_id");
+  const watchStatusReceita = form.watch("status");
+  const watchValorPrevisto = Number(form.watch("valor_total") || 0);
+  const watchValorAditivo = Number(form.watch("valor_aditivo") || 0);
+  const totalRealRecebido = watchValorPrevisto + watchValorAditivo;
 
   useEffect(() => {
     if (!open) return;
@@ -2209,10 +2242,12 @@ function ReceberFormDialog({
         cliente_id: target.cliente_id || "",
         descricao: target.descricao,
         valor_total: target.valor_total / 100,
+        valor_aditivo: (target.valor_aditivo || 0) / 100,
         data_vencimento: target.data_vencimento,
         status: target.status,
         data_recebimento: target.data_recebimento ?? "",
         valor_recebido: target.valor_recebido ? target.valor_recebido / 100 : 0,
+        forma_pagamento: target.forma_pagamento || "",
         nota_fiscal_url: target.nota_fiscal_url ?? "",
         comprovante_url: target.comprovante_url ?? "",
         observacoes: target.observacoes ?? "",
@@ -2243,10 +2278,12 @@ function ReceberFormDialog({
         cliente_id: values.cliente_id || null,
         descricao: values.descricao,
         valor_total: Math.round(values.valor_total * 100),
+        valor_aditivo: Math.round((values.valor_aditivo || 0) * 100),
         data_vencimento: values.data_vencimento,
         status: values.status,
-        data_recebimento: values.data_recebimento || null,
-        valor_recebido: values.valor_recebido ? Math.round(values.valor_recebido * 100) : null,
+        data_recebimento: values.status === "recebida" ? values.data_recebimento || null : null,
+        valor_recebido: values.status === "recebida" ? Math.round((values.valor_total + (values.valor_aditivo || 0)) * 100) : null,
+        forma_pagamento: values.status === "recebida" ? values.forma_pagamento || null : null,
         nota_fiscal_url: notaFiscalUrl || null,
         comprovante_url: comprovanteUrl || null,
         observacoes: values.observacoes || null,
@@ -2278,7 +2315,7 @@ function ReceberFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{target ? "Editar Receita" : "Nova Receita"}</DialogTitle>
           <DialogDescription>
@@ -2371,7 +2408,7 @@ function ReceberFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <FormField
                 control={form.control as any}
                 name="valor_total"
@@ -2402,6 +2439,36 @@ function ReceberFormDialog({
 
               <FormField
                 control={form.control as any}
+                name="valor_aditivo"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Aditivo (R$)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        {...field}
+                        value={formatBRLInput(field.value)}
+                        onChange={(e) => {
+                          const cleanDigits = e.target.value.replace(/\D/g, "");
+                          field.onChange(cleanDigits ? parseInt(cleanDigits, 10) / 100 : 0);
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormItem>
+                <FormLabel>Total Real Recebido</FormLabel>
+                <FormControl>
+                  <Input value={formatBRLInput(totalRealRecebido)} readOnly className="bg-muted font-semibold text-green-700" />
+                </FormControl>
+                <p className="text-[10px] text-muted-foreground">Previsto + aditivo</p>
+              </FormItem>
+
+              <FormField
+                control={form.control as any}
                 name="data_vencimento"
                 render={({ field }) => (
                   <FormItem>
@@ -2414,28 +2481,41 @@ function ReceberFormDialog({
                 )}
               />
 
-              <FormField
-                control={form.control as any}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="aberta">Aberta</SelectItem>
-                        <SelectItem value="recebida">Recebida</SelectItem>
-                        <SelectItem value="atrasada">Atrasada</SelectItem>
-                        <SelectItem value="cancelada">Cancelada</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-md border bg-muted/20 p-3">
+              <FormField control={form.control as any} name="status" render={({ field }) => (
+                <FormItem><FormLabel>Status</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="aberta">Aberta</SelectItem>
+                      <SelectItem value="recebida">Recebida</SelectItem>
+                      <SelectItem value="atrasada">Atrasada</SelectItem>
+                      <SelectItem value="cancelada">Cancelada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )} />
+              <FormField control={form.control as any} name="data_recebimento" render={({ field }) => (
+                <FormItem><FormLabel>Data do Pagamento{watchStatusReceita === "recebida" ? " *" : ""}</FormLabel>
+                  <FormControl><Input type="date" {...field} disabled={watchStatusReceita !== "recebida"} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control as any} name="forma_pagamento" render={({ field }) => (
+                <FormItem><FormLabel>Forma de Pagamento{watchStatusReceita === "recebida" ? " *" : ""}</FormLabel>
+                  <Select value={field.value || ""} onValueChange={field.onChange} disabled={watchStatusReceita !== "recebida"}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {Object.entries(FORMA_PAGAMENTO_RECEITA_LABEL).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </div>
 
             <div className="grid grid-cols-3 gap-4">
