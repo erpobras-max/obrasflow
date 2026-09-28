@@ -22,6 +22,7 @@ type Etapa = {
   data_fim: string | null;
   status: string;
   progresso: number;
+  percentual_planejado: number;
 };
 
 type Obra = { id: string; nome: string; numero: string };
@@ -42,6 +43,7 @@ function CronogramaPage() {
   const [nome, setNome] = useState("");
   const [inicio, setInicio] = useState("");
   const [fim, setFim] = useState("");
+  const [percentualPlanejado, setPercentualPlanejado] = useState("");
 
   const { data: obras } = useQuery({
     queryKey: ["obras-select"],
@@ -63,19 +65,26 @@ function CronogramaPage() {
 
   const adicionar = useMutation({
     mutationFn: async () => {
-      if (!obraId || !nome.trim()) throw new Error("Selecione obra e preencha nome");
+      const percentual = Number(percentualPlanejado.replace(",", "."));
+      if (!obraId || !nome.trim() || !inicio || !fim || !Number.isFinite(percentual) || percentual <= 0) {
+        throw new Error("Informe a etapa, o percentual planejado e as datas previstas.");
+      }
+      if (inicio > fim) throw new Error("A data de início prevista não pode ser posterior à data de fim.");
+      const totalPlanejado = (etapas ?? []).reduce((total, etapa) => total + Number(etapa.percentual_planejado ?? 0), 0);
+      if (totalPlanejado + percentual > 100) throw new Error(`O percentual planejado ultrapassa 100%. Saldo disponível: ${(100 - totalPlanejado).toLocaleString("pt-BR")}%`);
       const { error } = await supabase.from("obra_cronograma").insert({
         obra_id: obraId,
         nome: nome.trim(),
         ordem: (etapas?.length || 0) + 1,
         data_inicio: inicio || null,
         data_fim: fim || null,
+        percentual_planejado: percentual,
         status: "planejado",
         progresso: 0,
-      });
+      } as any);
       if (error) throw error;
     },
-    onSuccess: () => { toast.success("Etapa adicionada"); qc.invalidateQueries({ queryKey: ["cronograma-obra", obraId] }); setNome(""); setInicio(""); setFim(""); },
+    onSuccess: () => { toast.success("Etapa adicionada"); qc.invalidateQueries({ queryKey: ["cronograma-obra", obraId] }); setNome(""); setInicio(""); setFim(""); setPercentualPlanejado(""); },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -83,22 +92,23 @@ function CronogramaPage() {
     <div className="mx-auto max-w-5xl space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold">Cronograma da obra</h1>
-        <p className="text-sm text-muted-foreground">Visualize etapas, datas e progresso. Adicione etapas por obra.</p>
+        <p className="text-sm text-muted-foreground">Criado junto com a obra aprovada. Defina as etapas, percentuais e datas previstas.</p>
       </div>
 
       <Card>
         <CardHeader><CardTitle>Nova etapa</CardTitle></CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
             <select className="rounded-md border px-3 py-2 text-sm" value={obraId} onChange={e => setObraId(e.target.value)}>
               <option value="">Obra</option>
               {obras?.map(o => <option key={o.id} value={o.id}>{o.numero} — {o.nome}</option>)}
             </select>
             <Input placeholder="Nome da etapa" value={nome} onChange={e => setNome(e.target.value)} />
+            <Input type="text" inputMode="decimal" placeholder="% planejado" value={percentualPlanejado} onChange={e => setPercentualPlanejado(e.target.value.replace(",", "."))} />
             <Input type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
             <Input type="date" value={fim} onChange={e => setFim(e.target.value)} />
           </div>
-          <Button onClick={() => adicionar.mutate()} disabled={adicionar.isPending || !obraId || !nome.trim()}><Plus className="size-4" /> Adicionar</Button>
+          <Button onClick={() => adicionar.mutate()} disabled={adicionar.isPending || !obraId || !nome.trim() || !inicio || !fim || !percentualPlanejado}><Plus className="size-4" /> Adicionar etapa</Button>
         </CardContent>
       </Card>
 
@@ -117,7 +127,8 @@ function CronogramaPage() {
                 </div>
                 <div className="flex items-center gap-2 text-xs">
                   <span className={`px-1.5 py-0.5 rounded text-white ${e.status === "concluido" ? "bg-emerald-500" : e.status === "executando" ? "bg-amber-500" : e.status === "atrasado" ? "bg-rose-500" : "bg-slate-400"}`}>{e.status}</span>
-                  <span>{e.progresso}%</span>
+                  <span>Planejado: {Number(e.percentual_planejado ?? 0).toLocaleString("pt-BR")}%</span>
+                  <span>Realizado: {e.progresso}%</span>
                 </div>
                 {barraPct(e.progresso, e.status)}
               </div>
