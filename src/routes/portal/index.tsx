@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client.custom";
 import { usePortalContext } from "@/hooks/use-portal-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { CronogramaProprietario } from "@/components/cronograma-proprietario";
 import { STATUS_OBRA_LABEL, STATUS_OBRA_BADGE } from "@/lib/obras.schema";
 
 export const Route = createFileRoute("/portal/")({
@@ -214,6 +215,8 @@ function PortalIndex() {
           </CardContent>
         </Card>
       </div>
+
+      {obraId && <CronogramaProprietario obraId={obraId} />}
 
       <Card>
         <CardHeader className="pb-3">

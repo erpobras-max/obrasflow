@@ -200,9 +200,11 @@ function PropostasPage() {
       if (error) throw error;
     },
     onSuccess: (_, variaveis) => {
-      toast.success(variaveis.status === "aceita" ? "Proposta aceita e obra criada" : "Proposta rejeitada");
+      toast.success(variaveis.status === "aceita" ? "Proposta aceita. Obra e etapas do cronograma disponíveis." : "Proposta rejeitada");
       qc.invalidateQueries({ queryKey: ["propostas"] });
       qc.invalidateQueries({ queryKey: ["obras"] });
+      qc.invalidateQueries({ queryKey: ["obras-cronograma-select"] });
+      qc.invalidateQueries({ queryKey: ["cronograma-obra"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });

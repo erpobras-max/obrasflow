@@ -1,141 +1,111 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Plus, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
+import { situacaoEtapa, validarLancamentoCronograma, type EtapaCronograma } from "@/lib/cronograma";
 
-export const Route = createFileRoute("/_app/cronograma")({
-  component: CronogramaPage,
-});
+export const Route = createFileRoute("/_app/cronograma")({ component: CronogramaPage });
 
-type Etapa = {
-  id: string;
-  obra_id: string;
-  nome: string;
-  ordem: number;
-  data_inicio: string | null;
-  data_fim: string | null;
-  status: string;
-  progresso: number;
-  percentual_planejado: number;
-};
-
-type Obra = { id: string; nome: string; numero: string };
-
-function fmtDate(v: string | null) {
-  return v ? new Date(v + "T00:00").toLocaleDateString("pt-BR") : "—";
-}
-
-function barraPct(pct: number, status: string) {
-  const cor = status === "concluido" ? "bg-emerald-500" : status === "executando" ? "bg-amber-500" : status === "atrasado" ? "bg-rose-500" : "bg-slate-300";
-  return <div className="h-2 w-full rounded-full bg-slate-100 overflow-hidden"><div className={`h-full ${cor}`} style={{ width: `${pct}%` }} /></div>;
+function EtapaEditor({ etapa, podeEditar }: { etapa: EtapaCronograma; podeEditar: boolean }) {
+  const qc = useQueryClient();
+  const [inicio, setInicio] = useState(etapa.data_inicio ?? "");
+  const [fim, setFim] = useState(etapa.data_fim ?? "");
+  const [meta, setMeta] = useState(String(etapa.meta_percentual ?? 100));
+  const [realizado, setRealizado] = useState(String(etapa.progresso ?? 0));
+  const situacao = situacaoEtapa(etapa, format(new Date(), "yyyy-MM-dd"));
+  const salvar = useMutation({
+    mutationFn: async () => {
+      const dados = validarLancamentoCronograma(inicio, fim, meta, realizado);
+      const { error } = await supabase.from("obra_cronograma").update({
+        ...dados,
+        status: dados.progresso >= 100 ? "concluido" : dados.progresso > 0 ? "executando" : "planejado",
+        updated_at: new Date().toISOString(),
+      }).eq("id", etapa.id).eq("obra_id", etapa.obra_id).eq("updated_at", etapa.updated_at).select("id").single();
+      if (error) throw new Error(error.code === "PGRST116" ? "A etapa foi alterada por outra pessoa ou você não tem permissão. Atualize a página antes de salvar." : error.message);
+    },
+    onSuccess: async () => {
+      toast.success("Prazo e avanço da etapa salvos");
+      await qc.invalidateQueries({ queryKey: ["cronograma-obra", etapa.obra_id] });
+      await qc.invalidateQueries({ queryKey: ["portal-cronograma", etapa.obra_id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  return <Card>
+    <CardHeader className="pb-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><CardTitle className="text-base">{etapa.nome}</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">{etapa.etapa_origem_key ? "Etapa da proposta aceita" : "Etapa cadastrada anteriormente"}</p>
+        </div>
+        <Badge variant={situacao === "Prazo vencido" ? "destructive" : "secondary"}>{situacao}</Badge>
+      </div>
+    </CardHeader>
+    <CardContent>
+      <form onSubmit={(event) => { event.preventDefault(); salvar.mutate(); }}>
+        <fieldset disabled={!podeEditar || salvar.isPending} className="grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <label className="space-y-2 text-sm">Início previsto<Input required type="date" value={inicio} onChange={e => setInicio(e.target.value)} /></label>
+          <label className="space-y-2 text-sm">Fim previsto<Input required type="date" min={inicio || undefined} value={fim} onChange={e => setFim(e.target.value)} /></label>
+          <label className="space-y-2 text-sm">Meta até o fim (%)<Input required inputMode="decimal" value={meta} onChange={e => setMeta(e.target.value)} /></label>
+          <label className="space-y-2 text-sm">Realizado (%)<Input required inputMode="decimal" value={realizado} onChange={e => setRealizado(e.target.value)} /></label>
+          {podeEditar && <Button type="submit"><Save className="size-4" />{salvar.isPending ? "Salvando…" : "Salvar etapa"}</Button>}
+        </fieldset>
+      </form>
+      <p className="mt-3 text-xs text-muted-foreground">O realizado é informado pela equipe. Meta e datas são do planejamento desta etapa.</p>
+    </CardContent>
+  </Card>;
 }
 
 function CronogramaPage() {
-  const qc = useQueryClient();
-  const { user } = useAuth();
+  const { roles } = useAuth();
+  const podeEditar = roles.some(role => ["admin", "diretor", "engenharia"].includes(role));
   const [obraId, setObraId] = useState("");
-  const [nome, setNome] = useState("");
-  const [inicio, setInicio] = useState("");
-  const [fim, setFim] = useState("");
-  const [percentualPlanejado, setPercentualPlanejado] = useState("");
-
-  const { data: obras } = useQuery({
-    queryKey: ["obras-select"],
+  const obras = useQuery({
+    queryKey: ["obras-cronograma-select"],
     queryFn: async () => {
-      const { data } = await supabase.from("obras").select("id,nome,numero").order("nome").limit(50);
-      return (data || []) as Obra[];
+      const { data, error } = await supabase.from("obras").select("id,nome,numero,proposta_id").order("nome");
+      if (error) throw error;
+      return data ?? [];
     },
   });
-
-  const { data: etapas, isLoading } = useQuery({
+  const etapas = useQuery({
     queryKey: ["cronograma-obra", obraId],
     enabled: !!obraId,
     queryFn: async () => {
       const { data, error } = await supabase.from("obra_cronograma").select("*").eq("obra_id", obraId).order("ordem");
       if (error) throw error;
-      return (data || []) as Etapa[];
+      return (data ?? []) as EtapaCronograma[];
     },
   });
-
-  const adicionar = useMutation({
-    mutationFn: async () => {
-      const percentual = Number(percentualPlanejado.replace(",", "."));
-      if (!obraId || !nome.trim() || !inicio || !fim || !Number.isFinite(percentual) || percentual <= 0) {
-        throw new Error("Informe a etapa, o percentual planejado e as datas previstas.");
-      }
-      if (inicio > fim) throw new Error("A data de início prevista não pode ser posterior à data de fim.");
-      const totalPlanejado = (etapas ?? []).reduce((total, etapa) => total + Number(etapa.percentual_planejado ?? 0), 0);
-      if (totalPlanejado + percentual > 100) throw new Error(`O percentual planejado ultrapassa 100%. Saldo disponível: ${(100 - totalPlanejado).toLocaleString("pt-BR")}%`);
-      const { error } = await supabase.from("obra_cronograma").insert({
-        obra_id: obraId,
-        nome: nome.trim(),
-        ordem: (etapas?.length || 0) + 1,
-        data_inicio: inicio || null,
-        data_fim: fim || null,
-        percentual_planejado: percentual,
-        status: "planejado",
-        progresso: 0,
-      } as any);
-      if (error) throw error;
-    },
-    onSuccess: () => { toast.success("Etapa adicionada"); qc.invalidateQueries({ queryKey: ["cronograma-obra", obraId] }); setNome(""); setInicio(""); setFim(""); setPercentualPlanejado(""); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <div className="mx-auto max-w-5xl space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-bold">Cronograma da obra</h1>
-        <p className="text-sm text-muted-foreground">Criado junto com a obra aprovada. Defina as etapas, percentuais e datas previstas.</p>
-      </div>
-
-      <Card>
-        <CardHeader><CardTitle>Nova etapa</CardTitle></CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
-            <select className="rounded-md border px-3 py-2 text-sm" value={obraId} onChange={e => setObraId(e.target.value)}>
-              <option value="">Obra</option>
-              {obras?.map(o => <option key={o.id} value={o.id}>{o.numero} — {o.nome}</option>)}
-            </select>
-            <Input placeholder="Nome da etapa" value={nome} onChange={e => setNome(e.target.value)} />
-            <Input type="text" inputMode="decimal" placeholder="% planejado" value={percentualPlanejado} onChange={e => setPercentualPlanejado(e.target.value.replace(",", "."))} />
-            <Input type="date" value={inicio} onChange={e => setInicio(e.target.value)} />
-            <Input type="date" value={fim} onChange={e => setFim(e.target.value)} />
-          </div>
-          <Button onClick={() => adicionar.mutate()} disabled={adicionar.isPending || !obraId || !nome.trim() || !inicio || !fim || !percentualPlanejado}><Plus className="size-4" /> Adicionar etapa</Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader><CardTitle>Etapas</CardTitle></CardHeader>
-        <CardContent>
-          {!obraId && <p className="text-sm text-muted-foreground">Selecione uma obra para ver etapas.</p>}
-          {isLoading && <Loader2 className="size-5 animate-spin" />}
-          {etapas && etapas.length === 0 && obraId && <p className="text-sm text-muted-foreground">Nenhuma etapa cadastrada.</p>}
-          <div className="space-y-3">
-            {etapas?.map((e) => (
-              <div key={e.id} className="rounded-md border p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="font-medium text-sm">{e.ordem}. {e.nome}</div>
-                  <div className="text-xs text-muted-foreground">{fmtDate(e.data_inicio)} → {fmtDate(e.data_fim)}</div>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className={`px-1.5 py-0.5 rounded text-white ${e.status === "concluido" ? "bg-emerald-500" : e.status === "executando" ? "bg-amber-500" : e.status === "atrasado" ? "bg-rose-500" : "bg-slate-400"}`}>{e.status}</span>
-                  <span>Planejado: {Number(e.percentual_planejado ?? 0).toLocaleString("pt-BR")}%</span>
-                  <span>Realizado: {e.progresso}%</span>
-                </div>
-                {barraPct(e.progresso, e.status)}
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+  const hoje = format(new Date(), "yyyy-MM-dd");
+  const pendentes = etapas.data?.filter(e => !e.data_inicio || !e.data_fim).length ?? 0;
+  const atrasadas = etapas.data?.filter(e => situacaoEtapa(e, hoje) === "Prazo vencido").length ?? 0;
+  return <div className="mx-auto max-w-6xl space-y-6 p-6">
+    <div><h1 className="text-2xl font-bold">Cronograma da obra</h1>
+      <p className="text-sm text-muted-foreground">Planeje as etapas da proposta aceita e acompanhe sua execução com o proprietário.</p>
     </div>
-  );
+    <Card><CardContent className="pt-6">
+      <label className="space-y-2 text-sm font-medium">Obra
+        <select className="block w-full rounded-md border bg-background px-3 py-2 text-sm" value={obraId} onChange={e => setObraId(e.target.value)}>
+          <option value="">Selecione a obra</option>
+          {obras.data?.map(o => <option key={o.id} value={o.id}>{o.numero} — {o.nome}</option>)}
+        </select>
+      </label>
+      <p className="mt-3 text-sm text-muted-foreground">As etapas vêm da proposta. Em cada uma, defina o período e quanto deve estar executado até o fim. Etapas diferentes podem ter meta de 100%.</p>
+      {obras.error && <p role="alert" className="mt-3 text-destructive">Não foi possível carregar as obras: {obras.error.message}</p>}
+    </CardContent></Card>
+    {obraId && <>
+      {etapas.isLoading && <Loader2 aria-label="Carregando etapas" className="size-5 animate-spin" />}
+      {etapas.error && <p role="alert" className="text-destructive">Não foi possível carregar o cronograma: {etapas.error.message}</p>}
+      {etapas.data && <p className="text-sm">{etapas.data.length} etapas · {pendentes} com prazo a definir · {atrasadas} com prazo vencido</p>}
+      {etapas.data?.length === 0 && <p className="rounded-md border p-5 text-sm text-muted-foreground">Nenhuma etapa disponível. O cronograma recebe as etapas quando a proposta vinculada à obra é aceita.</p>}
+      {etapas.data?.map(etapa => <EtapaEditor key={`${etapa.id}:${etapa.updated_at}`} etapa={etapa} podeEditar={podeEditar} />)}
+    </>}
+  </div>;
 }
