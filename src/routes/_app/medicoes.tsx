@@ -536,7 +536,7 @@ function MedicaoFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{somenteLeitura ? "Visualizar medição" : (target ? "Editar medição" : "Nova medição")}</DialogTitle>
           <DialogDescription>Boletim de medição da obra.</DialogDescription>
@@ -618,7 +618,7 @@ function MedicaoFormDialog({
                   </Button>
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 overflow-x-auto pb-1">
                 {fields.map((f, idx) => {
                   const it = itensWatch?.[idx];
                   const percentualAnterior = Number(it?.percentual_anterior_item) || 0;
@@ -626,7 +626,7 @@ function MedicaoFormDialog({
                   const percentualMedicao = Math.max(0, percentualAtual - percentualAnterior);
                   const sub = (Number(it?.qtd_contratada) || 0) * percentualMedicao / 100 * (Number(it?.valor_unitario) || 0);
                   return (
-                    <div key={f.id} className="rounded-md border p-2"><div className="text-[10px] font-semibold text-muted-foreground mb-1">{[it?.etapa_codigo, it?.etapa_nome, it?.item_codigo, it?.item_nome].filter(Boolean).join(" · ") || "Item"}</div><div className="grid grid-cols-[minmax(0,1fr)_60px_60px_60px_70px_70px_60px_auto] gap-1 items-end">
+                    <div key={f.id} className="min-w-[820px] rounded-md border p-2"><div className="text-[10px] font-semibold text-muted-foreground mb-1">{[it?.etapa_codigo, it?.etapa_nome, it?.item_codigo, it?.item_nome].filter(Boolean).join(" · ") || "Item"}</div><div className="grid grid-cols-[minmax(150px,1fr)_64px_82px_82px_88px_100px_110px_36px] gap-2 items-end">
                       <FormField control={form.control} name={`itens.${idx}.descricao`} render={({ field }) => (
                         <FormItem className="!mb-0"><FormControl><Input placeholder="Descrição" {...field} className="h-7 text-xs" /></FormControl></FormItem>
                       )} />

@@ -281,7 +281,7 @@ function ContractDocument({ contract }: { contract: ContratoPortal }) {
     contract.empresa?.nome_fantasia || contract.empresa?.razao_social || "Empresa contratada";
   return (
     <article className="portal-contract-print mx-auto w-full max-w-[794px] bg-white p-5 text-[12px] leading-6 text-slate-900 shadow-sm sm:p-8 print:max-w-none print:p-8 print:shadow-none">
-      <style>{`@media print { body * { visibility:hidden!important } .portal-contract-print,.portal-contract-print * { visibility:visible!important } .portal-contract-print { position:absolute; inset:0; width:100% } @page { size:A4; margin:12mm } }`}</style>
+      <style>{`@media print { @page { size:A4; margin:12mm } html,body { background:#fff!important } .portal-contract-print { position:relative!important; display:block!important; width:100%!important; max-width:none!important; margin:0!important; box-shadow:none!important } }`}</style>
       <header className="flex items-start justify-between gap-6 border-b-2 border-slate-800 pb-5">
         <div>
           <h1 className="text-lg font-bold">{companyName}</h1>

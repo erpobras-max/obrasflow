@@ -155,15 +155,15 @@ export function MedicaoRelatorio({
       return;
     }
     printWindow.opener = null;
-    printWindow.onload = () => {
-      printWindow.focus();
-      setTimeout(() => printWindow.print(), 250);
-    };
     const estilos = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
       .map((element) => element.outerHTML)
       .join("\n");
     printWindow.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${medicao?.numero ?? "Medição"}</title>${estilos}<style>body{margin:0;background:#fff}.medicao-print-sheet{max-width:none!important;width:100%!important;box-shadow:none!important}@page{size:landscape;margin:10mm}</style></head><body>${reportRef.current.outerHTML}</body></html>`);
     printWindow.document.close();
+    window.setTimeout(() => {
+      printWindow.focus();
+      printWindow.print();
+    }, 500);
   };
 
   const gerarExcel = () => {

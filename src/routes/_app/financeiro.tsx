@@ -493,7 +493,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
       const { error } = await supabase.from("categorias_financeiras").insert({
         nome: categoriaNome,
         tipo: categoriaTipo,
-        pai_id: categoriaPaiId || null
+        parent_id: categoriaPaiId || null
       });
       if (error) throw error;
     },
@@ -1848,7 +1848,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
                 </TableHeader>
                 <TableBody>
                   {categoriasFinanceiras?.map((cat: any) => {
-                    const paiNome = categoriasFinanceiras?.find((p: any) => p.id === cat.pai_id)?.nome || "Raiz";
+                    const paiNome = categoriasFinanceiras?.find((p: any) => p.id === cat.parent_id)?.nome || "Raiz";
                     return (
                       <TableRow key={cat.id}>
                         <TableCell className="text-xs font-semibold">{cat.nome}</TableCell>
@@ -1938,7 +1938,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Nenhuma (Categoria Raiz)</SelectItem>
-                  {categoriasFinanceiras?.filter((c: any) => !c.pai_id).map((c: any) => (
+                  {categoriasFinanceiras?.filter((c: any) => !c.parent_id).map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                   ))}
                 </SelectContent>
@@ -2459,13 +2459,11 @@ function ReceberFormDialog({
                 )}
               />
 
-              <FormItem>
-                <FormLabel>Total Real Recebido</FormLabel>
-                <FormControl>
-                  <Input value={formatBRLInput(totalRealRecebido)} readOnly className="bg-muted font-semibold text-green-700" />
-                </FormControl>
+              <div className="space-y-2">
+                <label className="text-sm font-medium leading-none">Total Real Recebido</label>
+                <Input value={formatBRLInput(totalRealRecebido)} readOnly className="bg-muted font-semibold text-green-700" />
                 <p className="text-[10px] text-muted-foreground">Previsto + aditivo</p>
-              </FormItem>
+              </div>
 
               <FormField
                 control={form.control as any}

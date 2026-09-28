@@ -34,7 +34,7 @@ export function PropostaImpressao({proposta,open,onOpenChange}:{proposta:Propost
     <div className="print:hidden"><Button onClick={()=>window.print()}><Printer className="size-4"/> Imprimir / Salvar PDF</Button></div>
     {isLoading||!proposta ? <div className="space-y-3"><Skeleton className="h-20 w-full"/><Skeleton className="h-64 w-full"/></div> : (
      <article className="proposal-print-sheet mx-auto w-full max-w-[794px] bg-white p-8 text-[12px] text-slate-900 shadow print:max-w-none print:p-10 print:shadow-none">
-      <style>{`@media print { body * { visibility:hidden!important } .proposal-print-sheet,.proposal-print-sheet *{visibility:visible!important}.proposal-print-sheet{position:absolute;inset:0;width:100%}@page{size:A4;margin:12mm @top-left{content:"OBRASFLOW — PROPOSTA";font-size:8pt;} @bottom-left{content:"Page " counter(page);font-size:8pt;}}}`}</style>
+      <style>{`@media print { @page{size:A4;margin:12mm} html,body{background:#fff!important}.proposal-print-sheet{position:relative!important;display:block!important;width:100%!important;max-width:none!important;margin:0!important;box-shadow:none!important} }`}</style>
       <header className="border-b-2 border-slate-800 pb-5">
        <div className="flex items-start justify-between gap-8">
         <div className="flex items-start gap-3">

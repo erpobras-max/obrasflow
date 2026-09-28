@@ -15,7 +15,24 @@ export const Route = createFileRoute("/assinar/$token")({ component: AssinaturaP
 type LinkAssinatura = {
   papel_label: string; nome_esperado?: string | null; documento_esperado?: string | null;
   documento_titulo: string; documento_resumo: string; expira_em: string;
+  documento?: DocumentoPublico | null;
 };
+
+type DocumentoPublico = {
+  tipo: "civil" | "locacao";
+  numero: string;
+  titulo: string;
+  objeto?: string | null;
+  valor_total: number;
+  data_inicio?: string | null;
+  data_fim?: string | null;
+  observacoes?: string | null;
+  contratante?: { nome?: string | null; documento?: string | null } | null;
+  contratada?: { razao_social?: string | null; nome_fantasia?: string | null; cnpj?: string | null } | null;
+};
+
+const moeda = (valor: number) => Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const dataFormatada = (valor?: string | null) => valor ? new Date(`${valor}T00:00:00`).toLocaleDateString("pt-BR") : "A definir";
 
 function AssinaturaPublicaPage() {
   const { token } = Route.useParams();
@@ -65,6 +82,7 @@ function AssinaturaPublicaPage() {
         <Card><CardHeader className="border-b"><div className="flex items-start gap-3"><FileSignature className="mt-1 size-6 text-emerald-700" /><div><CardTitle>{link!.documento_titulo}</CardTitle><p className="mt-1 text-sm text-muted-foreground">Assinatura como {link!.papel_label}</p></div></div></CardHeader>
           <CardContent className="space-y-6 p-6 sm:p-8">
             <div className="rounded-lg border bg-stone-50 p-4 text-sm leading-6 text-stone-700">{link!.documento_resumo}</div>
+            {link!.documento && <DocumentoParaAssinatura documento={link!.documento} />}
             <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="nome">Nome completo</Label><Input id="nome" value={nome} onChange={(e) => setNome(e.target.value)} maxLength={160} /></div><div className="space-y-2"><Label htmlFor="documento">CPF/CNPJ</Label><Input id="documento" value={documento} onChange={(e) => setDocumento(e.target.value)} maxLength={30} /></div></div>
             <div><Label className="mb-2 block">Sua assinatura</Label><SignatureCanvas onChange={setAssinatura} resetKey={resetKey} /></div>
             <p className="text-xs leading-5 text-stone-500">Ao confirmar, você declara que revisou o contrato recebido e reconhece esta assinatura como sua manifestação de concordância.</p>
@@ -75,6 +93,30 @@ function AssinaturaPublicaPage() {
       </div>
     </main>
   );
+}
+
+function DocumentoParaAssinatura({ documento }: { documento: DocumentoPublico }) {
+  const contratada = documento.contratada?.nome_fantasia || documento.contratada?.razao_social || "CONTRATADA";
+  return <section className="rounded-lg border bg-white p-5 text-justify text-sm leading-6 text-slate-800 sm:p-7">
+    <div className="mb-5 flex items-start justify-between gap-4 border-b pb-4">
+      <div><p className="font-bold">{contratada}</p><p className="text-xs text-slate-500">CNPJ: {documento.contratada?.cnpj || "—"}</p></div>
+      <div className="text-right"><p className="font-bold">CONTRATO</p><p className="text-xs">Nº {documento.numero}</p></div>
+    </div>
+    <h2 className="text-center font-bold uppercase">{documento.tipo === "locacao" ? "Contrato de locação" : "Contrato de prestação de serviços"}</h2>
+    <div className="mt-5 space-y-4">
+      <p><b>CONTRATANTE:</b> {documento.contratante?.nome || "—"}, documento {documento.contratante?.documento || "—"}.</p>
+      <p><b>CONTRATADA:</b> {contratada}, CNPJ {documento.contratada?.cnpj || "—"}.</p>
+      <p><b>CLÁUSULA PRIMEIRA — OBJETO.</b> {documento.objeto || documento.titulo}.</p>
+      <p><b>CLÁUSULA SEGUNDA — ESCOPO.</b> Os serviços serão executados conforme os documentos técnicos, critérios de medição e condições acordadas entre as partes.</p>
+      <p><b>CLÁUSULA TERCEIRA — PRAZO.</b> Vigência de {dataFormatada(documento.data_inicio)} até {dataFormatada(documento.data_fim)}.</p>
+      <p><b>CLÁUSULA QUARTA — PREÇO E PAGAMENTO.</b> O valor total contratado é de <b>{moeda(documento.valor_total)}</b>, pago conforme o cronograma e as medições aceitas.</p>
+      <p><b>CLÁUSULA QUINTA — OBRIGAÇÕES.</b> A CONTRATADA observará as normas técnicas aplicáveis; a CONTRATANTE disponibilizará o acesso, os materiais e as condições sob sua responsabilidade.</p>
+      <p><b>CLÁUSULA SEXTA — ALTERAÇÕES.</b> Alterações de escopo, prazo ou valor exigem termo aditivo assinado pelas partes. Situações de força maior, paralisação, atraso na liberação de materiais ou projetos e chuvas que afetem os serviços poderão justificar a revisão do cronograma.</p>
+      <p><b>CLÁUSULA SÉTIMA — MEDIÇÃO E FATURAMENTO.</b> As medições registrarão os serviços efetivamente executados. O pagamento será realizado por depósito, transferência, PIX ou outro meio acordado, nos prazos definidos entre as partes.</p>
+      <p><b>CLÁUSULA OITAVA — RESCISÃO E MULTA.</b> O descumprimento contratual poderá resultar em rescisão mediante comunicação prévia. Na rescisão sem justa causa, serão apurados os serviços executados e as obrigações financeiras pendentes, conforme o contrato.</p>
+      {documento.observacoes && <p><b>OBSERVAÇÕES.</b> {documento.observacoes}</p>}
+    </div>
+  </section>;
 }
 
 function EmptyState() {
