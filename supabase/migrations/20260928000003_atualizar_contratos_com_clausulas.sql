@@ -1,6 +1,17 @@
 -- Atualiza as funções públicas para devolver as cláusulas personalizadas do contrato.
 -- Esta migration é necessária porque as funções originais já podem estar aplicadas.
 
+-- Mantém esta migration segura mesmo quando executada manualmente sozinha.
+ALTER TABLE public.contratos
+  ADD COLUMN IF NOT EXISTS clausulas JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+ALTER TABLE public.contratos
+  DROP CONSTRAINT IF EXISTS contratos_clausulas_array_check;
+
+ALTER TABLE public.contratos
+  ADD CONSTRAINT contratos_clausulas_array_check
+  CHECK (jsonb_typeof(clausulas) = 'array');
+
 CREATE OR REPLACE FUNCTION public.obter_link_assinatura(_token UUID)
 RETURNS JSONB
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
