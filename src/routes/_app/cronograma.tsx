@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, FileText, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { situacaoEtapa, validarLancamentoCronograma, type EtapaCronograma } from "@/lib/cronograma";
 import { CronogramaRelatorio } from "@/components/cronograma/cronograma-relatorio";
@@ -29,10 +29,18 @@ function EtapaEditor({
   etapa,
   podeEditar,
   podeExcluir,
+  podeSubir,
+  podeDescer,
+  movendo,
+  onMover,
 }: {
   etapa: EtapaCronograma;
   podeEditar: boolean;
   podeExcluir: boolean;
+  podeSubir: boolean;
+  podeDescer: boolean;
+  movendo: boolean;
+  onMover: (direcao: "subir" | "descer") => void;
 }) {
   const qc = useQueryClient();
   const [nome, setNome] = useState(etapa.nome);
@@ -126,6 +134,30 @@ function EtapaEditor({
             <Badge variant={situacao === "Prazo vencido" ? "destructive" : "secondary"}>
               {situacao}
             </Badge>
+            {podeEditar && (
+              <div className="flex items-center">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Subir etapa ${etapa.nome}`}
+                  onClick={() => onMover("subir")}
+                  disabled={!podeSubir || movendo}
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Descer etapa ${etapa.nome}`}
+                  onClick={() => onMover("descer")}
+                  disabled={!podeDescer || movendo}
+                >
+                  <ArrowDown className="size-4" />
+                </Button>
+              </div>
+            )}
             {podeExcluir && (
               <Button
                 type="button"
@@ -296,6 +328,43 @@ function CronogramaPage() {
     },
     onError: (error: Error) => toast.error(`Não foi possível adicionar a etapa: ${error.message}`),
   });
+  const moverEtapa = useMutation({
+    mutationFn: async ({ etapaId, direcao }: { etapaId: string; direcao: "subir" | "descer" }) => {
+      const lista = etapas.data ?? [];
+      const indice = lista.findIndex((etapa) => etapa.id === etapaId);
+      const vizinhoIndice = direcao === "subir" ? indice - 1 : indice + 1;
+      const etapa = lista[indice];
+      const vizinho = lista[vizinhoIndice];
+      if (!etapa || !vizinho) return;
+
+      const { error: erroTemporario } = await supabase
+        .from("obra_cronograma")
+        .update({ ordem: -1 })
+        .eq("id", etapa.id)
+        .eq("obra_id", obraId);
+      if (erroTemporario) throw erroTemporario;
+
+      const { error: erroVizinho } = await supabase
+        .from("obra_cronograma")
+        .update({ ordem: etapa.ordem })
+        .eq("id", vizinho.id)
+        .eq("obra_id", obraId);
+      if (erroVizinho) throw erroVizinho;
+
+      const { error: erroEtapa } = await supabase
+        .from("obra_cronograma")
+        .update({ ordem: vizinho.ordem })
+        .eq("id", etapa.id)
+        .eq("obra_id", obraId);
+      if (erroEtapa) throw erroEtapa;
+    },
+    onSuccess: async () => {
+      toast.success("Ordem das etapas atualizada");
+      await qc.invalidateQueries({ queryKey: ["cronograma-obra", obraId] });
+      await qc.invalidateQueries({ queryKey: ["portal-cronograma", obraId] });
+    },
+    onError: (error: Error) => toast.error(`Não foi possível ordenar as etapas: ${error.message}`),
+  });
   const hoje = format(new Date(), "yyyy-MM-dd");
   const pendentes = etapas.data?.filter((e) => !e.data_inicio || !e.data_fim).length ?? 0;
   const atrasadas =
@@ -456,6 +525,12 @@ function CronogramaPage() {
               etapa={etapa}
               podeEditar={podeEditar}
               podeExcluir={roles.some((role) => ["admin", "diretor"].includes(role))}
+              podeSubir={etapas.data.findIndex((item) => item.id === etapa.id) > 0}
+              podeDescer={
+                etapas.data.findIndex((item) => item.id === etapa.id) < etapas.data.length - 1
+              }
+              movendo={moverEtapa.isPending}
+              onMover={(direcao) => moverEtapa.mutate({ etapaId: etapa.id, direcao })}
             />
           ))}
           <CronogramaRelatorio
