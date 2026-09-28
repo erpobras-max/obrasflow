@@ -1,11 +1,14 @@
 /** Abre uma folha limpa para impressão, sem o modal ou a navegação do sistema. */
 export function imprimirElemento(elemento: HTMLElement | null, titulo: string, orientacao: "portrait" | "landscape" = "portrait") {
   if (!elemento) return;
-  const janela = window.open("", "_blank", "noopener,noreferrer,width=1200,height=900");
+  // `noopener` faz alguns navegadores devolverem `null` para a nova janela,
+  // deixando uma aba about:blank sem receber o documento de impressão.
+  const janela = window.open("", "_blank", "width=1200,height=900");
   if (!janela) {
     window.print();
     return;
   }
+  janela.opener = null;
 
   const estilos = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
     .map((item) => item.outerHTML)
