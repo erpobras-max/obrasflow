@@ -108,7 +108,7 @@ function RelatoriosPage() {
   }, [obras, filtroObra]);
 
   // Main report data query
-  const { data: reportData, isLoading } = useQuery({
+  const { data: reportData, isLoading } = useQuery<any[]>({
     queryKey: [
       "report-data",
       selectedRelatorio,
@@ -134,26 +134,15 @@ function RelatoriosPage() {
       if (selectedRelatorio === "cronograma_fisico") {
         if (!filtroObra || filtroObra === "none") return [];
         const { data, error } = await (supabase as any)
-          .from("obras")
-          .select("id, nome, numero, status, progresso")
-          .eq("id", filtroObra)
-          .single();
+          .from("obra_cronograma")
+          .select("id,nome,ordem,data_inicio,data_fim,meta_percentual,progresso,status")
+          .eq("obra_id", filtroObra)
+          .order("ordem");
         if (error) throw error;
-
-        // Generate standard physical roadmap stages based on overall progress
-        const overall = Number(data.progresso || 0);
-        const stages = [
-          { nome: "1. Serviços Preliminares & Projetos", peso: 5, concl: overall >= 10 ? 100 : overall * 10 },
-          { nome: "2. Infraestrutura & Fundações", peso: 15, concl: overall >= 30 ? 100 : Math.max(0, (overall - 5) * 5) },
-          { nome: "3. Supraestrutura (Pilares/Lajes)", peso: 25, concl: overall >= 60 ? 100 : Math.max(0, (overall - 25) * 3) },
-          { nome: "4. Alvenarias & Fechamentos", peso: 20, concl: overall >= 75 ? 100 : Math.max(0, (overall - 50) * 4) },
-          { nome: "5. Instalações (Hidráulica/Elétrica)", peso: 15, concl: overall >= 85 ? 100 : Math.max(0, (overall - 65) * 5) },
-          { nome: "6. Acabamentos & Pintura", peso: 20, concl: overall >= 100 ? 100 : Math.max(0, (overall - 80) * 5) },
-        ];
-
-        return stages.map((st) => ({
-          ...st,
-          progresso_calculado: Math.min(100, Math.round(st.concl)),
+        return (data ?? []).map((item: any) => ({
+          ...item,
+          peso: Number(item.meta_percentual ?? 0),
+          progresso_calculado: Number(item.progresso ?? 0),
         }));
       }
 
@@ -343,8 +332,12 @@ function RelatoriosPage() {
     } else if (selectedRelatorio === "cronograma_fisico") {
       rows = reportData.map((item) => ({
         "Etapa": item.nome,
-        "Peso Percentual (%)": Number(item.peso),
+        "Ordem": Number(item.ordem),
+        "Início previsto": item.data_inicio ? new Date(`${item.data_inicio}T00:00:00`).toLocaleDateString("pt-BR") : "—",
+        "Fim previsto": item.data_fim ? new Date(`${item.data_fim}T00:00:00`).toLocaleDateString("pt-BR") : "—",
+        "Meta Percentual (%)": Number(item.peso),
         "Avanço Físico (%)": Number(item.progresso_calculado),
+        "Status": item.status,
       }));
     } else if (selectedRelatorio === "compras_periodo") {
       rows = reportData.map((item) => ({
@@ -677,8 +670,10 @@ function RelatoriosPage() {
                     {selectedRelatorio === "cronograma_fisico" && (
                       <>
                         <TableHead>Etapa</TableHead>
-                        <TableHead className="text-right">Peso na Obra</TableHead>
+                        <TableHead>Período previsto</TableHead>
+                        <TableHead className="text-right">Meta</TableHead>
                         <TableHead className="text-right">Progresso Físico</TableHead>
+                        <TableHead>Status</TableHead>
                       </>
                     )}
                     {selectedRelatorio === "compras_periodo" && (
@@ -758,10 +753,12 @@ function RelatoriosPage() {
                       {selectedRelatorio === "cronograma_fisico" && (
                         <>
                           <TableCell className="font-medium">{item.nome}</TableCell>
+                          <TableCell className="text-xs">{item.data_inicio ? new Date(`${item.data_inicio}T00:00:00`).toLocaleDateString("pt-BR") : "—"} até {item.data_fim ? new Date(`${item.data_fim}T00:00:00`).toLocaleDateString("pt-BR") : "—"}</TableCell>
                           <TableCell className="text-right font-mono">{item.peso}%</TableCell>
                           <TableCell className="text-right font-mono font-semibold text-blue-700">
                             {item.progresso_calculado}%
                           </TableCell>
+                          <TableCell className="capitalize text-xs">{item.status?.replace(/_/g, " ") || "—"}</TableCell>
                         </>
                       )}
                       {selectedRelatorio === "compras_periodo" && (

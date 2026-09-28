@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save } from "lucide-react";
+import { FileText, Loader2, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { situacaoEtapa, validarLancamentoCronograma, type EtapaCronograma } from "@/lib/cronograma";
+import { CronogramaRelatorio } from "@/components/cronograma/cronograma-relatorio";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_app/cronograma")({ component: CronogramaPage });
 
@@ -64,12 +66,15 @@ function EtapaEditor({ etapa, podeEditar }: { etapa: EtapaCronograma; podeEditar
 
 function CronogramaPage() {
   const { roles } = useAuth();
+  const qc = useQueryClient();
   const podeEditar = roles.some(role => ["admin", "diretor", "engenharia"].includes(role));
   const [obraId, setObraId] = useState("");
+  const [excluirAberto, setExcluirAberto] = useState(false);
+  const [relatorioAberto, setRelatorioAberto] = useState(false);
   const obras = useQuery({
     queryKey: ["obras-cronograma-select"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("obras").select("id,nome,numero,proposta_id").order("nome");
+      const { data, error } = await supabase.from("obras").select("id,nome,numero,proposta_id,cliente_id,responsavel_id").order("nome");
       if (error) throw error;
       return data ?? [];
     },
@@ -86,6 +91,21 @@ function CronogramaPage() {
   const hoje = format(new Date(), "yyyy-MM-dd");
   const pendentes = etapas.data?.filter(e => !e.data_inicio || !e.data_fim).length ?? 0;
   const atrasadas = etapas.data?.filter(e => situacaoEtapa(e, hoje) === "Prazo vencido").length ?? 0;
+  const excluirCronograma = useMutation({
+    mutationFn: async () => {
+      if (!obraId) throw new Error("Selecione uma obra.");
+      const { error } = await supabase.from("obra_cronograma").delete().eq("obra_id", obraId);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      toast.success("Cronograma excluído. A obra e a proposta foram preservadas.");
+      setExcluirAberto(false);
+      await qc.invalidateQueries({ queryKey: ["cronograma-obra", obraId] });
+      await qc.invalidateQueries({ queryKey: ["portal-cronograma", obraId] });
+    },
+    onError: (error: Error) => toast.error(`Não foi possível excluir o cronograma: ${error.message}`),
+  });
+  const obraSelecionada = obras.data?.find((obra) => obra.id === obraId) ?? null;
   return <div className="mx-auto max-w-6xl space-y-6 p-6">
     <div><h1 className="text-2xl font-bold">Cronograma da obra</h1>
       <p className="text-sm text-muted-foreground">Planeje as etapas da proposta aceita e acompanhe sua execução com o proprietário.</p>
@@ -103,9 +123,30 @@ function CronogramaPage() {
     {obraId && <>
       {etapas.isLoading && <Loader2 aria-label="Carregando etapas" className="size-5 animate-spin" />}
       {etapas.error && <p role="alert" className="text-destructive">Não foi possível carregar o cronograma: {etapas.error.message}</p>}
-      {etapas.data && <p className="text-sm">{etapas.data.length} etapas · {pendentes} com prazo a definir · {atrasadas} com prazo vencido</p>}
+      {etapas.data && <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm">{etapas.data.length} etapas · {pendentes} com prazo a definir · {atrasadas} com prazo vencido</p>
+        {etapas.data.length > 0 && <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setRelatorioAberto(true)}><FileText className="size-4" /> Relatório detalhado</Button>
+          {roles.some(role => ["admin", "diretor"].includes(role)) && <Button variant="destructive" size="sm" onClick={() => setExcluirAberto(true)}><Trash2 className="size-4" /> Excluir cronograma</Button>}
+        </div>}
+      </div>}
       {etapas.data?.length === 0 && <p className="rounded-md border p-5 text-sm text-muted-foreground">Nenhuma etapa disponível. O cronograma recebe as etapas quando a proposta vinculada à obra é aceita.</p>}
       {etapas.data?.map(etapa => <EtapaEditor key={`${etapa.id}:${etapa.updated_at}`} etapa={etapa} podeEditar={podeEditar} />)}
+      <CronogramaRelatorio obra={obraSelecionada} etapas={etapas.data ?? []} open={relatorioAberto} onOpenChange={setRelatorioAberto} />
+      <AlertDialog open={excluirAberto} onOpenChange={setExcluirAberto}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir cronograma desta obra?</AlertDialogTitle>
+            <AlertDialogDescription>Isso removerá todas as etapas e seus lançamentos de prazo e progresso. A obra, a proposta e as medições serão preservadas. Essa ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluirCronograma.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive hover:bg-destructive/90" disabled={excluirCronograma.isPending} onClick={(event) => { event.preventDefault(); excluirCronograma.mutate(); }}>
+              {excluirCronograma.isPending ? "Excluindo..." : "Excluir cronograma"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>}
   </div>;
 }
