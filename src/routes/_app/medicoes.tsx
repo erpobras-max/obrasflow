@@ -640,12 +640,32 @@ function MedicaoFormDialog({
                         <FormItem className="!mb-0"><FormLabel className="text-[10px]">Exec</FormLabel><FormControl><Input type="number" step="0.01" placeholder="J" {...field} disabled={!!it?.proposta_item_id || (!!field.value && Number(field.value) > 0)} className="h-7 text-xs" /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.percentual_executado`} render={({ field }) => (
-                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">% acum.</FormLabel><FormControl><Input type="number" min={percentualAnterior} max="100" step="0.01" placeholder="%" {...field} onChange={(event) => {
-                          const percentual = Math.min(100, Math.max(percentualAnterior, Number(event.target.value || 0)));
-                          field.onChange(percentual);
-                          const contratado = Number(form.getValues(`itens.${idx}.qtd_contratada`) || 0);
-                          form.setValue(`itens.${idx}.qtd_executada`, contratado * (percentual - percentualAnterior) / 100, { shouldDirty: true });
-                        }} className="h-7 text-xs" /></FormControl></FormItem>
+                        <FormItem className="!mb-0"><FormLabel className="text-[10px]">% acum.</FormLabel><FormControl><Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="%"
+                          value={field.value ?? ""}
+                          onChange={(event) => {
+                            // Mantém a edição livre: o campo numérico anterior restaurava o
+                            // mínimo a cada tecla e impedia substituir o percentual digitando.
+                            const texto = event.target.value.replace(",", ".");
+                            if (texto !== "" && !/^\d{0,3}(?:\.\d{0,2})?$/.test(texto)) return;
+                            field.onChange(texto);
+                            const percentual = Number(texto);
+                            if (!Number.isFinite(percentual)) return;
+                            const contratado = Number(form.getValues(`itens.${idx}.qtd_contratada`) || 0);
+                            form.setValue(`itens.${idx}.qtd_executada`, contratado * Math.max(0, percentual - percentualAnterior) / 100, { shouldDirty: true });
+                          }}
+                          onBlur={(event) => {
+                            field.onBlur();
+                            const digitado = Number(event.target.value.replace(",", "."));
+                            const percentual = Math.min(100, Math.max(percentualAnterior, Number.isFinite(digitado) ? digitado : percentualAnterior));
+                            field.onChange(percentual);
+                            const contratado = Number(form.getValues(`itens.${idx}.qtd_contratada`) || 0);
+                            form.setValue(`itens.${idx}.qtd_executada`, contratado * (percentual - percentualAnterior) / 100, { shouldDirty: true });
+                          }}
+                          className="h-7 text-xs"
+                        /></FormControl></FormItem>
                       )} />
                       <FormField control={form.control} name={`itens.${idx}.valor_unitario`} render={({ field }) => (
                         <FormItem className="!mb-0"><FormLabel className="text-[10px]">Unit.</FormLabel><FormControl><Input type="number" step="0.01" placeholder="R$" {...field} className="h-7 text-xs" /></FormControl></FormItem>
