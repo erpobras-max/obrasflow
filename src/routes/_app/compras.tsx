@@ -302,6 +302,20 @@ function ComprasPage() {
     onError: (e: Error) => toast.error(`Não foi possível excluir a solicitação: ${e.message}`),
   });
 
+  const deleteApprovedSolicitacaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("admin_excluir_solicitacao_compra", { p_solicitacao_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Solicitação aprovada excluída pelo administrador");
+      qc.invalidateQueries({ queryKey: ["solicitacoes"] });
+      qc.invalidateQueries({ queryKey: ["solicitacoes-aprovadas-cotacao"] });
+      qc.invalidateQueries({ queryKey: ["cotacoes-compra"] });
+    },
+    onError: (e: Error) => toast.error(`Não foi possível excluir a solicitação: ${e.message}`),
+  });
+
   const handleExportFornecedoresExcel = () => {
     if (!fornecedores || fornecedores.length === 0) {
       toast.error("Nenhum fornecedor cadastrado para exportar");
@@ -578,13 +592,15 @@ function ComprasPage() {
                             </Button>
                           </>
                         )}
+                        {sol.status === "aprovada" && perfil?.perfil === "admin" && (
+                          <Button size="icon" variant="outline" className="size-7 text-destructive hover:text-destructive" title="Excluir solicitação aprovada (administrador)" onClick={() => {
+                            if (window.confirm("Excluir esta solicitação aprovada e sua cotação? Essa ação não pode ser desfeita.")) deleteApprovedSolicitacaoMutation.mutate(sol.id);
+                          }}>
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
                         {sol.status === "aprovada" && (
-                          <>
-                            <Link to="/cotacoes"><Button size="sm" variant="outline" className="h-7 gap-1 text-[#1e3a5f]"><FileSearch className="size-3" /> Criar cotação</Button></Link>
-                            <Button size="sm" className="h-7 bg-[#f97316] text-white hover:bg-[#f97316]/90" onClick={() => setPedidoModal(sol)}>
-                              Gerar Pedido
-                            </Button>
-                          </>
+                          <Link to="/cotacoes"><Button size="sm" variant="outline" className="h-7 gap-1 text-[#1e3a5f]"><FileSearch className="size-3" /> Criar cotação</Button></Link>
                         )}
                       </div>
                     </TableCell>
