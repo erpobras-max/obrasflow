@@ -207,8 +207,8 @@ function ComprasPage() {
   const materialMutation = useMutation({
     mutationFn: async (values: MaterialFormValues) => {
       const payload = {
-        sku: values.codigo,
-        nome: values.descricao,
+        sku: values.sku,
+        nome: values.nome,
         unidade: values.unidade,
         categoria: values.categoria,
         estoque_min: values.estoque_min,
@@ -989,8 +989,8 @@ function MaterialDialog({
   const form = useForm<any>({
     resolver: zodResolver(materialSchema),
     defaultValues: {
-      codigo: "",
-      descricao: "",
+      sku: "",
+      nome: "",
       unidade: "un",
       categoria: "MAT",
       estoque_min: 0,
@@ -1001,8 +1001,8 @@ function MaterialDialog({
     if (open) {
       if (target) {
         form.reset({
-          codigo: target.codigo,
-          descricao: target.descricao,
+          sku: target.sku || target.codigo || "",
+          nome: target.nome || target.descricao || "",
           unidade: target.unidade,
           categoria: target.categoria,
           estoque_min: target.estoque_min,
@@ -1029,7 +1029,7 @@ function MaterialDialog({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField control={form.control} name="codigo" render={({ field }) => (
+            <FormField control={form.control} name="sku" render={({ field }) => (
               <FormItem>
                 <FormLabel>Código Único (SKU/Código de Fábrica) *</FormLabel>
                 <FormControl><Input placeholder="CIM-01" {...field} /></FormControl>
@@ -1037,7 +1037,7 @@ function MaterialDialog({
               </FormItem>
             )} />
 
-            <FormField control={form.control} name="descricao" render={({ field }) => (
+            <FormField control={form.control} name="nome" render={({ field }) => (
               <FormItem>
                 <FormLabel>Descrição/Nome do Material *</FormLabel>
                 <FormControl><Input placeholder="Cimento CP-II 50kg" {...field} /></FormControl>
