@@ -36,7 +36,16 @@ export const solicitacaoItemSchema = z.object({
   descricao_livre: z.string().trim().optional().or(z.literal("")),
   quantidade: z.coerce.number().min(0.001, "Quantidade deve ser maior que zero"),
   unidade: z.string().trim().min(1, "Unidade obrigatória"),
+  valor_unit_estimado: z.coerce.number().min(0, "Valor estimado não pode ser negativo").default(0),
   etapa_id: z.string().uuid().nullable().optional(),
+}).superRefine((item, ctx) => {
+  if (!item.material_id && !item.produto_id && !item.descricao_livre?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["descricao_livre"],
+      message: "Selecione um produto ou informe a descrição do item",
+    });
+  }
 });
 
 // SOLICITAÇÃO COMPRA
@@ -93,6 +102,7 @@ export interface ProdutoRow {
   unidade: string;
   categoria: string;
   estoque_min: number;
+  preco_custo?: number | null;
   created_at: string;
 }
 
@@ -117,6 +127,8 @@ export interface SolicitacaoItemRow {
   descricao_livre: string | null;
   quantidade: number;
   unidade: string;
+  valor_unit_estimado: number;
+  valor_total_estimado?: number;
   etapa_id: string | null;
 }
 
@@ -143,3 +155,4 @@ export interface PedidoItemRow {
   valor_unit: number;
   valor_total: number;
 }
+
