@@ -184,9 +184,16 @@ O módulo também cria notificações para a equipe quando uma proposta é receb
 - GitHub Actions: execução #50 concluída com sucesso.
 - Alterações incluídas: ações de edição/exclusão, modal responsivo, fornecedor preferencial e valor estimado dos itens.
 
-## 17. Pendências prioritárias após esta atualização
+## 17. Correção do fluxo de compras — 13/10/2026
 
-- Publicar o frontend do módulo de cotações no Worker `obrasflow` e validar o fluxo completo em produção.
+- A aba `Pedidos de compra` agora respeita o parâmetro `/compras?tab=pedidos`, inclusive quando acessada pelo menu lateral.
+- A tela `/cotacoes` agora possui o botão destacado **Nova cotação** e um seletor claro para escolher uma solicitação aprovada.
+- A solicitação de compra continua aceitando fornecedor preferencial vazio; os fornecedores são escolhidos em conjunto na criação da cotação.
+- A cotação mostra a etapa correta: solicitação aprovada → seleção de vários fornecedores → respostas individuais → comparativo → pedidos separados por fornecedor vencedor.
+
+## 18. Pendências prioritárias após esta atualização
+
+- Validar o fluxo completo com dados reais: aprovar uma solicitação, enviar a cotação a vários fornecedores, registrar respostas e gerar pedidos.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado quando o acesso do CLI ao projeto estiver liberado; o módulo usa casts locais até essa regeneração.
 - Adicionar envio automático dos links por e-mail/WhatsApp com provedor configurado.
 - Melhorar o recebimento para aceitar quantidades parciais por item em uma tela dedicada; a primeira versão registra todo o saldo restante do pedido.
