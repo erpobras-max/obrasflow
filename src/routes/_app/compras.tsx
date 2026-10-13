@@ -56,6 +56,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePedidosCotacao } from "@/hooks/use-cotacoes";
 
 export const Route = createFileRoute("/_app/compras")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   component: ComprasPage,
 });
 
@@ -69,7 +72,20 @@ function ComprasPage() {
   const podeAprovar =
     perfil?.perfil === "admin" || perfil?.perfil === "diretor" || perfil?.perfil === "compras";
 
+  const { tab: tabParam } = Route.useSearch();
   const [activeTab, setActiveTab] = useState("solicitacoes");
+
+  useEffect(() => {
+    if (["solicitacoes", "pedidos", "fornecedores", "materiais"].includes(tabParam || "")) setActiveTab(tabParam!);
+    else setActiveTab("solicitacoes");
+  }, [tabParam]);
+
+  const mudarAba = (tab: string) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.replaceState({}, "", url);
+  };
 
   // State Modals
   const [fornecedorModal, setFornecedorModal] = useState<FornecedorRow | null | "new">(null);
@@ -486,7 +502,7 @@ function ComprasPage() {
         </Card>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={mudarAba} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 max-w-lg">
           <TabsTrigger value="solicitacoes">Solicitações</TabsTrigger>
           <TabsTrigger value="pedidos">Pedidos</TabsTrigger>
