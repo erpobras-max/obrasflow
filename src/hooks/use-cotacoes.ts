@@ -40,6 +40,15 @@ export function useCreateCotacao() {
   });
 }
 
+export function useExcluirCotacao() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (cotacaoId: string) => queryOrThrow((supabase as any).rpc("admin_excluir_cotacao_compra", { p_cotacao_id: cotacaoId })),
+    onSuccess: () => { toast.success("Cotação excluída"); qc.invalidateQueries({ queryKey: ["cotacoes-compra"] }); },
+    onError: (e: Error) => toast.error(`Não foi possível excluir a cotação: ${e.message}`),
+  });
+}
+
 export function useSelecionarVencedores(cotacaoId: string) {
   const qc = useQueryClient();
   return useMutation({
