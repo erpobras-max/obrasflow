@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 29/09/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 13/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -12,11 +12,11 @@ As rotas principais estão implementadas com TanStack Router. As páginas proteg
 | Painel            | `/`, `/dashboard`, `/empresa`, `/perfil`, `/usuarios`                                                                                       | Completo                                  |
 | Comercial         | `/comercial`, `/comercial/clientes`, `/comercial/propostas`, `/comercial/contratos`, `/comercial/licitacoes`                                | Completo                                  |
 | Obras             | `/obras`, `/cronograma`, `/diario`, `/medicoes`, `/documentos`, `/relatorios`                                                               | Completo                                  |
-| Operacional       | `/compras`, `/prestadores`, `/estoque`, `/equipamentos`, `/orcamentos`, `/fiscal`, `/importacoes`, `/vendas/pedidos`, `/rh`, `/ponto`      | Completo                                  |
+| Operacional       | `/compras`, `/cotacoes`, `/prestadores`, `/estoque`, `/equipamentos`, `/orcamentos`, `/fiscal`, `/importacoes`, `/vendas/pedidos`, `/rh`, `/ponto` | Completo                                  |
 | Financeiro        | `/financeiro`, `/imobiliaria/financeiro`                                                                                                    | Completo, com separação civil/imobiliária |
 | Imobiliária       | `/imobiliaria`, `/imobiliaria/dashboard`, `/imobiliaria/clientes`, `/imobiliaria/imoveis`, `/imobiliaria/locacoes`, `/imobiliaria/fiadores` | Completo                                  |
 | Portal do cliente | `/portal`, `/portal/contratos`, `/portal/documentos`, `/portal/financeiro`, `/portal/fotos`                                                 | Completo                                  |
-| Acesso público    | `/assinar/$token`, `/imovel-publico/$token`                                                                                                 | Completo                                  |
+| Acesso público    | `/assinar/$token`, `/cotacao/$token`, `/imovel-publico/$token`                                                                              | Completo                                  |
 
 Os arquivos de agrupamento (`/comercial`, `/imobiliaria` e `/portal`) funcionam como layouts/índices. Não há placeholder vazio conhecido entre as rotas listadas.
 
@@ -55,7 +55,12 @@ As entregas mais recentes são:
 - `20260929000001_servicos_aprovados_admin.sql`: restringe a edição e exclusão de serviços aprovados aos administradores.
 - `20261001000001_obra_funcionarios.sql`: permite vincular vários funcionários a cada obra, com acesso controlado para administração, diretoria, engenharia e RH.
 - `20261001000002_funcionario_epi_custos_folha.sql`: adiciona custos, EPI, uniformes e ferramentas por funcionário, com geração de parcelas autorizadas na folha.
-- `20261005000001_corrigir_colunas_indices_bcb.sql`: padroniza as colunas mensais e o acumulado de 12 meses dos índices BCB, cria a chave única por índice/ano/mês e atualiza o cache do PostgREST.`r`n
+- `20261005000001_corrigir_colunas_indices_bcb.sql`: padroniza as colunas mensais e o acumulado de 12 meses dos índices BCB, cria a chave única por índice/ano/mês e atualiza o cache do PostgREST.
+- `20261005000002_imobiliaria_vendas.sql`: cria vendas de imóveis e documentos da negociação, com RLS, índices e atualização automática do status do imóvel.
+- `20261013000002_fornecedor_preferencial_solicitacao.sql`: permite indicar um fornecedor preferencial na solicitação de compra.
+- `20261013000003_valor_estimado_solicitacao_item.sql`: adiciona o valor unitário estimado aos itens da solicitação de compra.
+- `20261013000004_cotacoes_compra.sql`: cria o módulo completo de cotações, convites por fornecedor, respostas públicas por token, anexos, comparação, seleção vencedora, pedidos, recebimentos, integração com contas a pagar, notificações e RLS.
+
 As melhorias de nome, inclusão, exclusão individual e ordenação das etapas não exigem nova migration; usam `obra_cronograma.ordem` e as colunas já existentes.
 
 ## 4. Edge Functions
@@ -85,7 +90,9 @@ Não há Edge Functions versionadas em `supabase/functions` neste checkout. A ap
 - O service worker foi ajustado para ignorar requisições de extensões do navegador e não tentar gravá-las no cache.
 - A tabela `notificacoes_usuario` foi criada no Supabase publicado. Os alertas de estoque agora consultam `produto_estoque`, em vez do estoque legado por obra.
 - O ambiente local pode mostrar avisos de versão do Node e vulnerabilidades do `npm audit`; devem ser tratados separadamente para não misturar atualização de dependências com regras de negócio.
+- A migration `20261013000004_cotacoes_compra.sql` foi aplicada no projeto Supabase publicado pelo SQL Editor em 13/10/2026, com retorno `Success. No rows returned`.
 - Consultas antigas de estoque/financeiro ainda exigem atenção se forem reintroduzidas: o schema publicado usa `produto_estoque` como fonte do saldo atual.
+- A última publicação confirmada nesta sequência foi o deploy do commit `e108939` (GitHub Actions, execução #50), referente às melhorias de Compras. O build local continua sujeito ao erro de permissão `EPERM` do Windows ao resolver o entrypoint do `@tanstack/react-start`, quando o diretório `node_modules` está bloqueado.
 
 ## 8. Prestadores de serviços
 
@@ -144,3 +151,34 @@ Build validado em 05/10/2026 e publicação concluída no Cloudflare Worker `obr
 Foi criado o `DESIGN.md` na raiz com a linguagem de interface do ObrasFlow: tokens semânticos, layout responsivo, formulários, tabelas, estados, acessibilidade e diretrizes para páginas públicas. A lista prática de revisão está em `docs/WEB_INTERFACE_REVIEW.md`.
 
 O Playwright foi incluído como dependência de desenvolvimento. Execute `npm run test:e2e` para validar, em desktop e celular, a tela de acesso, a formatação de CPF/CNPJ na área do cliente e o redirecionamento de rotas internas sem sessão. Os testes são somente leitura e usam, por padrão, o ambiente publicado; `E2E_BASE_URL` permite apontá-los para outro ambiente.
+
+## 14. Compras — estado atual
+
+Em `/compras`, o cadastro de materiais possui ações visíveis de edição e exclusão. Fornecedores também podem ser editados. Solicitações de compra em aberto ou rejeitadas podem ser editadas ou excluídas conforme as permissões do módulo.
+
+O modal de nova solicitação foi ajustado para telas menores, sem rolagem horizontal. Cada item permite selecionar um material do catálogo ou usar `Campo livre`, informar descrição alternativa, quantidade, unidade e valor unitário estimado. O fornecedor preferencial é opcional. O valor estimado é salvo em `solicitacao_itens.valor_estimado`.
+
+O campo `Campo livre` serve para solicitar algo que ainda não foi cadastrado no catálogo. Quando houver um material cadastrado, ele deve ser selecionado para aproveitar código, descrição e unidade. O SKU é um código interno do catálogo da empresa; não é um identificador universal de materiais.
+
+## 15. Cotações de compra — estado atual
+
+Em `/cotacoes`, uma solicitação aprovada pode ser enviada a vários fornecedores. O sistema cria um convite e um token individual para cada fornecedor, com link público em `/cotacao/$token`. O fornecedor informa preço unitário, disponibilidade, quantidade ofertada, frete, prazo de entrega, condição de pagamento, validade, observações e até cinco anexos PDF/imagem de até 10 MB.
+
+As respostas são registradas por funções SQL `SECURITY DEFINER`, com validação do token, prazo e status. A equipe acompanha a cotação, abre o comparativo, seleciona o vencedor por item e gera um ou mais pedidos de compra. Em `/compras`, a aba de pedidos permite aprovar e registrar o recebimento; o recebimento gera a conta a pagar vinculada ao pedido e registra o histórico.
+
+O módulo também cria notificações para a equipe quando uma proposta é recebida. Os links podem ser copiados e enviados por e-mail, WhatsApp ou outro canal disponível; a integração automática com provedor de mensagens ainda é uma pendência.
+
+## 16. Última entrega publicada
+
+- PR #75 — `feat: melhorar solicitações de compra` — mesclada em `main`.
+- Commit de merge: `e1089390306fb6d3a5c319765c32697be2c2807e`.
+- GitHub Actions: execução #50 concluída com sucesso.
+- Alterações incluídas: ações de edição/exclusão, modal responsivo, fornecedor preferencial e valor estimado dos itens.
+
+## 17. Pendências prioritárias após esta atualização
+
+- Publicar o frontend do módulo de cotações no Worker `obrasflow` e validar o fluxo completo em produção.
+- Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado quando o acesso do CLI ao projeto estiver liberado; o módulo usa casts locais até essa regeneração.
+- Adicionar envio automático dos links por e-mail/WhatsApp com provedor configurado.
+- Melhorar o recebimento para aceitar quantidades parciais por item em uma tela dedicada; a primeira versão registra todo o saldo restante do pedido.
+- Executar uma validação funcional no ambiente publicado para materiais, solicitações e permissões de edição/exclusão.

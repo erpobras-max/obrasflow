@@ -1,13 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
-  ShoppingCart, Plus, Search, FileText, Package, Users, HardHat,
+  ShoppingCart, Plus, Search, FileText, FileSearch, Package, Users, HardHat,
   AlertTriangle, Check, X, Star, Calendar, RefreshCw, ClipboardCheck, ArrowDown, Loader2,
-  Download, Upload
+  Download, Upload, Pencil, Trash2
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { usePedidosCotacao } from "@/hooks/use-cotacoes";
 
 export const Route = createFileRoute("/_app/compras")({
   component: ComprasPage,
@@ -71,6 +72,7 @@ function ComprasPage() {
   const [fornecedorModal, setFornecedorModal] = useState<FornecedorRow | null | "new">(null);
   const [materialModal, setMaterialModal] = useState<MaterialRow | null | "new">(null);
   const [solicitacaoModal, setSolicitacaoModal] = useState<boolean>(false);
+  const [solicitacaoEditModal, setSolicitacaoEditModal] = useState<SolicitacaoCompraRow | null>(null);
   const [aprovarModal, setAprovarModal] = useState<SolicitacaoCompraRow | null>(null);
   const [reprovarMotivo, setReprovarMotivo] = useState("");
   const [pedidoModal, setPedidoModal] = useState<SolicitacaoCompraRow | null>(null);
@@ -255,6 +257,30 @@ function ComprasPage() {
       setReprovarMotivo("");
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMaterialMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("produtos").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Material excluído");
+      qc.invalidateQueries({ queryKey: ["materiais"] });
+    },
+    onError: (e: Error) => toast.error(`Não foi possível excluir o material: ${e.message}`),
+  });
+
+  const deleteSolicitacaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("solicitacoes_compra").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Solicitação excluída");
+      qc.invalidateQueries({ queryKey: ["solicitacoes"] });
+    },
+    onError: (e: Error) => toast.error(`Não foi possível excluir a solicitação: ${e.message}`),
   });
 
   const handleExportFornecedoresExcel = () => {
@@ -481,7 +507,8 @@ function ComprasPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Criação</TableHead>
-                  <TableHead>Obra</TableHead>
+                <TableHead>Obra</TableHead>
+                <TableHead>Fornecedor</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Urgente</TableHead>
                   <TableHead className="w-24" />
@@ -489,13 +516,14 @@ function ComprasPage() {
               </TableHeader>
               <TableBody>
                 {loadingSol ? (
-                  <TableRow><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
                 ) : (solicitacoes ?? []).length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground">Nenhuma solicitação encontrada</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Nenhuma solicitação encontrada</TableCell></TableRow>
                 ) : (solicitacoes ?? []).map((sol) => (
                   <TableRow key={sol.id}>
                     <TableCell className="text-sm">{new Date(sol.created_at).toLocaleDateString("pt-BR")}</TableCell>
                     <TableCell className="font-medium">{obrasMap[sol.obra_id] || "Obra desconhecida"}</TableCell>
+                    <TableCell className="text-sm">{sol.fornecedor_id ? fornecedoresMap[sol.fornecedor_id] || "Fornecedor não encontrado" : "Não definido"}</TableCell>
                     <TableCell>
                       <Badge className={
                         sol.status === "aberta" ? "bg-gray-100 text-gray-800" :
@@ -519,10 +547,25 @@ function ComprasPage() {
                             Analisar
                           </Button>
                         )}
+                        {(sol.status === "aberta" || sol.status === "reprovada") && (
+                          <>
+                            <Button size="icon" variant="outline" className="size-7" title="Editar solicitação" onClick={() => setSolicitacaoEditModal(sol)}>
+                              <Pencil className="size-3.5" />
+                            </Button>
+                            <Button size="icon" variant="outline" className="size-7 text-destructive hover:text-destructive" title="Excluir solicitação" onClick={() => {
+                              if (window.confirm("Excluir esta solicitação e seus itens?")) deleteSolicitacaoMutation.mutate(sol.id);
+                            }}>
+                              <Trash2 className="size-3.5" />
+                            </Button>
+                          </>
+                        )}
                         {sol.status === "aprovada" && (
-                          <Button size="sm" className="h-7 bg-[#f97316] text-white hover:bg-[#f97316]/90" onClick={() => setPedidoModal(sol)}>
-                            Gerar Pedido
-                          </Button>
+                          <>
+                            <Link to="/cotacoes"><Button size="sm" variant="outline" className="h-7 gap-1 text-[#1e3a5f]"><FileSearch className="size-3" /> Criar cotação</Button></Link>
+                            <Button size="sm" className="h-7 bg-[#f97316] text-white hover:bg-[#f97316]/90" onClick={() => setPedidoModal(sol)}>
+                              Gerar Pedido
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -594,6 +637,7 @@ function ComprasPage() {
               </TableBody>
             </Table>
           </div>
+          <CotacoesPedidosPanel />
         </TabsContent>
 
         {/* ========================================================================= */}
@@ -645,7 +689,13 @@ function ComprasPage() {
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right" />
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button size="icon" variant="outline" className="size-7" title="Editar fornecedor" onClick={(e) => { e.stopPropagation(); setFornecedorModal(f); }}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -683,14 +733,15 @@ function ComprasPage() {
                   <TableHead>Descrição</TableHead>
                   <TableHead>Unidade</TableHead>
                   <TableHead>Categoria</TableHead>
-                  <TableHead className="text-right">Estoque Mínimo</TableHead>
+                <TableHead className="text-right">Estoque Mínimo</TableHead>
+                <TableHead className="w-20 text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loadingMat ? (
-                  <TableRow><TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
                 ) : (materiais ?? []).length === 0 ? (
-                  <TableRow><TableCell colSpan={5} className="text-center py-10 text-muted-foreground">Nenhum material cadastrado</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Nenhum material cadastrado</TableCell></TableRow>
                 ) : (materiais ?? []).map((m) => (
                   <TableRow key={m.id} className="group cursor-pointer hover:bg-muted/30" onClick={() => setMaterialModal(m)}>
                     <TableCell className="font-mono text-xs font-semibold">{m.codigo}</TableCell>
@@ -698,6 +749,16 @@ function ComprasPage() {
                     <TableCell>{m.unidade}</TableCell>
                     <TableCell><Badge variant="secondary">{m.categoria}</Badge></TableCell>
                     <TableCell className="text-right font-mono">{m.estoque_min}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button size="icon" variant="outline" className="size-7" title="Editar material" onClick={(e) => { e.stopPropagation(); setMaterialModal(m); }}>
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button size="icon" variant="outline" className="size-7 text-destructive hover:text-destructive" title="Excluir material" onClick={(e) => { e.stopPropagation(); if (window.confirm("Excluir este material do catálogo?")) deleteMaterialMutation.mutate(m.id); }}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -741,9 +802,24 @@ function ComprasPage() {
           onOpenChange={setSolicitacaoModal}
           obras={obras ?? []}
           materiais={materiais ?? []}
+          fornecedores={fornecedores ?? []}
           onSuccess={() => {
             qc.invalidateQueries({ queryKey: ["solicitacoes"] });
             setSolicitacaoModal(false);
+          }}
+        />
+      )}
+      {solicitacaoEditModal && (
+        <SolicitacaoDialog
+          open={!!solicitacaoEditModal}
+          onOpenChange={(o) => !o && setSolicitacaoEditModal(null)}
+          obras={obras ?? []}
+          materiais={materiais ?? []}
+          fornecedores={fornecedores ?? []}
+          target={solicitacaoEditModal}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ["solicitacoes"] });
+            setSolicitacaoEditModal(null);
           }}
         />
       )}
@@ -797,6 +873,15 @@ function ComprasPage() {
       )}
     </div>
   );
+}
+
+function CotacoesPedidosPanel() {
+  const { data: pedidos = [], isLoading } = usePedidosCotacao();
+  const qc = useQueryClient();
+  const aprovar = useMutation({ mutationFn: async (id: string) => { const { data: userData } = await supabase.auth.getUser(); const { error } = await (supabase as any).from("cotacoes_pedidos").update({ status: "aprovado", aprovado_por: userData.user?.id, aprovado_em: new Date().toISOString() }).eq("id", id); if (error) throw error; }, onSuccess: () => { toast.success("Pedido aprovado"); qc.invalidateQueries({ queryKey: ["pedidos-cotacao"] }); }, onError: (e: Error) => toast.error(e.message) });
+  const receberPedido = async (p: any) => { const itens = (p.cotacoes_pedidos_itens || []).map((i: any) => ({ pedido_item_id: i.id, quantidade_recebida: Math.max(0, Number(i.quantidade) - Number(i.qtd_recebida || 0)) })).filter((i: any) => i.quantidade_recebida > 0); if (!itens.length) return toast.error("Este pedido já foi recebido."); const { error } = await (supabase as any).rpc("registrar_recebimento_cotacao", { p_pedido_id: p.id, p_itens: itens, p_observacoes: "Recebimento conferido pela área de Compras" }); if (error) toast.error(error.message); else { toast.success("Recebimento registrado e enviado ao Financeiro"); qc.invalidateQueries({ queryKey: ["pedidos-cotacao"] }); } };
+  if (isLoading || !pedidos.length) return null;
+  return <Card><CardContent className="p-4"><h3 className="mb-3 text-lg font-semibold">Pedidos gerados pelas cotações</h3><Table><TableHeader><TableRow><TableHead>Nº</TableHead><TableHead>Fornecedor</TableHead><TableHead>Status</TableHead><TableHead>Total</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader><TableBody>{pedidos.map((p: any) => <TableRow key={p.id}><TableCell className="font-semibold">#{p.numero}</TableCell><TableCell>{p.fornecedores?.razao_social}</TableCell><TableCell><Badge>{String(p.status).replaceAll("_", " ")}</Badge></TableCell><TableCell>{fmtBRL(Number(p.valor_total))}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2">{p.status === "aguardando_aprovacao" && <Button size="sm" onClick={() => aprovar.mutate(p.id)}>Aprovar</Button>}{["aprovado", "parcialmente_recebido"].includes(p.status) && <Button size="sm" variant="outline" onClick={() => receberPedido(p)}><ArrowDown className="mr-1 size-3" />Receber</Button>}</div></TableCell></TableRow>)}</TableBody></Table></CardContent></Card>;
 }
 
 // ==========================================
@@ -1084,12 +1169,14 @@ function MaterialDialog({
 }
 
 function SolicitacaoDialog({
-  open, onOpenChange, obras, materiais, onSuccess,
+  open, onOpenChange, obras, materiais, fornecedores, target, onSuccess,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   obras: { id: string; numero: string; nome: string }[];
   materiais: MaterialRow[];
+  fornecedores: FornecedorRow[];
+  target?: SolicitacaoCompraRow | null;
   onSuccess: () => void;
 }) {
   const { user } = useAuth();
@@ -1097,9 +1184,10 @@ function SolicitacaoDialog({
     resolver: zodResolver(solicitacaoSchema),
     defaultValues: {
       obra_id: "",
+      fornecedor_id: "",
       urgente: false,
       observacoes: "",
-      itens: [{ material_id: "", descricao_livre: "", quantidade: 1, unidade: "un" }],
+      itens: [{ material_id: "", descricao_livre: "", quantidade: 1, unidade: "un", valor_estimado: 0 }],
     },
   });
 
@@ -1108,30 +1196,68 @@ function SolicitacaoDialog({
     name: "itens",
   });
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const load = async () => {
+      if (!target) {
+        form.reset({ obra_id: "", fornecedor_id: "", urgente: false, observacoes: "", itens: [{ material_id: "", descricao_livre: "", quantidade: 1, unidade: "un", valor_estimado: 0 }] });
+        return;
+      }
+      const { data: itens, error } = await (supabase as any).from("solicitacao_itens").select("*").eq("solicitacao_id", target.id).order("created_at");
+      if (error) {
+        toast.error(`Não foi possível carregar os itens: ${error.message}`);
+        return;
+      }
+      if (!cancelled) {
+        form.reset({
+          obra_id: target.obra_id,
+          fornecedor_id: target.fornecedor_id || "",
+          urgente: target.urgente,
+          observacoes: target.observacoes || "",
+          itens: (itens ?? []).map((item: SolicitacaoItemRow) => ({
+            material_id: item.produto_id || item.material_id || "",
+            descricao_livre: item.descricao_livre || "",
+            quantidade: item.quantidade,
+            unidade: item.unidade,
+            valor_estimado: item.valor_estimado ?? 0,
+          })),
+        });
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [open, target, form]);
+
   const onSubmit = async (values: SolicitacaoFormValues) => {
     try {
-      // 1. Insert header
-      const { data: sol, error: solErr } = await (supabase as any)
-        .from("solicitacoes_compra")
-        .insert({
+      const header = {
           obra_id: values.obra_id,
+          fornecedor_id: values.fornecedor_id || null,
           solicitante_id: user?.id,
           urgente: values.urgente,
           observacoes: values.observacoes || null,
-          status: "em_aprovacao",
-        })
-        .select()
-        .single();
+        };
+      let sol: SolicitacaoCompraRow;
+      if (target) {
+        const { data, error } = await (supabase as any).from("solicitacoes_compra").update(header).eq("id", target.id).select().single();
+        if (error) throw error;
+        sol = data;
+        const { error: deleteErr } = await (supabase as any).from("solicitacao_itens").delete().eq("solicitacao_id", target.id);
+        if (deleteErr) throw deleteErr;
+      } else {
+        const { data, error } = await (supabase as any).from("solicitacoes_compra").insert({ ...header, status: "em_aprovacao" }).select().single();
+        if (error) throw error;
+        sol = data;
+      }
 
-      if (solErr) throw solErr;
-
-      // 2. Insert items
       const itemsPayload = values.itens.map((item) => ({
         solicitacao_id: sol.id,
         produto_id: item.material_id || null,
         descricao_livre: item.descricao_livre || null,
         quantidade: item.quantidade,
         unidade: item.unidade,
+        valor_estimado: item.valor_estimado || 0,
       }));
 
       const { error: itemsErr } = await (supabase as any)
@@ -1140,7 +1266,7 @@ function SolicitacaoDialog({
 
       if (itemsErr) throw itemsErr;
 
-      toast.success("Solicitação enviada para aprovação");
+      toast.success(target ? "Solicitação atualizada" : "Solicitação enviada para aprovação");
       onSuccess();
     } catch (e) {
       toast.error((e as Error).message);
@@ -1149,15 +1275,15 @@ function SolicitacaoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle>Nova Solicitação de Compra</DialogTitle>
-          <DialogDescription>Selecione a obra de destino e adicione as quantidades dos itens necessários.</DialogDescription>
+          <DialogTitle>{target ? "Editar Solicitação de Compra" : "Nova Solicitação de Compra"}</DialogTitle>
+          <DialogDescription>Informe a obra, o fornecedor opcional e os materiais necessários.</DialogDescription>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3 items-end">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-end">
               <FormField control={form.control as any} name="obra_id" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Obra *</FormLabel>
@@ -1167,6 +1293,20 @@ function SolicitacaoDialog({
                       {obras.map((o) => (
                         <SelectItem key={o.id} value={o.id}>{o.numero} — {o.nome}</SelectItem>
                       ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+
+              <FormField control={form.control as any} name="fornecedor_id" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Fornecedor preferencial</FormLabel>
+                  <Select value={field.value || "_none"} onValueChange={(value) => field.onChange(value === "_none" ? "" : value)}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="_none">Nenhum definido</SelectItem>
+                      {fornecedores.map((fornecedor) => <SelectItem key={fornecedor.id} value={fornecedor.id}>{fornecedor.razao_social}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -1188,7 +1328,7 @@ function SolicitacaoDialog({
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-semibold">Itens Necessários *</label>
-                <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => append({ material_id: "", descricao_livre: "", quantidade: 1, unidade: "un" })}>
+                <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => append({ material_id: "", descricao_livre: "", quantidade: 1, unidade: "un", valor_estimado: 0 })}>
                   <Plus className="size-3.5" /> Adicionar Item
                 </Button>
               </div>
@@ -1196,9 +1336,10 @@ function SolicitacaoDialog({
               {fields.map((f, idx) => {
                 const selectedMatId = form.watch(`itens.${idx}.material_id`);
                 return (
-                  <div key={f.id} className="grid grid-cols-[1.5fr_1fr_100px_90px_auto] gap-2 items-start bg-muted/10 border p-3 rounded-lg relative">
+                  <div key={f.id} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_90px_90px_115px_32px] gap-2 items-start bg-muted/10 border p-3 rounded-lg relative">
                     <FormField control={form.control as any} name={`itens.${idx}.material_id`} render={({ field }) => (
                       <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Material do catálogo</FormLabel>
                         <Select value={field.value || "_libre"} onValueChange={(val) => {
                           field.onChange(val === "_libre" ? "" : val);
                           if (val !== "_libre" && val) {
@@ -1219,14 +1360,23 @@ function SolicitacaoDialog({
 
                     <FormField control={form.control as any} name={`itens.${idx}.descricao_livre`} render={({ field }) => (
                       <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Descrição livre</FormLabel>
                         <FormControl>
-                          <Input placeholder="Descrição alternativa" disabled={!!selectedMatId} {...field} />
+                          <Input placeholder="Descrição alternativa (se não houver catálogo)" disabled={!!selectedMatId} {...field} />
                         </FormControl>
+                      </FormItem>
+                    )} />
+
+                    <FormField control={form.control as any} name={`itens.${idx}.valor_estimado`} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Valor estimado</FormLabel>
+                        <FormControl><Input type="number" min="0" step="0.01" placeholder="R$ 0,00" {...field} /></FormControl>
                       </FormItem>
                     )} />
 
                     <FormField control={form.control as any} name={`itens.${idx}.quantidade`} render={({ field }) => (
                       <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Quantidade</FormLabel>
                         <FormControl>
                           <Input type="number" step="0.001" placeholder="Qtd" {...field} />
                         </FormControl>
@@ -1235,6 +1385,7 @@ function SolicitacaoDialog({
 
                     <FormField control={form.control as any} name={`itens.${idx}.unidade`} render={({ field }) => (
                       <FormItem>
+                        <FormLabel className="text-xs text-muted-foreground">Unidade</FormLabel>
                         <FormControl>
                           <Input placeholder="Unidade" disabled={!!selectedMatId} {...field} />
                         </FormControl>
@@ -1260,7 +1411,7 @@ function SolicitacaoDialog({
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
               <Button type="submit" className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white">
-                Enviar Solicitação
+                {target ? "Salvar Alterações" : "Enviar Solicitação"}
               </Button>
             </DialogFooter>
           </form>

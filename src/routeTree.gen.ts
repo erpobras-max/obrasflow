@@ -22,10 +22,12 @@ import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro
 import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
 import { Route as PortalContratosRouteImport } from './routes/portal/contratos'
 import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
+import { Route as CotacaoTokenRouteImport } from './routes/cotacao.$token'
 import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
 import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
 import { Route as AppRhRouteImport } from './routes/_app/rh'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
+import { Route as AppPrestadoresRouteImport } from './routes/_app/prestadores'
 import { Route as AppPerfilRouteImport } from './routes/_app/perfil'
 import { Route as AppOrcamentosRouteImport } from './routes/_app/orcamentos'
 import { Route as AppObrasRouteImport } from './routes/_app/obras'
@@ -43,17 +45,21 @@ import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCronogramaRouteImport } from './routes/_app/cronograma'
 import { Route as AppComprasRouteImport } from './routes/_app/compras'
 import { Route as AppComercialRouteImport } from './routes/_app/comercial'
+import { Route as AppCotacoesIndexRouteImport } from './routes/_app/cotacoes/index'
 import { Route as AppVendasPedidosRouteImport } from './routes/_app/vendas.pedidos'
+import { Route as AppImobiliariaVendasRouteImport } from './routes/_app/imobiliaria.vendas'
 import { Route as AppImobiliariaLocacoesRouteImport } from './routes/_app/imobiliaria.locacoes'
 import { Route as AppImobiliariaImoveisRouteImport } from './routes/_app/imobiliaria.imoveis'
 import { Route as AppImobiliariaFinanceiroRouteImport } from './routes/_app/imobiliaria.financeiro'
 import { Route as AppImobiliariaFiadoresRouteImport } from './routes/_app/imobiliaria/fiadores'
 import { Route as AppImobiliariaDashboardRouteImport } from './routes/_app/imobiliaria.dashboard'
 import { Route as AppImobiliariaClientesRouteImport } from './routes/_app/imobiliaria.clientes'
+import { Route as AppCotacoesCotacaoIdRouteImport } from './routes/_app/cotacoes/$cotacaoId'
 import { Route as AppComercialPropostasRouteImport } from './routes/_app/comercial.propostas'
 import { Route as AppComercialLicitacoesRouteImport } from './routes/_app/comercial.licitacoes'
 import { Route as AppComercialContratosRouteImport } from './routes/_app/comercial.contratos'
 import { Route as AppComercialClientesRouteImport } from './routes/_app/comercial.clientes'
+import { Route as AppCotacoesCotacaoIdComparativoRouteImport } from './routes/_app/cotacoes/$cotacaoId.comparativo'
 
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
   id: '/reset-password',
@@ -119,6 +125,11 @@ const ImovelPublicoTokenRoute = ImovelPublicoTokenRouteImport.update({
   path: '/imovel-publico/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CotacaoTokenRoute = CotacaoTokenRouteImport.update({
+  id: '/cotacao/$token',
+  path: '/cotacao/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AssinarTokenRoute = AssinarTokenRouteImport.update({
   id: '/assinar/$token',
   path: '/assinar/$token',
@@ -137,6 +148,11 @@ const AppRhRoute = AppRhRouteImport.update({
 const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
   id: '/relatorios',
   path: '/relatorios',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPrestadoresRoute = AppPrestadoresRouteImport.update({
+  id: '/prestadores',
+  path: '/prestadores',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPerfilRoute = AppPerfilRouteImport.update({
@@ -224,10 +240,20 @@ const AppComercialRoute = AppComercialRouteImport.update({
   path: '/comercial',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCotacoesIndexRoute = AppCotacoesIndexRouteImport.update({
+  id: '/cotacoes/',
+  path: '/cotacoes/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppVendasPedidosRoute = AppVendasPedidosRouteImport.update({
   id: '/vendas/pedidos',
   path: '/vendas/pedidos',
   getParentRoute: () => AppRoute,
+} as any)
+const AppImobiliariaVendasRoute = AppImobiliariaVendasRouteImport.update({
+  id: '/vendas',
+  path: '/vendas',
+  getParentRoute: () => AppImobiliariaRoute,
 } as any)
 const AppImobiliariaLocacoesRoute = AppImobiliariaLocacoesRouteImport.update({
   id: '/locacoes',
@@ -260,6 +286,11 @@ const AppImobiliariaClientesRoute = AppImobiliariaClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => AppImobiliariaRoute,
 } as any)
+const AppCotacoesCotacaoIdRoute = AppCotacoesCotacaoIdRouteImport.update({
+  id: '/cotacoes/$cotacaoId',
+  path: '/cotacoes/$cotacaoId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppComercialPropostasRoute = AppComercialPropostasRouteImport.update({
   id: '/propostas',
   path: '/propostas',
@@ -280,6 +311,12 @@ const AppComercialClientesRoute = AppComercialClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => AppComercialRoute,
 } as any)
+const AppCotacoesCotacaoIdComparativoRoute =
+  AppCotacoesCotacaoIdComparativoRouteImport.update({
+    id: '/comparativo',
+    path: '/comparativo',
+    getParentRoute: () => AppCotacoesCotacaoIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -305,10 +342,12 @@ export interface FileRoutesByFullPath {
   '/obras': typeof AppObrasRoute
   '/orcamentos': typeof AppOrcamentosRoute
   '/perfil': typeof AppPerfilRoute
+  '/prestadores': typeof AppPrestadoresRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
   '/assinar/$token': typeof AssinarTokenRoute
+  '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
@@ -319,13 +358,17 @@ export interface FileRoutesByFullPath {
   '/comercial/contratos': typeof AppComercialContratosRoute
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
+  '/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
   '/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
+  '/imobiliaria/vendas': typeof AppImobiliariaVendasRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
+  '/cotacoes/': typeof AppCotacoesIndexRoute
+  '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -350,10 +393,12 @@ export interface FileRoutesByTo {
   '/obras': typeof AppObrasRoute
   '/orcamentos': typeof AppOrcamentosRoute
   '/perfil': typeof AppPerfilRoute
+  '/prestadores': typeof AppPrestadoresRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
   '/assinar/$token': typeof AssinarTokenRoute
+  '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
@@ -364,13 +409,17 @@ export interface FileRoutesByTo {
   '/comercial/contratos': typeof AppComercialContratosRoute
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
+  '/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
   '/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
+  '/imobiliaria/vendas': typeof AppImobiliariaVendasRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
+  '/cotacoes': typeof AppCotacoesIndexRoute
+  '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -398,10 +447,12 @@ export interface FileRoutesById {
   '/_app/obras': typeof AppObrasRoute
   '/_app/orcamentos': typeof AppOrcamentosRoute
   '/_app/perfil': typeof AppPerfilRoute
+  '/_app/prestadores': typeof AppPrestadoresRoute
   '/_app/relatorios': typeof AppRelatoriosRoute
   '/_app/rh': typeof AppRhRoute
   '/_app/usuarios': typeof AppUsuariosRoute
   '/assinar/$token': typeof AssinarTokenRoute
+  '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
@@ -412,13 +463,17 @@ export interface FileRoutesById {
   '/_app/comercial/contratos': typeof AppComercialContratosRoute
   '/_app/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/_app/comercial/propostas': typeof AppComercialPropostasRoute
+  '/_app/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
   '/_app/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/_app/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/_app/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
   '/_app/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/_app/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/_app/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
+  '/_app/imobiliaria/vendas': typeof AppImobiliariaVendasRoute
   '/_app/vendas/pedidos': typeof AppVendasPedidosRoute
+  '/_app/cotacoes/': typeof AppCotacoesIndexRoute
+  '/_app/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -446,10 +501,12 @@ export interface FileRouteTypes {
     | '/obras'
     | '/orcamentos'
     | '/perfil'
+    | '/prestadores'
     | '/relatorios'
     | '/rh'
     | '/usuarios'
     | '/assinar/$token'
+    | '/cotacao/$token'
     | '/imovel-publico/$token'
     | '/portal/contratos'
     | '/portal/documentos'
@@ -460,13 +517,17 @@ export interface FileRouteTypes {
     | '/comercial/contratos'
     | '/comercial/licitacoes'
     | '/comercial/propostas'
+    | '/cotacoes/$cotacaoId'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
     | '/imobiliaria/financeiro'
     | '/imobiliaria/imoveis'
     | '/imobiliaria/locacoes'
+    | '/imobiliaria/vendas'
     | '/vendas/pedidos'
+    | '/cotacoes/'
+    | '/cotacoes/$cotacaoId/comparativo'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -491,10 +552,12 @@ export interface FileRouteTypes {
     | '/obras'
     | '/orcamentos'
     | '/perfil'
+    | '/prestadores'
     | '/relatorios'
     | '/rh'
     | '/usuarios'
     | '/assinar/$token'
+    | '/cotacao/$token'
     | '/imovel-publico/$token'
     | '/portal/contratos'
     | '/portal/documentos'
@@ -505,13 +568,17 @@ export interface FileRouteTypes {
     | '/comercial/contratos'
     | '/comercial/licitacoes'
     | '/comercial/propostas'
+    | '/cotacoes/$cotacaoId'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
     | '/imobiliaria/financeiro'
     | '/imobiliaria/imoveis'
     | '/imobiliaria/locacoes'
+    | '/imobiliaria/vendas'
     | '/vendas/pedidos'
+    | '/cotacoes'
+    | '/cotacoes/$cotacaoId/comparativo'
   id:
     | '__root__'
     | '/'
@@ -538,10 +605,12 @@ export interface FileRouteTypes {
     | '/_app/obras'
     | '/_app/orcamentos'
     | '/_app/perfil'
+    | '/_app/prestadores'
     | '/_app/relatorios'
     | '/_app/rh'
     | '/_app/usuarios'
     | '/assinar/$token'
+    | '/cotacao/$token'
     | '/imovel-publico/$token'
     | '/portal/contratos'
     | '/portal/documentos'
@@ -552,13 +621,17 @@ export interface FileRouteTypes {
     | '/_app/comercial/contratos'
     | '/_app/comercial/licitacoes'
     | '/_app/comercial/propostas'
+    | '/_app/cotacoes/$cotacaoId'
     | '/_app/imobiliaria/clientes'
     | '/_app/imobiliaria/dashboard'
     | '/_app/imobiliaria/fiadores'
     | '/_app/imobiliaria/financeiro'
     | '/_app/imobiliaria/imoveis'
     | '/_app/imobiliaria/locacoes'
+    | '/_app/imobiliaria/vendas'
     | '/_app/vendas/pedidos'
+    | '/_app/cotacoes/'
+    | '/_app/cotacoes/$cotacaoId/comparativo'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -570,6 +643,7 @@ export interface RootRouteChildren {
   PortalRoute: typeof PortalRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   AssinarTokenRoute: typeof AssinarTokenRoute
+  CotacaoTokenRoute: typeof CotacaoTokenRoute
   ImovelPublicoTokenRoute: typeof ImovelPublicoTokenRoute
 }
 
@@ -666,6 +740,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ImovelPublicoTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cotacao/$token': {
+      id: '/cotacao/$token'
+      path: '/cotacao/$token'
+      fullPath: '/cotacao/$token'
+      preLoaderRoute: typeof CotacaoTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/assinar/$token': {
       id: '/assinar/$token'
       path: '/assinar/$token'
@@ -692,6 +773,13 @@ declare module '@tanstack/react-router' {
       path: '/relatorios'
       fullPath: '/relatorios'
       preLoaderRoute: typeof AppRelatoriosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/prestadores': {
+      id: '/_app/prestadores'
+      path: '/prestadores'
+      fullPath: '/prestadores'
+      preLoaderRoute: typeof AppPrestadoresRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/perfil': {
@@ -813,12 +901,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppComercialRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/cotacoes/': {
+      id: '/_app/cotacoes/'
+      path: '/cotacoes'
+      fullPath: '/cotacoes/'
+      preLoaderRoute: typeof AppCotacoesIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/vendas/pedidos': {
       id: '/_app/vendas/pedidos'
       path: '/vendas/pedidos'
       fullPath: '/vendas/pedidos'
       preLoaderRoute: typeof AppVendasPedidosRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/imobiliaria/vendas': {
+      id: '/_app/imobiliaria/vendas'
+      path: '/vendas'
+      fullPath: '/imobiliaria/vendas'
+      preLoaderRoute: typeof AppImobiliariaVendasRouteImport
+      parentRoute: typeof AppImobiliariaRoute
     }
     '/_app/imobiliaria/locacoes': {
       id: '/_app/imobiliaria/locacoes'
@@ -862,6 +964,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImobiliariaClientesRouteImport
       parentRoute: typeof AppImobiliariaRoute
     }
+    '/_app/cotacoes/$cotacaoId': {
+      id: '/_app/cotacoes/$cotacaoId'
+      path: '/cotacoes/$cotacaoId'
+      fullPath: '/cotacoes/$cotacaoId'
+      preLoaderRoute: typeof AppCotacoesCotacaoIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/comercial/propostas': {
       id: '/_app/comercial/propostas'
       path: '/propostas'
@@ -889,6 +998,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/comercial/clientes'
       preLoaderRoute: typeof AppComercialClientesRouteImport
       parentRoute: typeof AppComercialRoute
+    }
+    '/_app/cotacoes/$cotacaoId/comparativo': {
+      id: '/_app/cotacoes/$cotacaoId/comparativo'
+      path: '/comparativo'
+      fullPath: '/cotacoes/$cotacaoId/comparativo'
+      preLoaderRoute: typeof AppCotacoesCotacaoIdComparativoRouteImport
+      parentRoute: typeof AppCotacoesCotacaoIdRoute
     }
   }
 }
@@ -918,6 +1034,7 @@ interface AppImobiliariaRouteChildren {
   AppImobiliariaFinanceiroRoute: typeof AppImobiliariaFinanceiroRoute
   AppImobiliariaImoveisRoute: typeof AppImobiliariaImoveisRoute
   AppImobiliariaLocacoesRoute: typeof AppImobiliariaLocacoesRoute
+  AppImobiliariaVendasRoute: typeof AppImobiliariaVendasRoute
 }
 
 const AppImobiliariaRouteChildren: AppImobiliariaRouteChildren = {
@@ -927,11 +1044,23 @@ const AppImobiliariaRouteChildren: AppImobiliariaRouteChildren = {
   AppImobiliariaFinanceiroRoute: AppImobiliariaFinanceiroRoute,
   AppImobiliariaImoveisRoute: AppImobiliariaImoveisRoute,
   AppImobiliariaLocacoesRoute: AppImobiliariaLocacoesRoute,
+  AppImobiliariaVendasRoute: AppImobiliariaVendasRoute,
 }
 
 const AppImobiliariaRouteWithChildren = AppImobiliariaRoute._addFileChildren(
   AppImobiliariaRouteChildren,
 )
+
+interface AppCotacoesCotacaoIdRouteChildren {
+  AppCotacoesCotacaoIdComparativoRoute: typeof AppCotacoesCotacaoIdComparativoRoute
+}
+
+const AppCotacoesCotacaoIdRouteChildren: AppCotacoesCotacaoIdRouteChildren = {
+  AppCotacoesCotacaoIdComparativoRoute: AppCotacoesCotacaoIdComparativoRoute,
+}
+
+const AppCotacoesCotacaoIdRouteWithChildren =
+  AppCotacoesCotacaoIdRoute._addFileChildren(AppCotacoesCotacaoIdRouteChildren)
 
 interface AppRouteChildren {
   AppComercialRoute: typeof AppComercialRouteWithChildren
@@ -951,10 +1080,13 @@ interface AppRouteChildren {
   AppObrasRoute: typeof AppObrasRoute
   AppOrcamentosRoute: typeof AppOrcamentosRoute
   AppPerfilRoute: typeof AppPerfilRoute
+  AppPrestadoresRoute: typeof AppPrestadoresRoute
   AppRelatoriosRoute: typeof AppRelatoriosRoute
   AppRhRoute: typeof AppRhRoute
   AppUsuariosRoute: typeof AppUsuariosRoute
+  AppCotacoesCotacaoIdRoute: typeof AppCotacoesCotacaoIdRouteWithChildren
   AppVendasPedidosRoute: typeof AppVendasPedidosRoute
+  AppCotacoesIndexRoute: typeof AppCotacoesIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -975,10 +1107,13 @@ const AppRouteChildren: AppRouteChildren = {
   AppObrasRoute: AppObrasRoute,
   AppOrcamentosRoute: AppOrcamentosRoute,
   AppPerfilRoute: AppPerfilRoute,
+  AppPrestadoresRoute: AppPrestadoresRoute,
   AppRelatoriosRoute: AppRelatoriosRoute,
   AppRhRoute: AppRhRoute,
   AppUsuariosRoute: AppUsuariosRoute,
+  AppCotacoesCotacaoIdRoute: AppCotacoesCotacaoIdRouteWithChildren,
   AppVendasPedidosRoute: AppVendasPedidosRoute,
+  AppCotacoesIndexRoute: AppCotacoesIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -1011,6 +1146,7 @@ const rootRouteChildren: RootRouteChildren = {
   PortalRoute: PortalRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   AssinarTokenRoute: AssinarTokenRoute,
+  CotacaoTokenRoute: CotacaoTokenRoute,
   ImovelPublicoTokenRoute: ImovelPublicoTokenRoute,
 }
 export const routeTree = rootRouteImport
