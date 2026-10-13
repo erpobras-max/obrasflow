@@ -2,8 +2,8 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   LayoutDashboard, HardHat, FileText, ClipboardList,
   ShoppingCart, Package, DollarSign, Receipt, Folder,
-  Wrench, BarChart3, Users, Building2, Ruler, UserCheck, Search,
-  Calculator, Upload, CalendarDays,
+  Wrench, BarChart3, Users, Building2, Ruler, UserCheck, Search, Hammer,
+  Calculator, Upload, CalendarDays, Handshake, FileSearch,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -54,6 +54,9 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
     title: "Suprimentos",
     items: [
       { key: "compras", label: "Compras", icon: ShoppingCart, to: "/compras" },
+      { key: "compras", label: "Cotações", icon: FileSearch, to: "/cotacoes" },
+      { key: "compras", label: "Pedidos de compra", icon: ShoppingCart, to: "/compras?tab=pedidos" },
+      { key: "prestadores", label: "Prestadores de serviços", icon: Hammer, to: "/prestadores" },
       { key: "estoque", label: "Estoque", icon: Package, to: "/estoque" },
       { key: "equipamentos", label: "Equipamentos", icon: Wrench, to: "/equipamentos" },
     ],
@@ -88,6 +91,7 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
       { key: "imobiliaria", label: "Fiadores", icon: UserCheck, to: "/imobiliaria/fiadores" },
       { key: "imobiliaria", label: "Imóveis", icon: Building2, to: "/imobiliaria/imoveis" },
       { key: "imobiliaria", label: "Locações", icon: ClipboardList, to: "/imobiliaria/locacoes" },
+      { key: "imobiliaria", label: "Vendas de imóveis", icon: Handshake, to: "/imobiliaria/vendas" },
       { key: "financeiro_imobiliaria", label: "Financeiro Imobiliário", icon: DollarSign, to: "/imobiliaria/financeiro" },
     ],
   },

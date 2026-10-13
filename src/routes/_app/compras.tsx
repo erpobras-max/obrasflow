@@ -1,11 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import {
-  ShoppingCart, Plus, Search, FileText, Package, Users, HardHat,
+  ShoppingCart, Plus, Search, FileText, FileSearch, Package, Users, HardHat,
   AlertTriangle, Check, X, Star, Calendar, RefreshCw, ClipboardCheck, ArrowDown, Loader2,
   Download, Upload, Pencil, Trash2
 } from "lucide-react";
@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { usePedidosCotacao } from "@/hooks/use-cotacoes";
 
 export const Route = createFileRoute("/_app/compras")({
   component: ComprasPage,
@@ -559,9 +560,12 @@ function ComprasPage() {
                           </>
                         )}
                         {sol.status === "aprovada" && (
-                          <Button size="sm" className="h-7 bg-[#f97316] text-white hover:bg-[#f97316]/90" onClick={() => setPedidoModal(sol)}>
-                            Gerar Pedido
-                          </Button>
+                          <>
+                            <Link to="/cotacoes"><Button size="sm" variant="outline" className="h-7 gap-1 text-[#1e3a5f]"><FileSearch className="size-3" /> Criar cotação</Button></Link>
+                            <Button size="sm" className="h-7 bg-[#f97316] text-white hover:bg-[#f97316]/90" onClick={() => setPedidoModal(sol)}>
+                              Gerar Pedido
+                            </Button>
+                          </>
                         )}
                       </div>
                     </TableCell>
@@ -633,6 +637,7 @@ function ComprasPage() {
               </TableBody>
             </Table>
           </div>
+          <CotacoesPedidosPanel />
         </TabsContent>
 
         {/* ========================================================================= */}
@@ -868,6 +873,15 @@ function ComprasPage() {
       )}
     </div>
   );
+}
+
+function CotacoesPedidosPanel() {
+  const { data: pedidos = [], isLoading } = usePedidosCotacao();
+  const qc = useQueryClient();
+  const aprovar = useMutation({ mutationFn: async (id: string) => { const { data: userData } = await supabase.auth.getUser(); const { error } = await (supabase as any).from("cotacoes_pedidos").update({ status: "aprovado", aprovado_por: userData.user?.id, aprovado_em: new Date().toISOString() }).eq("id", id); if (error) throw error; }, onSuccess: () => { toast.success("Pedido aprovado"); qc.invalidateQueries({ queryKey: ["pedidos-cotacao"] }); }, onError: (e: Error) => toast.error(e.message) });
+  const receberPedido = async (p: any) => { const itens = (p.cotacoes_pedidos_itens || []).map((i: any) => ({ pedido_item_id: i.id, quantidade_recebida: Math.max(0, Number(i.quantidade) - Number(i.qtd_recebida || 0)) })).filter((i: any) => i.quantidade_recebida > 0); if (!itens.length) return toast.error("Este pedido já foi recebido."); const { error } = await (supabase as any).rpc("registrar_recebimento_cotacao", { p_pedido_id: p.id, p_itens: itens, p_observacoes: "Recebimento conferido pela área de Compras" }); if (error) toast.error(error.message); else { toast.success("Recebimento registrado e enviado ao Financeiro"); qc.invalidateQueries({ queryKey: ["pedidos-cotacao"] }); } };
+  if (isLoading || !pedidos.length) return null;
+  return <Card><CardContent className="p-4"><h3 className="mb-3 text-lg font-semibold">Pedidos gerados pelas cotações</h3><Table><TableHeader><TableRow><TableHead>Nº</TableHead><TableHead>Fornecedor</TableHead><TableHead>Status</TableHead><TableHead>Total</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader><TableBody>{pedidos.map((p: any) => <TableRow key={p.id}><TableCell className="font-semibold">#{p.numero}</TableCell><TableCell>{p.fornecedores?.razao_social}</TableCell><TableCell><Badge>{String(p.status).replaceAll("_", " ")}</Badge></TableCell><TableCell>{fmtBRL(Number(p.valor_total))}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2">{p.status === "aguardando_aprovacao" && <Button size="sm" onClick={() => aprovar.mutate(p.id)}>Aprovar</Button>}{["aprovado", "parcialmente_recebido"].includes(p.status) && <Button size="sm" variant="outline" onClick={() => receberPedido(p)}><ArrowDown className="mr-1 size-3" />Receber</Button>}</div></TableCell></TableRow>)}</TableBody></Table></CardContent></Card>;
 }
 
 // ==========================================
@@ -1884,4 +1898,3 @@ function RecebimentoDialog({
     </Dialog>
   );
 }
-
