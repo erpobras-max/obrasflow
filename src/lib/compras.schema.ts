@@ -61,7 +61,10 @@ export const solicitacaoItemSchema = z.object({
 // SOLICITAÇÃO COMPRA
 export const solicitacaoSchema = z.object({
   obra_id: z.string().uuid("Selecione uma obra"),
-  fornecedor_id: z.string().uuid().nullable().optional(),
+  fornecedor_id: z.preprocess(
+    (value) => value === "" ? null : value,
+    z.string().uuid().nullable().optional(),
+  ),
   urgente: z.boolean().default(false),
   observacoes: z.string().trim().max(1000).optional().or(z.literal("")),
   itens: z.array(solicitacaoItemSchema).min(1, "Adicione pelo menos um item"),
