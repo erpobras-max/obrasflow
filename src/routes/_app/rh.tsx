@@ -7,7 +7,7 @@ import { z } from "zod";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
-  UserCheck, Plus, Search, Pencil, Trash2, Clock, Calendar,
+  UserCheck, Plus, Search, Pencil, Trash2, Clock, FileClock, Calendar,
   FileText, Upload, Download, AlertTriangle, ChevronLeft, ChevronRight,
   CheckCircle2, Users, Loader2, DollarSign, Heart, Shield,
   Building2, Briefcase, X, Eye, MoreVertical, Phone, Mail,
@@ -19,6 +19,8 @@ import { ptBR } from "date-fns/locale";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import { UFS } from "@/lib/clientes.schema";
+import { buscarCep } from "@/lib/cep";
+import { formatCep, formatCpfCnpj, formatTelefone } from "@/lib/validacao-documento";
 import { cn, formatBRLInput } from "@/lib/utils";
 import { uploadR2, getR2Url, openR2File } from "@/lib/r2";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -2144,6 +2146,7 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
   submitting: boolean;
 }) {
   const [section, setSection] = useState("pessoal");
+  const [buscandoCep, setBuscandoCep] = useState(false);
   const form = useForm<FuncionarioForm>({
     resolver: zodResolver(funcionarioSchema) as any,
     defaultValues: {
@@ -2190,6 +2193,23 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
     }
   }, [open, target, form]);
 
+  const preencherCep = async () => {
+    const cep = form.getValues("cep") ?? "";
+    if (cep.replace(/\D/g, "").length !== 8) return;
+    setBuscandoCep(true);
+    const endereco = await buscarCep(cep);
+    setBuscandoCep(false);
+    if (!endereco) {
+      toast.error("CEP não encontrado. Confira o número ou preencha o endereço manualmente.");
+      return;
+    }
+    form.setValue("logradouro", endereco.logradouro);
+    form.setValue("bairro", endereco.bairro);
+    form.setValue("cidade", endereco.cidade);
+    form.setValue("uf", endereco.uf);
+    toast.success("Endereço preenchido pelo CEP. Revise antes de salvar.");
+  };
+
   const sections = [
     { id: "pessoal", label: "Pessoal", icon: User },
     { id: "contato", label: "Contato", icon: Phone },
@@ -2231,7 +2251,7 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
                 <FormField control={form.control as any} name="cpf" render={({ field }) => (
                   <FormItem>
                     <FormLabel>CPF *</FormLabel>
-                    <FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl>
+                    <FormControl><Input placeholder="000.000.000-00" {...field} value={formatCpfCnpj(field.value)} onChange={(e) => field.onChange(formatCpfCnpj(e.target.value))} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -2302,21 +2322,21 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
                 <FormField control={form.control as any} name="celular" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Celular</FormLabel>
-                    <FormControl><Input placeholder="(00) 90000-0000" {...field} /></FormControl>
+                    <FormControl><Input placeholder="(00) 90000-0000" {...field} value={formatTelefone(field.value)} onChange={(e) => field.onChange(formatTelefone(e.target.value))} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control as any} name="telefone" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Telefone</FormLabel>
-                    <FormControl><Input placeholder="(00) 0000-0000" {...field} /></FormControl>
+                    <FormControl><Input placeholder="(00) 0000-0000" {...field} value={formatTelefone(field.value)} onChange={(e) => field.onChange(formatTelefone(e.target.value))} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
                 <FormField control={form.control as any} name="cep" render={({ field }) => (
                   <FormItem>
-                    <FormLabel>CEP</FormLabel>
-                    <FormControl><Input placeholder="00000-000" {...field} /></FormControl>
+                    <FormLabel>CEP {buscandoCep && <Loader2 className="ml-1 inline size-3 animate-spin" />}</FormLabel>
+                    <FormControl><Input placeholder="00000-000" {...field} value={formatCep(field.value)} onChange={(e) => field.onChange(formatCep(e.target.value))} onBlur={preencherCep} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />

@@ -136,6 +136,15 @@ supabase/
   functions/        Reservado para Edge Functions; vazio neste estado
 ```
 
+## 11. Correções de compras e cadastros — 13/10/2026
+
+- Corrigido o erro ao abrir **Analisar** uma solicitação: o modal usava `FormLabel` sem `FormField`, causando o erro `useFormField should be used within <FormField>`.
+- Criada a migration idempotente `20261013000005_fix_solicitacao_itens_valor_estimado.sql`, que adiciona `solicitacao_itens.valor_estimado` e solicita o recarregamento do schema do PostgREST.
+- A coluna foi aplicada e verificada no projeto Supabase remoto.
+- O cadastro de fornecedores agora aplica máscara de CNPJ, CPF e telefone e consulta o CNPJ ao sair do campo para preencher razão social, nome fantasia e telefone.
+- O cadastro de funcionários agora aplica máscara de CPF, telefone e CEP e consulta o ViaCEP para preencher logradouro, bairro, cidade e UF.
+- Os cadastros de clientes e empresa já possuíam essas integrações; a correção completa os principais formulários que ainda estavam sem máscara ou consulta.
+
 ## 12. Imobiliária — vendas de imóveis
 
 A rota `/imobiliaria/vendas` está publicada. Ela permite registrar proposta ou venda com imóvel, comprador, valores, entrada, forma de pagamento, parcelas, comissão, datas, situação e observações. Cada venda possui uma visualização de contrato de compra e venda e uma área para anexar, abrir e remover documentos da negociação no R2.
