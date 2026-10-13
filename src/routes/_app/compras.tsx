@@ -106,7 +106,7 @@ function ComprasPage() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("produtos")
-        .select("id, codigo:sku, descricao:nome, unidade, categoria, estoque_min")
+        .select("id, codigo:sku, descricao:nome, unidade, categoria, estoque_min, preco_custo")
         .order("nome");
       if (error) throw error;
       return (data ?? []) as MaterialRow[];
@@ -1099,7 +1099,7 @@ function SolicitacaoDialog({
       obra_id: "",
       urgente: false,
       observacoes: "",
-      itens: [{ material_id: "", descricao_livre: "", quantidade: 1, unidade: "un" }],
+      itens: [{ material_id: null, descricao_livre: "", quantidade: 1, unidade: "un", valor_unit_estimado: 0 }],
     },
   });
 
@@ -1132,13 +1132,17 @@ function SolicitacaoDialog({
         descricao_livre: item.descricao_livre || null,
         quantidade: item.quantidade,
         unidade: item.unidade,
+        valor_unit_estimado: item.valor_unit_estimado,
       }));
 
       const { error: itemsErr } = await (supabase as any)
         .from("solicitacao_itens")
         .insert(itemsPayload);
 
-      if (itemsErr) throw itemsErr;
+      if (itemsErr) {
+        await (supabase as any).from("solicitacoes_compra").delete().eq("id", sol.id);
+        throw itemsErr;
+      }
 
       toast.success("Solicitação enviada para aprovação");
       onSuccess();
@@ -1188,22 +1192,28 @@ function SolicitacaoDialog({
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <label className="text-sm font-semibold">Itens Necessários *</label>
-                <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => append({ material_id: "", descricao_livre: "", quantidade: 1, unidade: "un" })}>
+                <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={() => append({ material_id: null, descricao_livre: "", quantidade: 1, unidade: "un", valor_unit_estimado: 0 })}>
                   <Plus className="size-3.5" /> Adicionar Item
                 </Button>
               </div>
 
               {fields.map((f, idx) => {
                 const selectedMatId = form.watch(`itens.${idx}.material_id`);
+                const quantidade = Number(form.watch(`itens.${idx}.quantidade`) || 0);
+                const valorUnitario = Number(form.watch(`itens.${idx}.valor_unit_estimado`) || 0);
+                const valorTotal = quantidade * valorUnitario;
                 return (
-                  <div key={f.id} className="grid grid-cols-[1.5fr_1fr_100px_90px_auto] gap-2 items-start bg-muted/10 border p-3 rounded-lg relative">
+                  <div key={f.id} className="grid grid-cols-1 gap-2 rounded-lg border bg-muted/10 p-3 sm:grid-cols-[minmax(150px,1.5fr)_minmax(140px,1fr)_86px_74px_120px_120px_auto] sm:items-start">
                     <FormField control={form.control as any} name={`itens.${idx}.material_id`} render={({ field }) => (
                       <FormItem>
                         <Select value={field.value || "_libre"} onValueChange={(val) => {
-                          field.onChange(val === "_libre" ? "" : val);
+                          field.onChange(val === "_libre" ? null : val);
                           if (val !== "_libre" && val) {
                             const mat = materiais.find((m) => m.id === val);
-                            if (mat) form.setValue(`itens.${idx}.unidade`, mat.unidade);
+                            if (mat) {
+                              form.setValue(`itens.${idx}.unidade`, mat.unidade, { shouldValidate: true });
+                              form.setValue(`itens.${idx}.valor_unit_estimado`, Number(mat.preco_custo || 0), { shouldValidate: true });
+                            }
                           }
                         }}>
                           <FormControl><SelectTrigger><SelectValue placeholder="Selecione material" /></SelectTrigger></FormControl>
@@ -1222,14 +1232,16 @@ function SolicitacaoDialog({
                         <FormControl>
                           <Input placeholder="Descrição alternativa" disabled={!!selectedMatId} {...field} />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )} />
 
                     <FormField control={form.control as any} name={`itens.${idx}.quantidade`} render={({ field }) => (
                       <FormItem>
                         <FormControl>
-                          <Input type="number" step="0.001" placeholder="Qtd" {...field} />
+                          <Input type="number" min="0.001" step="0.001" placeholder="Qtd" {...field} />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )} />
 
@@ -1238,10 +1250,24 @@ function SolicitacaoDialog({
                         <FormControl>
                           <Input placeholder="Unidade" disabled={!!selectedMatId} {...field} />
                         </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )} />
 
-                    <Button type="button" size="icon" variant="ghost" className="text-destructive" onClick={() => fields.length > 1 && remove(idx)}>
+                    <FormField control={form.control as any} name={`itens.${idx}.valor_unit_estimado`} render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <Input type="number" min="0" step="0.01" inputMode="decimal" placeholder="Valor unitário" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+
+                    <div className="flex h-10 items-center justify-end rounded-md border bg-background px-3 text-sm font-medium tabular-nums" aria-label={`Total estimado do item: ${fmtBRL(Math.round(valorTotal * 100))}`}>
+                      {fmtBRL(Math.round(valorTotal * 100))}
+                    </div>
+
+                    <Button type="button" size="icon" variant="ghost" className="text-destructive" aria-label="Remover item" disabled={fields.length === 1} onClick={() => remove(idx)}>
                       <X className="size-4" />
                     </Button>
                   </div>
@@ -1259,8 +1285,8 @@ function SolicitacaoDialog({
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white">
-                Enviar Solicitação
+              <Button type="submit" disabled={form.formState.isSubmitting} className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white">
+                {form.formState.isSubmitting ? "Enviando..." : "Enviar Solicitação"}
               </Button>
             </DialogFooter>
           </form>
@@ -1747,3 +1773,4 @@ function RecebimentoDialog({
     </Dialog>
   );
 }
+
