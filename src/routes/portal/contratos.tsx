@@ -13,6 +13,8 @@ import {
 import { toast } from "sonner";
 
 import { SignatureCanvas } from "@/components/contratos/assinaturas-contrato";
+import { ClausulasDocumento } from "@/components/contratos/clausulas-documento";
+import type { ClausulaContrato } from "@/lib/contrato-clausulas";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +56,7 @@ type ContratoPortal = {
   data_inicio?: string | null;
   data_fim?: string | null;
   observacoes?: string | null;
+  clausulas?: ClausulaContrato[] | null;
   dia_vencimento?: number | null;
   garantia_tipo?: string | null;
   garantia_valor?: number | null;
@@ -237,7 +240,12 @@ function PortalContratos() {
             <DialogDescription>Revise todo o documento antes de assinar.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-wrap gap-2 print:hidden">
-            <Button variant="outline" onClick={() => imprimirElemento(printRef.current, `Contrato ${selected?.numero || ""}`)}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                imprimirElemento(printRef.current, `Contrato ${selected?.numero || ""}`)
+              }
+            >
               <Printer className="size-4" /> Imprimir / Salvar PDF
             </Button>
             {selected && !selected.assinado && (
@@ -278,11 +286,21 @@ function PortalContratos() {
   );
 }
 
-function ContractDocument({ contract, printRef }: { contract: ContratoPortal; printRef: RefObject<HTMLElement | null> }) {
+function ContractDocument({
+  contract,
+  printRef,
+}: {
+  contract: ContratoPortal;
+  printRef: RefObject<HTMLElement | null>;
+}) {
   const companyName =
     contract.empresa?.nome_fantasia || contract.empresa?.razao_social || "Empresa contratada";
+  const clausulasSalvas = contract.clausulas?.length ? contract.clausulas : null;
   return (
-    <article ref={printRef} className="print-sheet portal-contract-print mx-auto w-full max-w-[794px] bg-white p-5 text-[12px] leading-6 text-slate-900 shadow-sm sm:p-8 print:max-w-none print:p-8 print:shadow-none">
+    <article
+      ref={printRef}
+      className="print-sheet portal-contract-print mx-auto w-full max-w-[794px] bg-white p-5 text-[12px] leading-6 text-slate-900 shadow-sm sm:p-8 print:max-w-none print:p-8 print:shadow-none"
+    >
       <style>{`@media print { @page { size:A4; margin:12mm } html,body { background:#fff!important } .portal-contract-print { position:relative!important; display:block!important; width:100%!important; max-width:none!important; margin:0!important; box-shadow:none!important } }`}</style>
       <header className="flex items-start justify-between gap-6 border-b-2 border-slate-800 pb-5">
         <div>
@@ -310,17 +328,29 @@ function ContractDocument({ contract, printRef }: { contract: ContratoPortal; pr
             <p>
               <b>CONTRATADA:</b> {companyName}, CNPJ {contract.empresa?.cnpj || "—"}.
             </p>
-            <p>
-              <b>CLÁUSULA 1ª — OBJETO.</b> {contract.objeto || contract.titulo}.
-            </p>
-            <p>
-              <b>CLÁUSULA 2ª — VALOR.</b> O valor total contratado é de{" "}
-              <b>{moeda(contract.valor)}</b>.
-            </p>
-            <p>
-              <b>CLÁUSULA 3ª — VIGÊNCIA.</b> De {data(contract.data_inicio)} até{" "}
-              {data(contract.data_fim)}.
-            </p>
+            {clausulasSalvas ? (
+              <ClausulasDocumento
+                clausulas={clausulasSalvas}
+                objeto={contract.objeto || contract.titulo}
+                inicio={data(contract.data_inicio)}
+                fim={data(contract.data_fim)}
+                valor={moeda(contract.valor)}
+              />
+            ) : (
+              <>
+                <p>
+                  <b>CLÁUSULA 1ª — OBJETO.</b> {contract.objeto || contract.titulo}.
+                </p>
+                <p>
+                  <b>CLÁUSULA 2ª — VALOR.</b> O valor total contratado é de{" "}
+                  <b>{moeda(contract.valor)}</b>.
+                </p>
+                <p>
+                  <b>CLÁUSULA 3ª — VIGÊNCIA.</b> De {data(contract.data_inicio)} até{" "}
+                  {data(contract.data_fim)}.
+                </p>
+              </>
+            )}
           </>
         ) : (
           <>
@@ -379,3 +409,4 @@ function ContractDocument({ contract, printRef }: { contract: ContratoPortal; pr
     </article>
   );
 }
+

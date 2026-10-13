@@ -9,6 +9,16 @@ export const fornecedorSchema = z.object({
   tipo: z.enum(["pf", "pj"]),
   email: z.string().trim().email("E-mail inválido").optional().or(z.literal("")),
   telefone: z.string().trim().optional().or(z.literal("")),
+  celular: z.string().trim().optional().or(z.literal("")),
+  classificacao: z.enum(["fornecedor", "terceirizado"]).default("fornecedor"),
+  especialidade: z.string().trim().max(120).optional().or(z.literal("")),
+  segmento: z.string().trim().max(100).optional().or(z.literal("")),
+  categoria: z.string().trim().max(100).optional().or(z.literal("")),
+  banco: z.string().trim().max(120).optional().or(z.literal("")),
+  agencia: z.string().trim().max(20).optional().or(z.literal("")),
+  conta: z.string().trim().max(30).optional().or(z.literal("")),
+  tipo_conta: z.enum(["corrente", "poupanca", "pagamento", "outro"]).optional().or(z.literal("")),
+  chave_pix: z.string().trim().max(120).optional().or(z.literal("")),
   avaliacao: z.coerce.number().int().min(1).max(5).optional().or(z.literal("" as any)),
   ativo: z.boolean().default(true),
 });
@@ -36,12 +46,22 @@ export const solicitacaoItemSchema = z.object({
   descricao_livre: z.string().trim().optional().or(z.literal("")),
   quantidade: z.coerce.number().min(0.001, "Quantidade deve ser maior que zero"),
   unidade: z.string().trim().min(1, "Unidade obrigatória"),
+  valor_estimado: z.coerce.number().min(0, "Valor deve ser maior ou igual a zero").default(0),
   etapa_id: z.string().uuid().nullable().optional(),
+}).superRefine((item, ctx) => {
+  if (!item.material_id && !item.produto_id && !item.descricao_livre?.trim()) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["descricao_livre"],
+      message: "Selecione um produto ou informe a descrição do item.",
+    });
+  }
 });
 
 // SOLICITAÇÃO COMPRA
 export const solicitacaoSchema = z.object({
   obra_id: z.string().uuid("Selecione uma obra"),
+  fornecedor_id: z.string().uuid().nullable().optional(),
   urgente: z.boolean().default(false),
   observacoes: z.string().trim().max(1000).optional().or(z.literal("")),
   itens: z.array(solicitacaoItemSchema).min(1, "Adicione pelo menos um item"),
@@ -79,6 +99,16 @@ export interface FornecedorRow {
   tipo: "pf" | "pj";
   email: string | null;
   telefone: string | null;
+  celular: string | null;
+  classificacao: "fornecedor" | "terceirizado";
+  especialidade: string | null;
+  segmento: string | null;
+  categoria: string | null;
+  banco: string | null;
+  agencia: string | null;
+  conta: string | null;
+  tipo_conta: string | null;
+  chave_pix: string | null;
   avaliacao: number | null;
   ativo: boolean;
   created_at: string;
@@ -99,6 +129,7 @@ export interface ProdutoRow {
 export interface SolicitacaoCompraRow {
   id: string;
   obra_id: string;
+  fornecedor_id: string | null;
   solicitante_id: string;
   status: "aberta" | "em_aprovacao" | "aprovada" | "reprovada" | "pedido_gerado";
   urgente: boolean;
@@ -117,6 +148,7 @@ export interface SolicitacaoItemRow {
   descricao_livre: string | null;
   quantidade: number;
   unidade: string;
+  valor_estimado: number;
   etapa_id: string | null;
 }
 
@@ -143,3 +175,4 @@ export interface PedidoItemRow {
   valor_unit: number;
   valor_total: number;
 }
+
