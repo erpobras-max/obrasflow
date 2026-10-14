@@ -6,10 +6,7 @@ test.describe("Acesso público", () => {
 
     await expect(page.getByRole("heading", { name: "Entre na sua conta" })).toBeVisible();
     await expect(page.getByLabel("E-mail")).toHaveAttribute("type", "email");
-    await expect(page.getByRole("textbox", { name: "Senha" })).toHaveAttribute(
-      "autocomplete",
-      "current-password",
-    );
+    await expect(page.getByRole("textbox", { name: "Senha" })).toHaveAttribute("autocomplete", "current-password");
     await expect(page.getByRole("button", { name: "Entrar no sistema" })).toBeVisible();
   });
 

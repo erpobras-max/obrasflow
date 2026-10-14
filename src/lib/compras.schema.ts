@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+const optionalUuid = () => z.preprocess(
+  (value) => value === "" ? null : value,
+  z.string().uuid().nullable().optional(),
+);
+
 // FORNECEDOR
 export const fornecedorSchema = z.object({
   razao_social: z.string().trim().min(2, "Razão social obrigatória").max(200),
@@ -41,13 +46,13 @@ export type ProdutoFormValues = z.infer<typeof produtoSchema>;
 
 // SOLICITAÇÃO ITEM
 export const solicitacaoItemSchema = z.object({
-  material_id: z.string().uuid().nullable().optional(),
-  produto_id: z.string().uuid().nullable().optional(),
+  material_id: optionalUuid(),
+  produto_id: optionalUuid(),
   descricao_livre: z.string().trim().optional().or(z.literal("")),
   quantidade: z.coerce.number().min(0.001, "Quantidade deve ser maior que zero"),
   unidade: z.string().trim().min(1, "Unidade obrigatória"),
   valor_estimado: z.coerce.number().min(0, "Valor deve ser maior ou igual a zero").default(0),
-  etapa_id: z.string().uuid().nullable().optional(),
+  etapa_id: optionalUuid(),
 }).superRefine((item, ctx) => {
   if (!item.material_id && !item.produto_id && !item.descricao_livre?.trim()) {
     ctx.addIssue({
@@ -61,7 +66,7 @@ export const solicitacaoItemSchema = z.object({
 // SOLICITAÇÃO COMPRA
 export const solicitacaoSchema = z.object({
   obra_id: z.string().uuid("Selecione uma obra"),
-  fornecedor_id: z.string().uuid().nullable().optional(),
+  fornecedor_id: optionalUuid(),
   urgente: z.boolean().default(false),
   observacoes: z.string().trim().max(1000).optional().or(z.literal("")),
   itens: z.array(solicitacaoItemSchema).min(1, "Adicione pelo menos um item"),

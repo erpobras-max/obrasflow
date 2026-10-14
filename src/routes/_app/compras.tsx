@@ -42,9 +42,12 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
 } from "@/components/ui/form";
+import { buscarCnpj } from "@/lib/cnpj";
+import { formatCpfCnpj, formatTelefone } from "@/lib/validacao-documento";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -53,6 +56,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePedidosCotacao } from "@/hooks/use-cotacoes";
 
 export const Route = createFileRoute("/_app/compras")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: typeof search.tab === "string" ? search.tab : undefined,
+  }),
   component: ComprasPage,
 });
 
@@ -66,7 +72,20 @@ function ComprasPage() {
   const podeAprovar =
     perfil?.perfil === "admin" || perfil?.perfil === "diretor" || perfil?.perfil === "compras";
 
+  const { tab: tabParam } = Route.useSearch();
   const [activeTab, setActiveTab] = useState("solicitacoes");
+
+  useEffect(() => {
+    if (["solicitacoes", "pedidos", "fornecedores", "materiais"].includes(tabParam || "")) setActiveTab(tabParam!);
+    else setActiveTab("solicitacoes");
+  }, [tabParam]);
+
+  const mudarAba = (tab: string) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.replaceState({}, "", url);
+  };
 
   // State Modals
   const [fornecedorModal, setFornecedorModal] = useState<FornecedorRow | null | "new">(null);
@@ -283,6 +302,20 @@ function ComprasPage() {
     onError: (e: Error) => toast.error(`Não foi possível excluir a solicitação: ${e.message}`),
   });
 
+  const deleteApprovedSolicitacaoMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).rpc("admin_excluir_solicitacao_compra", { p_solicitacao_id: id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Solicitação aprovada excluída pelo administrador");
+      qc.invalidateQueries({ queryKey: ["solicitacoes"] });
+      qc.invalidateQueries({ queryKey: ["solicitacoes-aprovadas-cotacao"] });
+      qc.invalidateQueries({ queryKey: ["cotacoes-compra"] });
+    },
+    onError: (e: Error) => toast.error(`Não foi possível excluir a solicitação: ${e.message}`),
+  });
+
   const handleExportFornecedoresExcel = () => {
     if (!fornecedores || fornecedores.length === 0) {
       toast.error("Nenhum fornecedor cadastrado para exportar");
@@ -483,7 +516,7 @@ function ComprasPage() {
         </Card>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+      <Tabs value={activeTab} onValueChange={mudarAba} className="space-y-4">
         <TabsList className="grid w-full grid-cols-4 max-w-lg">
           <TabsTrigger value="solicitacoes">Solicitações</TabsTrigger>
           <TabsTrigger value="pedidos">Pedidos</TabsTrigger>
@@ -559,13 +592,15 @@ function ComprasPage() {
                             </Button>
                           </>
                         )}
+                        {sol.status === "aprovada" && perfil?.perfil === "admin" && (
+                          <Button size="icon" variant="outline" className="size-7 text-destructive hover:text-destructive" title="Excluir solicitação aprovada (administrador)" onClick={() => {
+                            if (window.confirm("Excluir esta solicitação aprovada e sua cotação? Essa ação não pode ser desfeita.")) deleteApprovedSolicitacaoMutation.mutate(sol.id);
+                          }}>
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        )}
                         {sol.status === "aprovada" && (
-                          <>
-                            <Link to="/cotacoes"><Button size="sm" variant="outline" className="h-7 gap-1 text-[#1e3a5f]"><FileSearch className="size-3" /> Criar cotação</Button></Link>
-                            <Button size="sm" className="h-7 bg-[#f97316] text-white hover:bg-[#f97316]/90" onClick={() => setPedidoModal(sol)}>
-                              Gerar Pedido
-                            </Button>
-                          </>
+                          <Link to="/cotacoes"><Button size="sm" variant="outline" className="h-7 gap-1 text-[#1e3a5f]"><FileSearch className="size-3" /> Criar cotação</Button></Link>
                         )}
                       </div>
                     </TableCell>
@@ -943,6 +978,22 @@ function FornecedorDialog({
   }, [open, target, form]);
 
   const tipo = form.watch("tipo");
+  const [consultandoCnpj, setConsultandoCnpj] = useState(false);
+
+  const preencherCnpj = async () => {
+    if (tipo !== "pj" || form.getValues("cnpj").replace(/\D/g, "").length !== 14) return;
+    setConsultandoCnpj(true);
+    const empresa = await buscarCnpj(form.getValues("cnpj"));
+    setConsultandoCnpj(false);
+    if (!empresa) {
+      toast.error("CNPJ não encontrado na base pública. Confira o número ou preencha manualmente.");
+      return;
+    }
+    form.setValue("razao_social", empresa.razaoSocial || form.getValues("razao_social"));
+    form.setValue("nome_fantasia", empresa.nomeFantasia || form.getValues("nome_fantasia"));
+    form.setValue("telefone", empresa.telefone ? formatTelefone(empresa.telefone) : form.getValues("telefone"));
+    toast.success("Dados do CNPJ preenchidos. Revise antes de salvar.");
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -973,7 +1024,8 @@ function FornecedorDialog({
                 <FormField control={form.control} name="cnpj" render={({ field }) => (
                   <FormItem>
                     <FormLabel>CNPJ</FormLabel>
-                    <FormControl><Input placeholder="00.000.000/0000-00" {...field} /></FormControl>
+                    <FormControl><Input placeholder="00.000.000/0000-00" {...field} value={formatCpfCnpj(field.value)} onChange={(e) => field.onChange(formatCpfCnpj(e.target.value))} onBlur={preencherCnpj} /></FormControl>
+                    {consultandoCnpj && <p className="text-xs text-muted-foreground"><Loader2 className="mr-1 inline size-3 animate-spin" />Consultando CNPJ...</p>}
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -981,7 +1033,7 @@ function FornecedorDialog({
                 <FormField control={form.control} name="cpf" render={({ field }) => (
                   <FormItem>
                     <FormLabel>CPF</FormLabel>
-                    <FormControl><Input placeholder="000.000.000-00" {...field} /></FormControl>
+                    <FormControl><Input placeholder="000.000.000-00" {...field} value={formatCpfCnpj(field.value)} onChange={(e) => field.onChange(formatCpfCnpj(e.target.value))} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
@@ -1017,7 +1069,7 @@ function FornecedorDialog({
               <FormField control={form.control} name="telefone" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Telefone</FormLabel>
-                  <FormControl><Input placeholder="(00) 00000-0000" {...field} /></FormControl>
+                  <FormControl><Input placeholder="(00) 00000-0000" {...field} value={formatTelefone(field.value)} onChange={(e) => field.onChange(formatTelefone(e.target.value))} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
@@ -1487,7 +1539,7 @@ function AprovacaoDialog({
           </div>
 
           <div className="space-y-1.5">
-            <FormLabel>Motivo da Reprovação (Obrigatório apenas se for reprovar)</FormLabel>
+            <Label>Motivo da Reprovação (Obrigatório apenas se for reprovar)</Label>
             <Textarea
               placeholder="Descreva o motivo caso vá reprovar a solicitação..."
               value={reprovarMotivo}
