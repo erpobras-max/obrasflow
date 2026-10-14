@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -158,6 +158,7 @@ const fmtBRL = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 function EstoquePage() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { perfil, roles } = useAuth();
   const qc = useQueryClient();
 
@@ -191,6 +192,7 @@ function EstoquePage() {
   // Queries
   const { data: produtos, isLoading: loadingProds } = useQuery({
     queryKey: ["produtos-estoque-list"],
+    enabled: pathname !== "/estoque/movimentacao",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("produtos")
@@ -203,6 +205,7 @@ function EstoquePage() {
 
   const { data: depositos, isLoading: loadingDeps } = useQuery({
     queryKey: ["depositos-estoque-list"],
+    enabled: pathname !== "/estoque/movimentacao",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("depositos")
@@ -215,6 +218,7 @@ function EstoquePage() {
 
   const { data: prateleiras, isLoading: loadingPrateleiras } = useQuery({
     queryKey: ["estoque-prateleiras-list"],
+    enabled: pathname !== "/estoque/movimentacao",
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("estoque_prateleiras")
@@ -227,6 +231,7 @@ function EstoquePage() {
 
   const { data: posicao, isLoading: loadingPos } = useQuery({
     queryKey: ["posicao-estoque-list"],
+    enabled: pathname !== "/estoque/movimentacao",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("produto_estoque")
@@ -238,6 +243,7 @@ function EstoquePage() {
 
   const { data: movimentacoes, isLoading: loadingMovs } = useQuery({
     queryKey: ["movimentacoes-estoque-list"],
+    enabled: pathname !== "/estoque/movimentacao",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("movimentacoes_estoque")
@@ -429,6 +435,10 @@ function EstoquePage() {
 
   const selectedProducts = (produtos ?? []).filter((product) => selectedProductIds.includes(product.id));
   const selectedPrateleiras = (prateleiras ?? []).filter((shelf) => selectedPrateleiraIds.includes(shelf.id));
+
+  if (pathname === "/estoque/movimentacao") {
+    return <Outlet />;
+  }
 
   return (
     <div className="space-y-6">
