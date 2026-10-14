@@ -54,6 +54,7 @@ import { Route as AppImobiliariaFinanceiroRouteImport } from './routes/_app/imob
 import { Route as AppImobiliariaFiadoresRouteImport } from './routes/_app/imobiliaria/fiadores'
 import { Route as AppImobiliariaDashboardRouteImport } from './routes/_app/imobiliaria.dashboard'
 import { Route as AppImobiliariaClientesRouteImport } from './routes/_app/imobiliaria.clientes'
+import { Route as AppEstoqueMovimentacaoRouteImport } from './routes/_app/estoque.movimentacao'
 import { Route as AppCotacoesCotacaoIdRouteImport } from './routes/_app/cotacoes/$cotacaoId'
 import { Route as AppComercialPropostasRouteImport } from './routes/_app/comercial.propostas'
 import { Route as AppComercialLicitacoesRouteImport } from './routes/_app/comercial.licitacoes'
@@ -286,6 +287,11 @@ const AppImobiliariaClientesRoute = AppImobiliariaClientesRouteImport.update({
   path: '/clientes',
   getParentRoute: () => AppImobiliariaRoute,
 } as any)
+const AppEstoqueMovimentacaoRoute = AppEstoqueMovimentacaoRouteImport.update({
+  id: '/movimentacao',
+  path: '/movimentacao',
+  getParentRoute: () => AppEstoqueRoute,
+} as any)
 const AppCotacoesCotacaoIdRoute = AppCotacoesCotacaoIdRouteImport.update({
   id: '/cotacoes/$cotacaoId',
   path: '/cotacoes/$cotacaoId',
@@ -333,7 +339,7 @@ export interface FileRoutesByFullPath {
   '/documentos': typeof AppDocumentosRoute
   '/empresa': typeof AppEmpresaRoute
   '/equipamentos': typeof AppEquipamentosRoute
-  '/estoque': typeof AppEstoqueRoute
+  '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/fiscal': typeof AppFiscalRoute
   '/imobiliaria': typeof AppImobiliariaRouteWithChildren
@@ -359,6 +365,7 @@ export interface FileRoutesByFullPath {
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
   '/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
+  '/estoque/movimentacao': typeof AppEstoqueMovimentacaoRoute
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
@@ -384,7 +391,7 @@ export interface FileRoutesByTo {
   '/documentos': typeof AppDocumentosRoute
   '/empresa': typeof AppEmpresaRoute
   '/equipamentos': typeof AppEquipamentosRoute
-  '/estoque': typeof AppEstoqueRoute
+  '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/fiscal': typeof AppFiscalRoute
   '/imobiliaria': typeof AppImobiliariaRouteWithChildren
@@ -410,6 +417,7 @@ export interface FileRoutesByTo {
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
   '/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
+  '/estoque/movimentacao': typeof AppEstoqueMovimentacaoRoute
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
@@ -438,7 +446,7 @@ export interface FileRoutesById {
   '/_app/documentos': typeof AppDocumentosRoute
   '/_app/empresa': typeof AppEmpresaRoute
   '/_app/equipamentos': typeof AppEquipamentosRoute
-  '/_app/estoque': typeof AppEstoqueRoute
+  '/_app/estoque': typeof AppEstoqueRouteWithChildren
   '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/fiscal': typeof AppFiscalRoute
   '/_app/imobiliaria': typeof AppImobiliariaRouteWithChildren
@@ -464,6 +472,7 @@ export interface FileRoutesById {
   '/_app/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/_app/comercial/propostas': typeof AppComercialPropostasRoute
   '/_app/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
+  '/_app/estoque/movimentacao': typeof AppEstoqueMovimentacaoRoute
   '/_app/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/_app/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/_app/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
@@ -518,6 +527,7 @@ export interface FileRouteTypes {
     | '/comercial/licitacoes'
     | '/comercial/propostas'
     | '/cotacoes/$cotacaoId'
+    | '/estoque/movimentacao'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
@@ -569,6 +579,7 @@ export interface FileRouteTypes {
     | '/comercial/licitacoes'
     | '/comercial/propostas'
     | '/cotacoes/$cotacaoId'
+    | '/estoque/movimentacao'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
@@ -622,6 +633,7 @@ export interface FileRouteTypes {
     | '/_app/comercial/licitacoes'
     | '/_app/comercial/propostas'
     | '/_app/cotacoes/$cotacaoId'
+    | '/_app/estoque/movimentacao'
     | '/_app/imobiliaria/clientes'
     | '/_app/imobiliaria/dashboard'
     | '/_app/imobiliaria/fiadores'
@@ -964,6 +976,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImobiliariaClientesRouteImport
       parentRoute: typeof AppImobiliariaRoute
     }
+    '/_app/estoque/movimentacao': {
+      id: '/_app/estoque/movimentacao'
+      path: '/movimentacao'
+      fullPath: '/estoque/movimentacao'
+      preLoaderRoute: typeof AppEstoqueMovimentacaoRouteImport
+      parentRoute: typeof AppEstoqueRoute
+    }
     '/_app/cotacoes/$cotacaoId': {
       id: '/_app/cotacoes/$cotacaoId'
       path: '/cotacoes/$cotacaoId'
@@ -1027,6 +1046,18 @@ const AppComercialRouteWithChildren = AppComercialRoute._addFileChildren(
   AppComercialRouteChildren,
 )
 
+interface AppEstoqueRouteChildren {
+  AppEstoqueMovimentacaoRoute: typeof AppEstoqueMovimentacaoRoute
+}
+
+const AppEstoqueRouteChildren: AppEstoqueRouteChildren = {
+  AppEstoqueMovimentacaoRoute: AppEstoqueMovimentacaoRoute,
+}
+
+const AppEstoqueRouteWithChildren = AppEstoqueRoute._addFileChildren(
+  AppEstoqueRouteChildren,
+)
+
 interface AppImobiliariaRouteChildren {
   AppImobiliariaClientesRoute: typeof AppImobiliariaClientesRoute
   AppImobiliariaDashboardRoute: typeof AppImobiliariaDashboardRoute
@@ -1071,7 +1102,7 @@ interface AppRouteChildren {
   AppDocumentosRoute: typeof AppDocumentosRoute
   AppEmpresaRoute: typeof AppEmpresaRoute
   AppEquipamentosRoute: typeof AppEquipamentosRoute
-  AppEstoqueRoute: typeof AppEstoqueRoute
+  AppEstoqueRoute: typeof AppEstoqueRouteWithChildren
   AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppFiscalRoute: typeof AppFiscalRoute
   AppImobiliariaRoute: typeof AppImobiliariaRouteWithChildren
@@ -1098,7 +1129,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDocumentosRoute: AppDocumentosRoute,
   AppEmpresaRoute: AppEmpresaRoute,
   AppEquipamentosRoute: AppEquipamentosRoute,
-  AppEstoqueRoute: AppEstoqueRoute,
+  AppEstoqueRoute: AppEstoqueRouteWithChildren,
   AppFinanceiroRoute: AppFinanceiroRoute,
   AppFiscalRoute: AppFiscalRoute,
   AppImobiliariaRoute: AppImobiliariaRouteWithChildren,

@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -12,10 +12,13 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const navigate = useNavigate();
+  const currentHref = useRouterState({ select: (state) => state.location.href });
   const { loading, user, perfil, roles } = useAuth();
 
   useEffect(() => {
-    if (!loading && !user) navigate({ to: "/auth", replace: true });
+    if (!loading && !user) {
+      navigate({ to: "/auth", search: { redirect: currentHref }, replace: true });
+    }
     else if (!loading && perfil?.ativo === false) {
       void supabase.auth.signOut().then(() => navigate({ to: "/auth", replace: true }));
     }
@@ -24,7 +27,7 @@ function AppLayout() {
     } else if (!loading && roles.length > 0 && roles.every((role) => role === "funcionario")) {
       navigate({ to: "/ponto" as any, replace: true });
     }
-  }, [loading, user, perfil?.ativo, roles, navigate]);
+  }, [loading, user, perfil?.ativo, roles, navigate, currentHref]);
 
   if (loading || !user) {
     return (
