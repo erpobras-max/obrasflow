@@ -161,7 +161,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
   const profileEmail =
     record.email?.trim().toLowerCase() ||
     (phone ? `${phone.replace(/\D/g, "")}@sms.obrasflow.local` : null);
-  if (!profileEmail && !phone) failAccess("sem_contato");
+  if (!profileEmail) failAccess("sem_contato");
 
   let userId = area === "client" ? record.auth_user_id : record.user_id;
 
@@ -178,9 +178,11 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
   if (!userId) {
     const createPayload = {
       user_metadata: { nome: record.nome, perfil: expectedRole },
-      ...(isRealEmail(record.email)
-        ? { email: record.email!.trim().toLowerCase(), email_confirm: true }
-        : {}),
+      // O gatilho handle_new_user grava NEW.email em perfis_usuarios.email (NOT NULL).
+      // Para cadastros com telefone, o e-mail interno estável permite criar a conta
+      // e iniciar o acesso direto por documento sem depender de envio para ele.
+      email: profileEmail,
+      email_confirm: true,
       ...(phone ? { phone, phone_confirm: true } : {}),
     };
     const { data: created, error: createError } =
@@ -219,7 +221,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     const { error } = await supabaseAdmin.from("perfis_usuarios").insert({
       user_id: userId,
       nome: record.nome,
-      email: profileEmail!,
+      email: profileEmail,
       perfil: expectedRole,
       ativo: true,
     });
