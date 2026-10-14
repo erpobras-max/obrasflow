@@ -158,7 +158,8 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
 
   const expectedRole = area === "client" ? "cliente" : "funcionario";
   const phone = normalizeBrazilianPhone(record.celular || record.telefone);
-  const profileEmail = record.email?.trim().toLowerCase() || (phone ? `acesso-${record.id}@obrasflow.com.br` : null);
+  const profileEmail =
+    record.email?.trim().toLowerCase() || (phone ? `acesso-${record.id}@obrasflow.com.br` : null);
   if (!profileEmail) failAccess("sem_contato");
 
   let userId = area === "client" ? record.auth_user_id : record.user_id;
