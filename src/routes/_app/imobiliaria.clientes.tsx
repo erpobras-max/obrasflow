@@ -29,9 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -376,9 +374,9 @@ function ImobClientesPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <Select value={filterTipo} onValueChange={setFilterTipo}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="h-11 w-full min-w-0 sm:w-[150px]">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -389,7 +387,7 @@ function ImobClientesPage() {
           </Select>
 
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="h-11 w-full min-w-0 sm:w-[150px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
@@ -402,80 +400,67 @@ function ImobClientesPage() {
       </div>
 
       {/* Main Table */}
-      <div className="bg-card rounded-xl border overflow-hidden">
-        {isLoading ? (
-          <div className="p-8 space-y-4">
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-            <Skeleton className="h-8 w-full" />
-          </div>
-        ) : filteredClientes.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground">
-            Nenhum cliente imobiliário encontrado.
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Documento</TableHead>
-                  <TableHead>E-mail</TableHead>
-                  <TableHead>Contatos</TableHead>
-                  <TableHead>Localidade</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-[120px] text-right">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredClientes.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="font-medium">
-                      <div>
-                        {c.nome}
-                        {c.nome_fantasia && (
-                          <div className="text-xs text-muted-foreground">{c.nome_fantasia}</div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{formatCpfCnpj(c.cpf_cnpj)}</TableCell>
-                    <TableCell>{c.email || "—"}</TableCell>
-                    <TableCell className="text-xs space-y-0.5">
-                      {c.celular && <div>Cel: {formatTelefone(c.celular)}</div>}
-                      {c.telefone && <div>Tel: {formatTelefone(c.telefone)}</div>}
-                      {!c.celular && !c.telefone && "—"}
-                    </TableCell>
-                    <TableCell>
-                      {c.cidade ? `${c.cidade} / ${c.uf}` : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={cn("text-xs font-semibold", STATUS_CLIENTE_BADGE[c.status])}>
-                        {STATUS_CLIENTE_LABEL[c.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleView(c)} title="Ver Detalhes">
-                          <Eye className="size-4" />
-                        </Button>
-                        {podeEditar && (
-                          <>
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(c)} title="Editar">
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(c)} className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Excluir">
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+      <div className="min-w-0 overflow-hidden rounded-xl border bg-card">
+        <ResponsiveTable<(typeof filteredClientes)[number]>
+          columns={[
+            {
+              key: "nome",
+              header: "Nome",
+              mobileLabel: "Cliente",
+              priority: "essential",
+              cell: (c) => (
+                <div className="min-w-0 break-words font-medium">
+                  {c.nome}
+                  {c.nome_fantasia && <div className="text-xs text-muted-foreground">{c.nome_fantasia}</div>}
+                </div>
+              ),
+            },
+            {
+              key: "documento",
+              header: "Documento",
+              mobileLabel: "CPF / CNPJ",
+              priority: "essential",
+              cell: (c) => <span className="break-all font-mono text-xs">{formatCpfCnpj(c.cpf_cnpj)}</span>,
+            },
+            {
+              key: "status",
+              header: "Status",
+              mobileLabel: "Status",
+              priority: "essential",
+              cell: (c) => <Badge className={cn("text-xs font-semibold", STATUS_CLIENTE_BADGE[c.status])}>{STATUS_CLIENTE_LABEL[c.status]}</Badge>,
+            },
+            { key: "email", header: "E-mail", mobileLabel: "E-mail", priority: "secondary", cell: (c) => <span className="break-all">{c.email || "—"}</span> },
+            {
+              key: "contatos",
+              header: "Contatos",
+              mobileLabel: "Telefones",
+              priority: "secondary",
+              cell: (c) => (
+                <div className="space-y-0.5 text-xs">
+                  {c.celular && <div>Cel: {formatTelefone(c.celular)}</div>}
+                  {c.telefone && <div>Tel: {formatTelefone(c.telefone)}</div>}
+                  {!c.celular && !c.telefone && "—"}
+                </div>
+              ),
+            },
+            { key: "localidade", header: "Localidade", mobileLabel: "Localidade", priority: "secondary", cell: (c) => c.cidade ? `${c.cidade} / ${c.uf}` : "—" },
+          ]}
+          rows={filteredClientes}
+          getRowKey={(c) => c.id}
+          loading={isLoading && <div className="space-y-3 p-4">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>}
+          emptyState="Nenhum cliente imobiliário encontrado."
+          renderActions={(c) => (
+            <div className="flex flex-wrap justify-end gap-1">
+              <Button variant="ghost" size="icon" className="size-11" onClick={() => handleView(c)} aria-label={`Ver detalhes de ${c.nome}`} title="Ver detalhes"><Eye className="size-4" /></Button>
+              {podeEditar && (
+                <>
+                  <Button variant="ghost" size="icon" className="size-11" onClick={() => handleEdit(c)} aria-label={`Editar ${c.nome}`} title="Editar"><Pencil className="size-4" /></Button>
+                  <Button variant="ghost" size="icon" className="size-11 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteTarget(c)} aria-label={`Excluir ${c.nome}`} title="Excluir"><Trash2 className="size-4" /></Button>
+                </>
+              )}
+            </div>
+          )}
+        />
       </div>
 
       {/* Create / Edit Dialog */}

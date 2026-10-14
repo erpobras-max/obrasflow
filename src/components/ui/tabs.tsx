@@ -42,7 +42,7 @@ const TabsList = React.forwardRef<
   return (
     <div
       ref={scrollAreaRef}
-      className="w-full max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="min-w-0 w-full max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       <TabsPrimitive.List
         ref={ref}

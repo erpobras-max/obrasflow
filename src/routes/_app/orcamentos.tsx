@@ -854,7 +854,7 @@ function OrcamentosPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full md:w-[480px] grid-cols-2">
+        <TabsList className="gap-1">
           <TabsTrigger value="obras" id="tab-orcamento-obras">Orçamento de Obras</TabsTrigger>
           <TabsTrigger value="referencias" id="tab-sinapi-sicro">Base de Referência (SINAPI/SICRO)</TabsTrigger>
         </TabsList>

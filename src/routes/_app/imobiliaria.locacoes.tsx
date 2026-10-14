@@ -1340,7 +1340,7 @@ function LocacoesPage() {
 
           {viewTarget && (
             <Tabs value={detailsTab} onValueChange={setDetailsTab} className="mt-4">
-              <TabsList className="grid grid-cols-4">
+              <TabsList className="gap-1">
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="faturas">Faturas (Fluxo)</TabsTrigger>
                 <TabsTrigger value="pdf">Visualizar Contrato</TabsTrigger>

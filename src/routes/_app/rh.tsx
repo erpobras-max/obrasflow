@@ -1415,7 +1415,7 @@ function RhPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-5 max-w-2xl">
+        <TabsList className="gap-1">
           <TabsTrigger value="funcionarios">Funcionários</TabsTrigger>
           <TabsTrigger value="ponto">Ponto</TabsTrigger>
           <TabsTrigger value="ferias">Férias</TabsTrigger>
