@@ -8,7 +8,8 @@ import { toast } from "sonner";
 import {
   Package, Plus, Search, Calendar, RefreshCw, AlertTriangle,
   ArrowUpDown, Loader2, Info, FileSpreadsheet, Upload, History,
-  GitCompare, Landmark, ArrowRightLeft, Settings
+  GitCompare, Landmark, ArrowRightLeft, Settings, Pencil, Trash2,
+  QrCode, Printer, CheckSquare, Square
 } from "lucide-react";
 import * as XLSX from "xlsx";
 
@@ -34,6 +35,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { QrCodeLabel } from "@/components/estoque/QrCodeLabel";
 
 export const Route = createFileRoute("/_app/estoque")({
   head: () => ({ meta: [{ title: "Estoque — ERP Obras" }] }),
@@ -67,6 +69,16 @@ const depositoFormSchema = z.object({
 
 type DepositoFormValues = z.infer<typeof depositoFormSchema>;
 
+const prateleiraFormSchema = z.object({
+  deposito_id: z.string().uuid("Selecione um depósito"),
+  codigo: z.string().trim().min(1, "Código obrigatório").max(30),
+  nome: z.string().trim().min(1, "Nome obrigatório").max(100),
+  descricao: z.string().trim().max(300).optional().or(z.literal("")),
+  ativo: z.boolean().default(true),
+});
+
+type PrateleiraFormValues = z.infer<typeof prateleiraFormSchema>;
+
 // Quick adjustment validation schema
 const ajusteFormSchema = z.object({
   produto_id: z.string().uuid("Selecione um produto"),
@@ -93,6 +105,7 @@ interface ProductRow {
   estoque_max: number;
   imagem_url: string | null;
   created_at: string;
+  qr_token: string;
 }
 
 interface DepositoRow {
@@ -101,6 +114,18 @@ interface DepositoRow {
   codigo: string;
   ativo: boolean;
   created_at: string;
+}
+
+interface PrateleiraRow {
+  id: string;
+  deposito_id: string;
+  codigo: string;
+  nome: string;
+  descricao: string | null;
+  qr_token: string;
+  ativo: boolean;
+  created_at: string;
+  depositos: { nome: string } | null;
 }
 
 interface PosicaoEstoqueRow {
@@ -133,7 +158,7 @@ const fmtBRL = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 function EstoquePage() {
-  const { perfil } = useAuth();
+  const { perfil, roles } = useAuth();
   const qc = useQueryClient();
 
   const [activeTab, setActiveTab] = useState("produtos");
@@ -147,6 +172,9 @@ function EstoquePage() {
   // Modals target
   const [productModal, setProductModal] = useState<ProductRow | null | "new">(null);
   const [depositoModal, setDepositoModal] = useState<DepositoRow | null | "new">(null);
+  const [prateleiraModal, setPrateleiraModal] = useState<PrateleiraRow | "new" | null>(null);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [selectedPrateleiraIds, setSelectedPrateleiraIds] = useState<string[]>([]);
   const [ajusteModalOpen, setAjusteModalOpen] = useState(false);
 
   const podeEditar =
@@ -155,6 +183,10 @@ function EstoquePage() {
     perfil?.perfil === "financeiro_civil" ||
     perfil?.perfil === "financeiro_imobiliaria" ||
     perfil?.perfil === "almoxarifado";
+
+  const podeGerenciarPrateleiras = roles.some((role) =>
+    role === "admin" || role === "diretor" || role === "almoxarifado",
+  );
 
   // Queries
   const { data: produtos, isLoading: loadingProds } = useQuery({
@@ -178,6 +210,18 @@ function EstoquePage() {
         .order("nome");
       if (error) throw error;
       return (data ?? []) as DepositoRow[];
+    },
+  });
+
+  const { data: prateleiras, isLoading: loadingPrateleiras } = useQuery({
+    queryKey: ["estoque-prateleiras-list"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("estoque_prateleiras")
+        .select("*, depositos(nome)")
+        .order("codigo");
+      if (error) throw error;
+      return (data ?? []) as PrateleiraRow[];
     },
   });
 
@@ -282,16 +326,64 @@ function EstoquePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const prateleiraMutation = useMutation({
+    mutationFn: async (values: PrateleiraFormValues) => {
+      const payload = {
+        deposito_id: values.deposito_id,
+        codigo: values.codigo.trim().toUpperCase(),
+        nome: values.nome.trim(),
+        descricao: values.descricao?.trim() || null,
+        ativo: values.ativo,
+      };
+
+      if (prateleiraModal && prateleiraModal !== "new") {
+        const { error } = await (supabase as any)
+          .from("estoque_prateleiras")
+          .update(payload)
+          .eq("id", prateleiraModal.id);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any)
+          .from("estoque_prateleiras")
+          .insert(payload);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("Prateleira salva com sucesso!");
+      qc.invalidateQueries({ queryKey: ["estoque-prateleiras-list"] });
+      setPrateleiraModal(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deletePrateleiraMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any)
+        .from("estoque_prateleiras")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Prateleira excluída.");
+      qc.invalidateQueries({ queryKey: ["estoque-prateleiras-list"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const ajusteMutation = useMutation({
     mutationFn: async (values: AjusteFormValues) => {
-      const { error } = await supabase.rpc("registrar_movimentacao_produto", {
+      const { error } = await (supabase as any).rpc("registrar_movimentacao_almoxarifado", {
         p_produto_id: values.produto_id,
         p_deposito_id: values.deposito_id,
         p_tipo: "ajuste",
         p_quantidade: values.quantidade,
-        p_custo_unitario: values.preco_custo || 0,
-        p_deposito_destino_id: null,
-        p_observacao: values.observacao || "Ajuste de saldo manual"
+        p_obra_id: null,
+        p_prateleira_id: null,
+        p_documento: null,
+        p_justificativa: values.observacao,
+        p_custo_unitario: values.preco_custo ?? null,
       });
       if (error) throw error;
     },
@@ -323,6 +415,21 @@ function EstoquePage() {
     XLSX.writeFile(wb, "posicao_estoque.xlsx");
   };
 
+  const toggleSelected = (id: string, selected: string[], setSelected: (value: string[]) => void) => {
+    setSelected(selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id]);
+  };
+
+  const printQrLabels = () => {
+    if (selectedProductIds.length === 0 && selectedPrateleiraIds.length === 0) {
+      toast.error("Selecione pelo menos um produto ou uma prateleira.");
+      return;
+    }
+    window.print();
+  };
+
+  const selectedProducts = (produtos ?? []).filter((product) => selectedProductIds.includes(product.id));
+  const selectedPrateleiras = (prateleiras ?? []).filter((shelf) => selectedPrateleiraIds.includes(shelf.id));
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -346,6 +453,11 @@ function EstoquePage() {
               <Plus className="size-4" /> Novo Depósito
             </Button>
           )}
+          {activeTab === "etiquetas" && (
+            <Button className="gap-2" onClick={printQrLabels}>
+              <Printer className="size-4" /> Imprimir selecionadas
+            </Button>
+          )}
         </div>
       </div>
 
@@ -361,7 +473,7 @@ function EstoquePage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList>
+        <TabsList className="h-auto flex-wrap justify-start gap-1">
           <TabsTrigger value="produtos" className="gap-2">
             <Package className="size-4" /> Cadastro de Produtos
           </TabsTrigger>
@@ -373,6 +485,9 @@ function EstoquePage() {
           </TabsTrigger>
           <TabsTrigger value="movimentacoes" className="gap-2">
             <History className="size-4" /> Extrato de Movimentações
+          </TabsTrigger>
+          <TabsTrigger value="etiquetas" className="gap-2">
+            <QrCode className="size-4" /> Etiquetas QR
           </TabsTrigger>
         </TabsList>
 
@@ -484,6 +599,178 @@ function EstoquePage() {
               )}
             </CardContent>
           </Card>
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-md">Prateleiras e localizações</CardTitle>
+              <CardDescription>Organize os materiais por localização dentro de cada depósito.</CardDescription>
+            </div>
+            {podeGerenciarPrateleiras && (
+              <Button className="gap-2" onClick={() => setPrateleiraModal("new")}>
+                <Plus className="size-4" /> Nova prateleira
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="p-0">
+            {loadingPrateleiras ? (
+              <div className="p-6"><Skeleton className="h-10 w-full" /></div>
+            ) : (prateleiras ?? []).length === 0 ? (
+              <div className="p-6 text-sm text-muted-foreground">Nenhuma prateleira cadastrada.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Depósito</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-28 text-center">QR</TableHead>
+                      {podeGerenciarPrateleiras && <TableHead className="w-24 text-center">Ações</TableHead>}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(prateleiras ?? []).map((shelf) => (
+                      <TableRow key={shelf.id}>
+                        <TableCell className="font-mono text-xs">{shelf.codigo}</TableCell>
+                        <TableCell className="text-xs font-semibold">{shelf.nome}</TableCell>
+                        <TableCell className="text-xs">{shelf.depositos?.nome || "—"}</TableCell>
+                        <TableCell>
+                          <Badge variant={shelf.ativo ? "default" : "secondary"} className="text-[10px]">
+                            {shelf.ativo ? "ATIVA" : "INATIVA"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            size="icon"
+                            variant={selectedPrateleiraIds.includes(shelf.id) ? "default" : "ghost"}
+                            className="size-8"
+                            title="Selecionar etiqueta QR"
+                            onClick={() => toggleSelected(shelf.id, selectedPrateleiraIds, setSelectedPrateleiraIds)}
+                          >
+                            {selectedPrateleiraIds.includes(shelf.id) ? <CheckSquare className="size-4" /> : <QrCode className="size-4" />}
+                          </Button>
+                        </TableCell>
+                        {podeGerenciarPrateleiras && (
+                          <TableCell className="text-center">
+                            <div className="flex justify-center gap-1">
+                              <Button size="icon" variant="ghost" className="size-8" onClick={() => setPrateleiraModal(shelf)} title="Editar prateleira">
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8 text-destructive hover:text-destructive"
+                                title="Excluir prateleira"
+                                onClick={() => {
+                                  if (window.confirm(`Excluir a prateleira ${shelf.codigo}?`)) deletePrateleiraMutation.mutate(shelf.id);
+                                }}
+                                disabled={deletePrateleiraMutation.isPending}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        </TabsContent>
+
+        {/* TAB: ETIQUETAS QR */}
+        <TabsContent value="etiquetas" className="qr-print-sheet space-y-4">
+          <Card className="print:hidden">
+            <CardHeader>
+              <CardTitle className="text-md">Etiquetas QR</CardTitle>
+              <CardDescription>Selecione produtos e prateleiras. O QR abre a movimentação já identificada.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Produtos</h3>
+                    <Button variant="outline" size="sm" onClick={() => setSelectedProductIds(selectedProductIds.length === (produtos ?? []).length ? [] : (produtos ?? []).map((p) => p.id))}>
+                      {selectedProductIds.length === (produtos ?? []).length && (produtos ?? []).length > 0 ? "Limpar" : "Selecionar todos"}
+                    </Button>
+                  </div>
+                  <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
+                    {(produtos ?? []).map((product) => {
+                      const checked = selectedProductIds.includes(product.id);
+                      return (
+                        <button
+                          type="button"
+                          key={product.id}
+                          className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-muted"
+                          onClick={() => toggleSelected(product.id, selectedProductIds, setSelectedProductIds)}
+                        >
+                          {checked ? <CheckSquare className="size-4 text-primary" /> : <Square className="size-4 text-muted-foreground" />}
+                          <span className="min-w-0 flex-1 truncate">{product.nome}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{product.sku}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold">Prateleiras</h3>
+                    <Button variant="outline" size="sm" onClick={() => setSelectedPrateleiraIds(selectedPrateleiraIds.length === (prateleiras ?? []).length ? [] : (prateleiras ?? []).map((shelf) => shelf.id))}>
+                      {selectedPrateleiraIds.length === (prateleiras ?? []).length && (prateleiras ?? []).length > 0 ? "Limpar" : "Selecionar todas"}
+                    </Button>
+                  </div>
+                  <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
+                    {(prateleiras ?? []).map((shelf) => {
+                      const checked = selectedPrateleiraIds.includes(shelf.id);
+                      return (
+                        <button
+                          type="button"
+                          key={shelf.id}
+                          className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-muted"
+                          onClick={() => toggleSelected(shelf.id, selectedPrateleiraIds, setSelectedPrateleiraIds)}
+                        >
+                          {checked ? <CheckSquare className="size-4 text-primary" /> : <Square className="size-4 text-muted-foreground" />}
+                          <span className="min-w-0 flex-1 truncate">{shelf.nome}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{shelf.codigo}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <Button className="w-full gap-2 sm:w-auto" onClick={printQrLabels}>
+                <Printer className="size-4" /> Imprimir etiquetas selecionadas
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="qr-print-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {selectedProducts.map((product) => (
+              <QrCodeLabel
+                key={`produto-${product.id}`}
+                kind="produto"
+                token={product.qr_token}
+                title={product.nome}
+                code={`SKU: ${product.sku}`}
+                unidade={product.unidade}
+              />
+            ))}
+            {selectedPrateleiras.map((shelf) => (
+              <QrCodeLabel
+                key={`prateleira-${shelf.id}`}
+                kind="prateleira"
+                token={shelf.qr_token}
+                title={shelf.nome}
+                code={shelf.codigo}
+                subtitle={`Depósito: ${shelf.depositos?.nome || "—"}`}
+              />
+            ))}
+          </div>
         </TabsContent>
 
         {/* TAB: POSICAO */}
@@ -667,6 +954,24 @@ function EstoquePage() {
               onSave={depositoMutation.mutate}
               onClose={() => setDepositoModal(null)}
               submitting={depositoMutation.isPending}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {prateleiraModal && (
+        <Dialog open={!!prateleiraModal} onOpenChange={(open) => !open && setPrateleiraModal(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{prateleiraModal === "new" ? "Nova prateleira" : "Editar prateleira"}</DialogTitle>
+              <DialogDescription>Defina a localização física dentro do depósito.</DialogDescription>
+            </DialogHeader>
+            <PrateleiraForm
+              target={prateleiraModal === "new" ? null : prateleiraModal}
+              depositos={depositos || []}
+              onSave={prateleiraMutation.mutate}
+              onClose={() => setPrateleiraModal(null)}
+              submitting={prateleiraMutation.isPending}
             />
           </DialogContent>
         </Dialog>
@@ -967,6 +1272,129 @@ function DepositoForm({
           <Button type="submit" disabled={submitting}>
             {submitting && <Loader2 className="size-4 animate-spin mr-2" />}
             Confirmar
+          </Button>
+        </DialogFooter>
+      </form>
+    </Form>
+  );
+}
+
+function PrateleiraForm({
+  target, depositos, onSave, onClose, submitting,
+}: {
+  target: PrateleiraRow | null;
+  depositos: DepositoRow[];
+  onSave: (values: PrateleiraFormValues) => void;
+  onClose: () => void;
+  submitting: boolean;
+}) {
+  const form = useForm<PrateleiraFormValues>({
+    resolver: zodResolver(prateleiraFormSchema) as any,
+    defaultValues: {
+      deposito_id: "",
+      codigo: "",
+      nome: "",
+      descricao: "",
+      ativo: true,
+    },
+  });
+
+  useEffect(() => {
+    if (target) {
+      form.reset({
+        deposito_id: target.deposito_id,
+        codigo: target.codigo,
+        nome: target.nome,
+        descricao: target.descricao || "",
+        ativo: target.ativo,
+      });
+    } else {
+      form.reset({ deposito_id: "", codigo: "", nome: "", descricao: "", ativo: true });
+    }
+  }, [target, form]);
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSave)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="deposito_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Depósito</FormLabel>
+              <Select value={field.value} onValueChange={field.onChange}>
+                <FormControl><SelectTrigger><SelectValue placeholder="Selecione o depósito" /></SelectTrigger></FormControl>
+                <SelectContent>
+                  {depositos.filter((deposito) => deposito.ativo).map((deposito) => (
+                    <SelectItem key={deposito.id} value={deposito.id}>{deposito.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField
+            control={form.control}
+            name="codigo"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Código</FormLabel>
+                <FormControl><Input placeholder="Ex.: A-01" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="nome"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nome</FormLabel>
+                <FormControl><Input placeholder="Ex.: Corredor A" {...field} /></FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        <FormField
+          control={form.control}
+          name="descricao"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Descrição opcional</FormLabel>
+              <FormControl><Textarea placeholder="Detalhes da localização" {...field} /></FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="ativo"
+          render={({ field }) => (
+            <FormItem className="flex items-center justify-between rounded-md border p-3">
+              <FormLabel className="cursor-pointer">Prateleira ativa</FormLabel>
+              <FormControl>
+                <input
+                  type="checkbox"
+                  checked={field.value}
+                  onChange={field.onChange}
+                  className="size-5 accent-primary"
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Cancelar</Button>
+          <Button type="submit" disabled={submitting}>
+            {submitting && <Loader2 className="mr-2 size-4 animate-spin" />}
+            Salvar prateleira
           </Button>
         </DialogFooter>
       </form>
