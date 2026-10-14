@@ -56,7 +56,8 @@ function PrestadoresPage() {
           <Hammer className="size-6 text-primary" /> Prestadores de serviços
         </h1>
         <p className="text-sm text-muted-foreground">
-          Controle de serviços terceirizados, medições executadas e pagamentos por obra.
+          Cadastre serviços terceirizados, registre medições executadas e acompanhe os pagamentos
+          por obra.
         </p>
       </div>
       <PrestadoresServicosPanel
