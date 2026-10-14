@@ -6,17 +6,17 @@ Atualizado em 13/10/2026. Este arquivo registra o estado conhecido no código, n
 
 As rotas principais estão implementadas com TanStack Router. As páginas protegidas ficam em `src/routes/_app`; os portais, login, assinatura e imóveis públicos ficam fora desse agrupamento.
 
-| Área              | Rotas                                                                                                                                       | Estado                                    |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Acesso            | `/auth`, `/forgot-password`, `/reset-password`                                                                                              | Completo                                  |
-| Painel            | `/`, `/dashboard`, `/empresa`, `/perfil`, `/usuarios`                                                                                       | Completo                                  |
-| Comercial         | `/comercial`, `/comercial/clientes`, `/comercial/propostas`, `/comercial/contratos`, `/comercial/licitacoes`                                | Completo                                  |
-| Obras             | `/obras`, `/cronograma`, `/diario`, `/medicoes`, `/documentos`, `/relatorios`                                                               | Completo                                  |
+| Área              | Rotas                                                                                                                                              | Estado                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Acesso            | `/auth`, `/forgot-password`, `/reset-password`                                                                                                     | Completo                                  |
+| Painel            | `/`, `/dashboard`, `/empresa`, `/perfil`, `/usuarios`                                                                                              | Completo                                  |
+| Comercial         | `/comercial`, `/comercial/clientes`, `/comercial/propostas`, `/comercial/contratos`, `/comercial/licitacoes`                                       | Completo                                  |
+| Obras             | `/obras`, `/cronograma`, `/diario`, `/medicoes`, `/documentos`, `/relatorios`                                                                      | Completo                                  |
 | Operacional       | `/compras`, `/cotacoes`, `/prestadores`, `/estoque`, `/equipamentos`, `/orcamentos`, `/fiscal`, `/importacoes`, `/vendas/pedidos`, `/rh`, `/ponto` | Completo                                  |
-| Financeiro        | `/financeiro`, `/imobiliaria/financeiro`                                                                                                    | Completo, com separação civil/imobiliária |
-| Imobiliária       | `/imobiliaria`, `/imobiliaria/dashboard`, `/imobiliaria/clientes`, `/imobiliaria/imoveis`, `/imobiliaria/locacoes`, `/imobiliaria/fiadores` | Completo                                  |
-| Portal do cliente | `/portal`, `/portal/contratos`, `/portal/documentos`, `/portal/financeiro`, `/portal/fotos`                                                 | Completo                                  |
-| Acesso público    | `/assinar/$token`, `/cotacao/$token`, `/imovel-publico/$token`                                                                              | Completo                                  |
+| Financeiro        | `/financeiro`, `/imobiliaria/financeiro`                                                                                                           | Completo, com separação civil/imobiliária |
+| Imobiliária       | `/imobiliaria`, `/imobiliaria/dashboard`, `/imobiliaria/clientes`, `/imobiliaria/imoveis`, `/imobiliaria/locacoes`, `/imobiliaria/fiadores`        | Completo                                  |
+| Portal do cliente | `/portal`, `/portal/contratos`, `/portal/documentos`, `/portal/financeiro`, `/portal/fotos`                                                        | Completo                                  |
+| Acesso público    | `/assinar/$token`, `/cotacao/$token`, `/imovel-publico/$token`                                                                                     | Completo                                  |
 
 Os arquivos de agrupamento (`/comercial`, `/imobiliaria` e `/portal`) funcionam como layouts/índices. Não há placeholder vazio conhecido entre as rotas listadas.
 
@@ -60,8 +60,20 @@ As entregas mais recentes são:
 - `20261013000002_fornecedor_preferencial_solicitacao.sql`: permite indicar um fornecedor preferencial na solicitação de compra.
 - `20261013000003_valor_estimado_solicitacao_item.sql`: adiciona o valor unitário estimado aos itens da solicitação de compra.
 - `20261013000004_cotacoes_compra.sql`: cria o módulo completo de cotações, convites por fornecedor, respostas públicas por token, anexos, comparação, seleção vencedora, pedidos, recebimentos, integração com contas a pagar, notificações e RLS.
+- `20261014000001_almoxarifado_base_recuperacao.sql`: recria de forma aditiva as tabelas-base `depositos`, `produto_estoque` e `movimentacoes_estoque` quando ausentes, configura leitura/RLS e semeia o depósito geral; foi aplicada no projeto de produção para corrigir o erro de cadastro.
 
 As melhorias de nome, inclusão, exclusão individual e ordenação das etapas não exigem nova migration; usam `obra_cronograma.ordem` e as colunas já existentes.
+
+### Estoque com QR e movimentações — fases A, B e C
+
+- `/estoque` reutiliza a página existente; `/estoque/movimentacao` abre a movimentação iniciada por QR ou manualmente.
+- Depósitos: tabela `depositos`; prateleiras: `estoque_prateleiras`; materiais: `produtos`; posição: `produto_estoque`; histórico: `movimentacoes_estoque`.
+- A Fase C acrescenta filtros do histórico por tipo, intervalo de datas, colaborador, obra e prateleira; exporta exatamente o filtro ativo para Excel e exibe saldo anterior/novo, responsável, localização e justificativa.
+- Alertas de estoque mínimo são registrados em `notificacoes_usuario` por usuário; não foi criado um sistema paralelo de notificações.
+- Produtos podem ser excluídos por admin/diretor somente quando não houver posição nem movimentações. Depósitos podem ser excluídos por admin/diretor/almoxarifado somente sem saldos, movimentações, prateleiras ou pedidos de venda vinculados.
+- O mobile apresenta o extrato em cartões para evitar rolagem horizontal da tabela.
+- A movimentação de saldo permanece exclusivamente pela RPC `registrar_movimentacao_almoxarifado`; ajuste informa o saldo físico final e exige justificativa; saída exige obra e não pode ultrapassar o saldo.
+- O teste Playwright de rota protegida é executado nos projetos Chromium desktop e Pixel 7 mobile e verifica retorno ao login preservando o destino e os parâmetros do QR.
 
 ## 4. Edge Functions
 
@@ -92,6 +104,7 @@ Não há Edge Functions versionadas em `supabase/functions` neste checkout. A ap
 - O ambiente local pode mostrar avisos de versão do Node e vulnerabilidades do `npm audit`; devem ser tratados separadamente para não misturar atualização de dependências com regras de negócio.
 - A migration `20261013000004_cotacoes_compra.sql` foi aplicada no projeto Supabase publicado pelo SQL Editor em 13/10/2026, com retorno `Success. No rows returned`.
 - Consultas antigas de estoque/financeiro ainda exigem atenção se forem reintroduzidas: o schema publicado usa `produto_estoque` como fonte do saldo atual.
+- Verificação direta no Supabase em 14/10/2026 encontrou inicialmente as tabelas-base, mas faltavam `estoque_prateleiras`, a RPC e o trigger. A migration `20261013000006_almoxarifado_qr.sql` foi aplicada pelo SQL Editor com sucesso; consulta posterior confirmou todos esses objetos. O teste como `authenticated` registrou saldo 10 dentro de transação e o `ROLLBACK` deixou o banco sem a posição criada. A migration foi aplicada manualmente e ainda não consta em `supabase_migrations.schema_migrations`, assim como a recuperação da base; reconciliar o histórico do CLI antes de depender de `supabase db push`.
 - A última publicação confirmada nesta sequência foi o deploy do commit `e108939` (GitHub Actions, execução #50), referente às melhorias de Compras. O build local continua sujeito ao erro de permissão `EPERM` do Windows ao resolver o entrypoint do `@tanstack/react-start`, quando o diretório `node_modules` está bloqueado.
 
 ## 8. Prestadores de serviços
@@ -136,15 +149,6 @@ supabase/
   functions/        Reservado para Edge Functions; vazio neste estado
 ```
 
-## 11. Correções de compras e cadastros — 13/10/2026
-
-- Corrigido o erro ao abrir **Analisar** uma solicitação: o modal usava `FormLabel` sem `FormField`, causando o erro `useFormField should be used within <FormField>`.
-- Criada a migration idempotente `20261013000005_fix_solicitacao_itens_valor_estimado.sql`, que adiciona `solicitacao_itens.valor_estimado` e solicita o recarregamento do schema do PostgREST.
-- A coluna foi aplicada e verificada no projeto Supabase remoto.
-- O cadastro de fornecedores agora aplica máscara de CNPJ, CPF e telefone e consulta o CNPJ ao sair do campo para preencher razão social, nome fantasia e telefone.
-- O cadastro de funcionários agora aplica máscara de CPF, telefone e CEP e consulta o ViaCEP para preencher logradouro, bairro, cidade e UF.
-- Os cadastros de clientes e empresa já possuíam essas integrações; a correção completa os principais formulários que ainda estavam sem máscara ou consulta.
-
 ## 12. Imobiliária — vendas de imóveis
 
 A rota `/imobiliaria/vendas` está publicada. Ela permite registrar proposta ou venda com imóvel, comprador, valores, entrada, forma de pagamento, parcelas, comissão, datas, situação e observações. Cada venda possui uma visualização de contrato de compra e venda e uma área para anexar, abrir e remover documentos da negociação no R2.
@@ -184,16 +188,9 @@ O módulo também cria notificações para a equipe quando uma proposta é receb
 - GitHub Actions: execução #50 concluída com sucesso.
 - Alterações incluídas: ações de edição/exclusão, modal responsivo, fornecedor preferencial e valor estimado dos itens.
 
-## 17. Correção do fluxo de compras — 13/10/2026
+## 17. Pendências prioritárias após esta atualização
 
-- A aba `Pedidos de compra` agora respeita o parâmetro `/compras?tab=pedidos`, inclusive quando acessada pelo menu lateral.
-- A tela `/cotacoes` agora possui o botão destacado **Nova cotação** e um seletor claro para escolher uma solicitação aprovada.
-- A solicitação de compra continua aceitando fornecedor preferencial vazio; os fornecedores são escolhidos em conjunto na criação da cotação.
-- A cotação mostra a etapa correta: solicitação aprovada → seleção de vários fornecedores → respostas individuais → comparativo → pedidos separados por fornecedor vencedor.
-
-## 18. Pendências prioritárias após esta atualização
-
-- Validar o fluxo completo com dados reais: aprovar uma solicitação, enviar a cotação a vários fornecedores, registrar respostas e gerar pedidos.
+- Publicar o frontend do módulo de cotações no Worker `obrasflow` e validar o fluxo completo em produção.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado quando o acesso do CLI ao projeto estiver liberado; o módulo usa casts locais até essa regeneração.
 - Adicionar envio automático dos links por e-mail/WhatsApp com provedor configurado.
 - Melhorar o recebimento para aceitar quantidades parciais por item em uma tela dedicada; a primeira versão registra todo o saldo restante do pedido.

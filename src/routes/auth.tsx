@@ -41,6 +41,7 @@ const AREA_COPY: Record<AccessArea, { title: string; hint: string }> = {
 };
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: z.object({ redirect: z.string().optional() }),
   head: () => ({ meta: [{ title: "Entrar — ERP Obras" }] }),
   component: AuthPage,
 });
@@ -91,6 +92,7 @@ function formatDocumentInput(value: string, area: AccessArea) {
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { redirect } = Route.useSearch();
   const [area, setArea] = useState<AccessArea>("general");
   const [submitting, setSubmitting] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
@@ -114,12 +116,12 @@ function AuthPage() {
 
       try {
         const roles = await loadUserAccess(session.user.id);
-        navigate({ to: getDestination(roles) as never, replace: true });
+        navigate({ to: redirect?.startsWith("/") ? redirect as never : getDestination(roles) as never, replace: true });
       } catch {
         await supabase.auth.signOut();
       }
     });
-  }, [navigate]);
+  }, [navigate, redirect]);
 
   const onSubmit = async (values: FormData) => {
     setSubmitting(true);
@@ -142,7 +144,7 @@ function AuthPage() {
         const roles = await loadUserAccess(data.user.id);
 
         toast.success("Bem-vindo!");
-        navigate({ to: getDestination(roles) as never, replace: true });
+        navigate({ to: redirect?.startsWith("/") ? redirect as never : getDestination(roles) as never, replace: true });
         return;
       }
 

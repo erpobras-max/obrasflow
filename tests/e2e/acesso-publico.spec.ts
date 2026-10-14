@@ -26,4 +26,15 @@ test.describe("Acesso público", () => {
     await expect(page).toHaveURL(/\/auth$/);
     await expect(page.getByRole("heading", { name: "Entre na sua conta" })).toBeVisible();
   });
+
+  test("redireciona movimentação sem sessão ao login e preserva os parâmetros do QR", async ({
+    page,
+  }) => {
+    await page.goto("/estoque/movimentacao?produto=qr-token-teste");
+
+    await expect(page).toHaveURL(/\/auth\?/);
+    await expect(page).toHaveURL(/redirect=.*estoque.*movimentacao/);
+    await expect(page).toHaveURL(/produto.*qr-token-teste/);
+    await expect(page.getByRole("heading", { name: "Entre na sua conta" })).toBeVisible();
+  });
 });

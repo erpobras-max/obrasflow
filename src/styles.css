@@ -142,3 +142,33 @@
     color: var(--color-foreground);
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .qr-print-sheet,
+  .qr-print-sheet * {
+    visibility: visible !important;
+  }
+
+  .qr-print-sheet {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    padding: 8mm;
+  }
+
+  .qr-print-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6mm;
+  }
+
+  .qr-print-label {
+    break-inside: avoid;
+    box-shadow: none !important;
+    min-height: 78mm;
+  }
+}
