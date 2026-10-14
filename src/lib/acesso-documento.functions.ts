@@ -160,7 +160,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
   const phone = normalizeBrazilianPhone(record.celular || record.telefone);
   const profileEmail =
     record.email?.trim().toLowerCase() ||
-    (phone ? `${phone.replace(/\D/g, "")}@sms.obrasflow.local` : null);
+    (phone ? `acesso-${record.id}@obrasflow.com.br` : null);
   if (!profileEmail) failAccess("sem_contato");
 
   let userId = area === "client" ? record.auth_user_id : record.user_id;
