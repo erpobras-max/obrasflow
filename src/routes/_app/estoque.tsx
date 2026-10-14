@@ -211,6 +211,25 @@ interface MovimentacaoRow {
 const fmtBRL = (v: number | null | undefined) =>
   (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+async function findInventoryReference(table: string, column: string, id: string) {
+  const typedClient = supabase as unknown as {
+    from: (tableName: string) => {
+      select: (columns: string) => {
+        eq: (
+          columnName: string,
+          value: string,
+        ) => {
+          limit: (count: number) => PromiseLike<{
+            data: Array<{ id: string }> | null;
+            error: Error | null;
+          }>;
+        };
+      };
+    };
+  };
+  return typedClient.from(table).select("id").eq(column, id).limit(1);
+}
+
 function EstoquePage() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { perfil, roles, user } = useAuth();
@@ -248,6 +267,7 @@ function EstoquePage() {
   const podeGerenciarPrateleiras = roles.some(
     (role) => role === "admin" || role === "diretor" || role === "almoxarifado",
   );
+  const podeExcluirProduto = roles.some((role) => role === "admin" || role === "diretor");
 
   // Queries
   const { data: produtos, isLoading: loadingProds } = useQuery({
@@ -478,6 +498,70 @@ function EstoquePage() {
       setDepositoModal(null);
     },
     onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteProductMutation = useMutation({
+    mutationFn: async (product: ProductRow) => {
+      const [positions, movements] = await Promise.all([
+        supabase.from("produto_estoque").select("id").eq("produto_id", product.id).limit(1),
+        supabase.from("movimentacoes_estoque").select("id").eq("produto_id", product.id).limit(1),
+      ]);
+      if (positions.error) throw positions.error;
+      if (movements.error) throw movements.error;
+      if (positions.data?.length || movements.data?.length) {
+        throw new Error(
+          "Este produto já possui posição ou histórico de estoque e não pode ser excluído. Altere a situação para INATIVO para preservá-lo no histórico.",
+        );
+      }
+
+      const { error } = await supabase.from("produtos").delete().eq("id", product.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Produto excluído do catálogo.");
+      qc.invalidateQueries({ queryKey: ["produtos-estoque-list"] });
+      qc.invalidateQueries({ queryKey: ["posicao-estoque-list"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const deleteDepositoMutation = useMutation({
+    mutationFn: async (deposito: DepositoRow) => {
+      const [positions, movements, shelves, sales] = await Promise.all([
+        supabase.from("produto_estoque").select("id").eq("deposito_id", deposito.id).limit(1),
+        supabase
+          .from("movimentacoes_estoque")
+          .select("id")
+          .or(`deposito_id.eq.${deposito.id},deposito_destino_id.eq.${deposito.id}`)
+          .limit(1),
+        findInventoryReference("estoque_prateleiras", "deposito_id", deposito.id),
+        findInventoryReference("pedidos_venda", "deposito_id", deposito.id),
+      ]);
+      if (positions.error) throw positions.error;
+      if (movements.error) throw movements.error;
+      if (shelves.error) throw shelves.error;
+      if (sales.error) throw sales.error;
+      if (
+        positions.data?.length ||
+        movements.data?.length ||
+        shelves.data?.length ||
+        sales.data?.length
+      ) {
+        throw new Error(
+          "Este depósito está vinculado a saldos, movimentações, prateleiras ou pedidos de venda. Remova essas vinculações antes de excluir.",
+        );
+      }
+
+      const { error } = await supabase.from("depositos").delete().eq("id", deposito.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Depósito excluído.");
+      qc.invalidateQueries({ queryKey: ["depositos-estoque-list"] });
+      qc.invalidateQueries({ queryKey: ["estoque-prateleiras-list"] });
+      qc.invalidateQueries({ queryKey: ["posicao-estoque-list"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
   });
 
   const prateleiraMutation = useMutation({
@@ -715,7 +799,7 @@ function EstoquePage() {
                       <TableHead className="text-right">Preço Venda</TableHead>
                       <TableHead className="text-right">Preço Custo</TableHead>
                       <TableHead>Situação</TableHead>
-                      {podeEditar && <TableHead className="w-20 text-center">Ações</TableHead>}
+                      {podeEditar && <TableHead className="w-24 text-center">Ações</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -741,14 +825,33 @@ function EstoquePage() {
                         </TableCell>
                         {podeEditar && (
                           <TableCell className="text-center">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="size-8"
-                              onClick={() => setProductModal(p)}
-                            >
-                              <Settings className="size-3.5" />
-                            </Button>
+                            <div className="flex justify-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8"
+                                aria-label={`Editar ${p.nome}`}
+                                onClick={() => setProductModal(p)}
+                              >
+                                <Settings className="size-3.5" />
+                              </Button>
+                              {podeExcluirProduto && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="size-8 text-destructive hover:text-destructive"
+                                  aria-label={`Excluir ${p.nome}`}
+                                  title="Excluir produto"
+                                  disabled={deleteProductMutation.isPending}
+                                  onClick={() => {
+                                    if (window.confirm(`Excluir o produto ${p.nome} do catálogo?`))
+                                      deleteProductMutation.mutate(p);
+                                  }}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              )}
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>
@@ -781,7 +884,9 @@ function EstoquePage() {
                       <TableHead>Código</TableHead>
                       <TableHead>Nome do Depósito</TableHead>
                       <TableHead>Status</TableHead>
-                      {podeEditar && <TableHead className="w-20 text-center">Ações</TableHead>}
+                      {podeGerenciarPrateleiras && (
+                        <TableHead className="w-24 text-center">Ações</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -797,16 +902,33 @@ function EstoquePage() {
                             {d.ativo ? "ATIVO" : "INATIVO"}
                           </Badge>
                         </TableCell>
-                        {podeEditar && (
+                        {podeGerenciarPrateleiras && (
                           <TableCell className="text-center">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="size-8"
-                              onClick={() => setDepositoModal(d)}
-                            >
-                              <Settings className="size-3.5" />
-                            </Button>
+                            <div className="flex justify-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8"
+                                aria-label={`Editar depósito ${d.nome}`}
+                                onClick={() => setDepositoModal(d)}
+                              >
+                                <Settings className="size-3.5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8 text-destructive hover:text-destructive"
+                                aria-label={`Excluir depósito ${d.nome}`}
+                                title="Excluir depósito"
+                                disabled={deleteDepositoMutation.isPending}
+                                onClick={() => {
+                                  if (window.confirm(`Excluir o depósito ${d.nome}?`))
+                                    deleteDepositoMutation.mutate(d);
+                                }}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
                           </TableCell>
                         )}
                       </TableRow>

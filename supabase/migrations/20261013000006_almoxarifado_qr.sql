@@ -222,6 +222,16 @@ BEGIN
 END;
 $$;
 
+-- Garante que inserções legadas também atualizem o saldo. A RPC marca a
+-- transação e o trigger ignora somente a movimentação que ela própria gravou.
+DROP TRIGGER IF EXISTS trg_aplicar_mov_estoque
+  ON public.movimentacoes_estoque;
+
+CREATE TRIGGER trg_aplicar_mov_estoque
+  AFTER INSERT ON public.movimentacoes_estoque
+  FOR EACH ROW
+  EXECUTE FUNCTION public.aplicar_movimentacao_estoque();
+
 -- 5. RPC transacional do almoxarifado
 -- ============================================================================
 DROP FUNCTION IF EXISTS public.registrar_movimentacao_almoxarifado(

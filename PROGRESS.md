@@ -70,6 +70,7 @@ As melhorias de nome, inclusão, exclusão individual e ordenação das etapas n
 - Depósitos: tabela `depositos`; prateleiras: `estoque_prateleiras`; materiais: `produtos`; posição: `produto_estoque`; histórico: `movimentacoes_estoque`.
 - A Fase C acrescenta filtros do histórico por tipo, intervalo de datas, colaborador, obra e prateleira; exporta exatamente o filtro ativo para Excel e exibe saldo anterior/novo, responsável, localização e justificativa.
 - Alertas de estoque mínimo são registrados em `notificacoes_usuario` por usuário; não foi criado um sistema paralelo de notificações.
+- Produtos podem ser excluídos por admin/diretor somente quando não houver posição nem movimentações. Depósitos podem ser excluídos por admin/diretor/almoxarifado somente sem saldos, movimentações, prateleiras ou pedidos de venda vinculados.
 - O mobile apresenta o extrato em cartões para evitar rolagem horizontal da tabela.
 - A movimentação de saldo permanece exclusivamente pela RPC `registrar_movimentacao_almoxarifado`; ajuste informa o saldo físico final e exige justificativa; saída exige obra e não pode ultrapassar o saldo.
 - O teste Playwright de rota protegida é executado nos projetos Chromium desktop e Pixel 7 mobile e verifica retorno ao login preservando o destino e os parâmetros do QR.
@@ -103,6 +104,7 @@ Não há Edge Functions versionadas em `supabase/functions` neste checkout. A ap
 - O ambiente local pode mostrar avisos de versão do Node e vulnerabilidades do `npm audit`; devem ser tratados separadamente para não misturar atualização de dependências com regras de negócio.
 - A migration `20261013000004_cotacoes_compra.sql` foi aplicada no projeto Supabase publicado pelo SQL Editor em 13/10/2026, com retorno `Success. No rows returned`.
 - Consultas antigas de estoque/financeiro ainda exigem atenção se forem reintroduzidas: o schema publicado usa `produto_estoque` como fonte do saldo atual.
+- Verificação direta no Supabase em 14/10/2026 encontrou inicialmente as tabelas-base, mas faltavam `estoque_prateleiras`, a RPC e o trigger. A migration `20261013000006_almoxarifado_qr.sql` foi aplicada pelo SQL Editor com sucesso; consulta posterior confirmou todos esses objetos. O teste como `authenticated` registrou saldo 10 dentro de transação e o `ROLLBACK` deixou o banco sem a posição criada. A migration foi aplicada manualmente e ainda não consta em `supabase_migrations.schema_migrations`, assim como a recuperação da base; reconciliar o histórico do CLI antes de depender de `supabase db push`.
 - A última publicação confirmada nesta sequência foi o deploy do commit `e108939` (GitHub Actions, execução #50), referente às melhorias de Compras. O build local continua sujeito ao erro de permissão `EPERM` do Windows ao resolver o entrypoint do `@tanstack/react-start`, quando o diretório `node_modules` está bloqueado.
 
 ## 8. Prestadores de serviços
