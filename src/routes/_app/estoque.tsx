@@ -64,14 +64,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Textarea } from "@/components/ui/textarea";
 import { QrCodeLabel } from "@/components/estoque/QrCodeLabel";
 
@@ -695,12 +688,340 @@ function EstoquePage() {
     selectedPrateleiraIds.includes(shelf.id),
   );
 
+  const productColumns = [
+    {
+      key: "sku",
+      header: "SKU",
+      mobileLabel: "SKU",
+      priority: "essential" as const,
+      cell: (product: ProductRow) => product.sku,
+      cellClassName: "font-bold text-xs",
+    },
+    {
+      key: "nome",
+      header: "Descrição",
+      mobileLabel: "Produto",
+      priority: "essential" as const,
+      cell: (product: ProductRow) => product.nome,
+      cellClassName: "font-semibold text-xs",
+    },
+    {
+      key: "preco_venda",
+      header: "Preço Venda (R$)",
+      mobileLabel: "Preço de venda",
+      priority: "essential" as const,
+      align: "right" as const,
+      cell: (product: ProductRow) => fmtBRL(product.preco_venda),
+      cellClassName: "text-xs font-bold text-primary tabular-nums",
+    },
+    {
+      key: "categoria",
+      header: "Categoria",
+      mobileLabel: "Categoria",
+      priority: "secondary" as const,
+      cell: (product: ProductRow) => product.categoria || "—",
+      cellClassName: "text-xs",
+    },
+    {
+      key: "unidade",
+      header: "Unidade",
+      mobileLabel: "Unidade",
+      priority: "secondary" as const,
+      cell: (product: ProductRow) => product.unidade,
+      cellClassName: "text-xs",
+    },
+    {
+      key: "preco_custo",
+      header: "Preço Custo (R$)",
+      mobileLabel: "Preço de custo",
+      priority: "secondary" as const,
+      align: "right" as const,
+      cell: (product: ProductRow) => fmtBRL(product.preco_custo),
+      cellClassName: "text-xs text-muted-foreground tabular-nums",
+    },
+    {
+      key: "situacao",
+      header: "Situação",
+      mobileLabel: "Situação",
+      priority: "secondary" as const,
+      cell: (product: ProductRow) => (
+        <Badge
+          variant={product.situacao === "ativo" ? "default" : "secondary"}
+          className="text-[10px]"
+        >
+          {product.situacao.toUpperCase()}
+        </Badge>
+      ),
+    },
+  ];
+
+  const depositoColumns = [
+    {
+      key: "codigo",
+      header: "Código",
+      mobileLabel: "Código",
+      priority: "essential" as const,
+      cell: (deposito: DepositoRow) => deposito.codigo,
+      cellClassName: "font-mono text-xs",
+    },
+    {
+      key: "nome",
+      header: "Nome do Depósito",
+      mobileLabel: "Depósito",
+      priority: "essential" as const,
+      cell: (deposito: DepositoRow) => deposito.nome,
+      cellClassName: "font-semibold text-xs",
+    },
+    {
+      key: "ativo",
+      header: "Status",
+      mobileLabel: "Status",
+      priority: "essential" as const,
+      cell: (deposito: DepositoRow) => (
+        <Badge variant={deposito.ativo ? "default" : "secondary"} className="text-[10px]">
+          {deposito.ativo ? "ATIVO" : "INATIVO"}
+        </Badge>
+      ),
+    },
+  ];
+
+  const prateleiraColumns = [
+    {
+      key: "codigo",
+      header: "Código",
+      mobileLabel: "Código",
+      priority: "essential" as const,
+      cell: (shelf: PrateleiraRow) => shelf.codigo,
+      cellClassName: "font-mono text-xs",
+    },
+    {
+      key: "nome",
+      header: "Nome",
+      mobileLabel: "Prateleira",
+      priority: "essential" as const,
+      cell: (shelf: PrateleiraRow) => shelf.nome,
+      cellClassName: "text-xs font-semibold",
+    },
+    {
+      key: "deposito",
+      header: "Depósito",
+      mobileLabel: "Depósito",
+      priority: "essential" as const,
+      cell: (shelf: PrateleiraRow) => shelf.depositos?.nome || "—",
+      cellClassName: "text-xs",
+    },
+    {
+      key: "ativo",
+      header: "Status",
+      mobileLabel: "Status",
+      priority: "secondary" as const,
+      cell: (shelf: PrateleiraRow) => (
+        <Badge variant={shelf.ativo ? "default" : "secondary"} className="text-[10px]">
+          {shelf.ativo ? "ATIVA" : "INATIVA"}
+        </Badge>
+      ),
+    },
+    {
+      key: "qr",
+      header: "QR",
+      mobileLabel: "Etiqueta QR",
+      priority: "secondary" as const,
+      align: "center" as const,
+      cell: (shelf: PrateleiraRow) => (
+        <Button
+          size="icon"
+          variant={selectedPrateleiraIds.includes(shelf.id) ? "default" : "ghost"}
+          className="size-11"
+          aria-label={`${selectedPrateleiraIds.includes(shelf.id) ? "Desmarcar" : "Selecionar"} etiqueta QR da prateleira ${shelf.codigo}`}
+          title="Selecionar etiqueta QR"
+          onClick={() => toggleSelected(shelf.id, selectedPrateleiraIds, setSelectedPrateleiraIds)}
+        >
+          {selectedPrateleiraIds.includes(shelf.id) ? (
+            <CheckSquare className="size-4" />
+          ) : (
+            <QrCode className="size-4" />
+          )}
+        </Button>
+      ),
+    },
+  ];
+
+  const posicaoColumns = [
+    {
+      key: "sku",
+      header: "SKU",
+      mobileLabel: "SKU",
+      priority: "essential" as const,
+      cell: (position: PosicaoEstoqueRow) => position.produtos?.sku || "—",
+      cellClassName: "font-bold text-xs",
+    },
+    {
+      key: "produto",
+      header: "Produto",
+      mobileLabel: "Produto",
+      priority: "essential" as const,
+      cell: (position: PosicaoEstoqueRow) => position.produtos?.nome || "—",
+      cellClassName: "font-semibold text-xs",
+    },
+    {
+      key: "deposito",
+      header: "Depósito",
+      mobileLabel: "Depósito",
+      priority: "essential" as const,
+      cell: (position: PosicaoEstoqueRow) => position.depositos?.nome || "—",
+      cellClassName: "text-xs",
+    },
+    {
+      key: "saldo",
+      header: "Saldo Físico",
+      mobileLabel: "Saldo físico",
+      priority: "essential" as const,
+      align: "right" as const,
+      cell: (position: PosicaoEstoqueRow) => position.saldo,
+      cellClassName: "font-bold text-xs tabular-nums",
+    },
+    {
+      key: "unidade",
+      header: "Unidade",
+      mobileLabel: "Unidade",
+      priority: "secondary" as const,
+      align: "center" as const,
+      cell: (position: PosicaoEstoqueRow) => position.produtos?.unidade || "—",
+      cellClassName: "text-xs",
+    },
+    {
+      key: "minimo_maximo",
+      header: "Mínimo / Máximo",
+      mobileLabel: "Mínimo / máximo",
+      priority: "secondary" as const,
+      align: "right" as const,
+      cell: (position: PosicaoEstoqueRow) =>
+        `${position.produtos?.estoque_min || 0} / ${position.produtos?.estoque_max || 0}`,
+      cellClassName: "text-xs text-muted-foreground tabular-nums",
+    },
+    {
+      key: "alerta",
+      header: "Alerta",
+      mobileLabel: "Alerta de estoque",
+      priority: "secondary" as const,
+      cell: (position: PosicaoEstoqueRow) => {
+        const isLow = position.produtos && position.saldo <= position.produtos.estoque_min;
+        if (position.saldo <= 0)
+          return <Badge className="bg-red-600 text-white text-[10px]">ZERADO</Badge>;
+        if (isLow) return <Badge className="bg-amber-500 text-white text-[10px]">BAIXO</Badge>;
+        return (
+          <Badge variant="outline" className="text-green-600 text-[10px]">
+            NORMAL
+          </Badge>
+        );
+      },
+    },
+  ];
+
+  const movimentacaoColumns = [
+    {
+      key: "data",
+      header: "Data/Hora",
+      mobileLabel: "Data",
+      priority: "essential" as const,
+      cell: (movement: MovimentacaoRow) => new Date(movement.created_at).toLocaleString("pt-BR"),
+      cellClassName: "text-xs",
+    },
+    {
+      key: "material",
+      header: "Material",
+      mobileLabel: "Material",
+      priority: "essential" as const,
+      cell: (movement: MovimentacaoRow) => (
+        <div className="min-w-0">
+          <div className="break-words font-semibold text-xs">{movement.produtos?.nome || "—"}</div>
+          <div className="text-[10px] text-muted-foreground">
+            SKU: {movement.produtos?.sku || "—"}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: "tipo",
+      header: "Tipo",
+      mobileLabel: "Tipo",
+      priority: "essential" as const,
+      cell: (movement: MovimentacaoRow) => (
+        <Badge variant="outline" className="capitalize text-[10px]">
+          {movement.tipo === "saida"
+            ? "Saída"
+            : movement.tipo === "ajuste"
+              ? "Ajuste"
+              : movement.tipo === "transferencia"
+                ? "Transferência"
+                : "Entrada"}
+        </Badge>
+      ),
+    },
+    {
+      key: "quantidade",
+      header: "Quantidade",
+      mobileLabel: "Quantidade",
+      priority: "essential" as const,
+      cell: (movement: MovimentacaoRow) =>
+        `${movement.quantidade} ${movement.produtos?.unidade || ""}`,
+      cellClassName: "text-xs font-semibold tabular-nums",
+    },
+    {
+      key: "saldo",
+      header: "Saldo anterior → após",
+      mobileLabel: "Saldo anterior → após",
+      priority: "secondary" as const,
+      cell: (movement: MovimentacaoRow) =>
+        `${movement.saldo_anterior ?? "—"} → ${movement.saldo_apos}`,
+      cellClassName: "whitespace-nowrap text-xs tabular-nums",
+    },
+    {
+      key: "obra",
+      header: "Obra",
+      mobileLabel: "Obra",
+      priority: "secondary" as const,
+      cell: (movement: MovimentacaoRow) =>
+        obrasFiltro.find((obra) => obra.id === movement.obra_id)?.nome || "—",
+      cellClassName: "text-xs",
+    },
+    {
+      key: "local",
+      header: "Local",
+      mobileLabel: "Local",
+      priority: "secondary" as const,
+      cell: (movement: MovimentacaoRow) =>
+        movement.estoque_prateleiras
+          ? `${movement.estoque_prateleiras.codigo} — ${movement.estoque_prateleiras.nome}`
+          : movement.deposito_origem?.nome || "—",
+      cellClassName: "text-xs",
+    },
+    {
+      key: "responsavel",
+      header: "Responsável",
+      mobileLabel: "Responsável",
+      priority: "secondary" as const,
+      cell: (movement: MovimentacaoRow) =>
+        perfis.find((profile) => profile.user_id === (movement.user_id ?? movement.usuario_id))
+          ?.nome || "—",
+      cellClassName: "text-xs",
+    },
+    {
+      key: "justificativa",
+      header: "Justificativa",
+      mobileLabel: "Justificativa",
+      priority: "secondary" as const,
+      cell: (movement: MovimentacaoRow) => movement.justificativa || movement.observacao || "—",
+      cellClassName: "max-w-56 truncate text-xs",
+    },
+  ];
+
   if (pathname === "/estoque/movimentacao") {
     return <Outlet />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Produtos & Estoque</h1>
@@ -708,7 +1029,7 @@ function EstoquePage() {
             Ficha de produtos, múltiplos depósitos e auditoria de movimentações.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
           {podeEditar && (
             <Button variant="outline" className="gap-2" onClick={() => setAjusteModalOpen(true)}>
               <GitCompare className="size-4" /> Ajustar Saldo
@@ -745,7 +1066,7 @@ function EstoquePage() {
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="h-auto flex-wrap justify-start gap-1">
+        <TabsList className="h-auto justify-start gap-1">
           <TabsTrigger value="produtos" className="gap-2">
             <Package className="size-4" /> Cadastro de Produtos
           </TabsTrigger>
@@ -766,9 +1087,9 @@ function EstoquePage() {
         {/* TAB: PRODUTOS */}
         <TabsContent value="produtos" className="space-y-4">
           <Card>
-            <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between">
+            <CardHeader className="flex flex-col items-stretch justify-between gap-3 p-4 pb-0 sm:flex-row sm:items-center">
               <CardTitle className="text-md">Catálogo de Produtos</CardTitle>
-              <div className="relative w-80">
+              <div className="relative w-full min-w-0 sm:w-80">
                 <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar por SKU, nome ou GTIN..."
@@ -778,87 +1099,56 @@ function EstoquePage() {
                 />
               </div>
             </CardHeader>
-            <CardContent className="p-0 mt-4">
-              {loadingProds ? (
-                <div className="p-6 space-y-3">
-                  <Skeleton className="h-10 w-full" />
-                  <Skeleton className="h-20 w-full" />
-                </div>
-              ) : filteredProducts.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  Nenhum produto cadastrado.
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead>Unidade</TableHead>
-                      <TableHead className="text-right">Preço Venda</TableHead>
-                      <TableHead className="text-right">Preço Custo</TableHead>
-                      <TableHead>Situação</TableHead>
-                      {podeEditar && <TableHead className="w-24 text-center">Ações</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredProducts.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="font-bold text-xs">{p.sku}</TableCell>
-                        <TableCell className="font-semibold text-xs">{p.nome}</TableCell>
-                        <TableCell className="text-xs">{p.categoria || "—"}</TableCell>
-                        <TableCell className="text-xs">{p.unidade}</TableCell>
-                        <TableCell className="text-right text-xs font-bold text-primary">
-                          {fmtBRL(p.preco_venda)}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
-                          {fmtBRL(p.preco_custo)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={p.situacao === "ativo" ? "default" : "secondary"}
-                            className="text-[10px]"
+            <CardContent className="mt-4 min-w-0 p-0">
+              <ResponsiveTable
+                columns={productColumns}
+                rows={filteredProducts}
+                getRowKey={(product) => product.id}
+                loading={
+                  loadingProds && (
+                    <div className="space-y-3 p-6">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-20 w-full" />
+                    </div>
+                  )
+                }
+                emptyState="Nenhum produto cadastrado."
+                renderActions={
+                  podeEditar
+                    ? (product) => (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-11"
+                            aria-label={`Editar ${product.nome}`}
+                            onClick={() => setProductModal(product)}
                           >
-                            {p.situacao.toUpperCase()}
-                          </Badge>
-                        </TableCell>
-                        {podeEditar && (
-                          <TableCell className="text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8"
-                                aria-label={`Editar ${p.nome}`}
-                                onClick={() => setProductModal(p)}
-                              >
-                                <Settings className="size-3.5" />
-                              </Button>
-                              {podeExcluirProduto && (
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-8 text-destructive hover:text-destructive"
-                                  aria-label={`Excluir ${p.nome}`}
-                                  title="Excluir produto"
-                                  disabled={deleteProductMutation.isPending}
-                                  onClick={() => {
-                                    if (window.confirm(`Excluir o produto ${p.nome} do catálogo?`))
-                                      deleteProductMutation.mutate(p);
-                                  }}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+                            <Settings className="size-4" />
+                          </Button>
+                          {podeExcluirProduto && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="size-11 text-destructive hover:text-destructive"
+                              aria-label={`Excluir ${product.nome}`}
+                              title="Excluir produto"
+                              disabled={deleteProductMutation.isPending}
+                              onClick={() => {
+                                if (
+                                  window.confirm(`Excluir o produto ${product.nome} do catálogo?`)
+                                )
+                                  deleteProductMutation.mutate(product);
+                              }}
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          )}
+                        </div>
+                      )
+                    : undefined
+                }
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -873,69 +1163,50 @@ function EstoquePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-0">
-              {loadingDeps ? (
-                <div className="p-6 space-y-3">
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Código</TableHead>
-                      <TableHead>Nome do Depósito</TableHead>
-                      <TableHead>Status</TableHead>
-                      {podeGerenciarPrateleiras && (
-                        <TableHead className="w-24 text-center">Ações</TableHead>
-                      )}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {depositos?.map((d) => (
-                      <TableRow key={d.id}>
-                        <TableCell className="font-mono text-xs">{d.codigo}</TableCell>
-                        <TableCell className="font-semibold text-xs">{d.nome}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={d.ativo ? "default" : "secondary"}
-                            className="text-[10px]"
+              <ResponsiveTable
+                columns={depositoColumns}
+                rows={depositos ?? []}
+                getRowKey={(deposit) => deposit.id}
+                loading={
+                  loadingDeps && (
+                    <div className="p-6">
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  )
+                }
+                emptyState="Nenhum depósito cadastrado."
+                renderActions={
+                  podeGerenciarPrateleiras
+                    ? (deposit) => (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-11"
+                            aria-label={`Editar depósito ${deposit.nome}`}
+                            onClick={() => setDepositoModal(deposit)}
                           >
-                            {d.ativo ? "ATIVO" : "INATIVO"}
-                          </Badge>
-                        </TableCell>
-                        {podeGerenciarPrateleiras && (
-                          <TableCell className="text-center">
-                            <div className="flex justify-center gap-1">
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8"
-                                aria-label={`Editar depósito ${d.nome}`}
-                                onClick={() => setDepositoModal(d)}
-                              >
-                                <Settings className="size-3.5" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8 text-destructive hover:text-destructive"
-                                aria-label={`Excluir depósito ${d.nome}`}
-                                title="Excluir depósito"
-                                disabled={deleteDepositoMutation.isPending}
-                                onClick={() => {
-                                  if (window.confirm(`Excluir o depósito ${d.nome}?`))
-                                    deleteDepositoMutation.mutate(d);
-                                }}
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+                            <Settings className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-11 text-destructive hover:text-destructive"
+                            aria-label={`Excluir depósito ${deposit.nome}`}
+                            title="Excluir depósito"
+                            disabled={deleteDepositoMutation.isPending}
+                            onClick={() => {
+                              if (window.confirm(`Excluir o depósito ${deposit.nome}?`))
+                                deleteDepositoMutation.mutate(deposit);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      )
+                    : undefined
+                }
+              />
             </CardContent>
           </Card>
           <Card>
@@ -953,100 +1224,51 @@ function EstoquePage() {
               )}
             </CardHeader>
             <CardContent className="p-0">
-              {loadingPrateleiras ? (
-                <div className="p-6">
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : (prateleiras ?? []).length === 0 ? (
-                <div className="p-6 text-sm text-muted-foreground">
-                  Nenhuma prateleira cadastrada.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Código</TableHead>
-                        <TableHead>Nome</TableHead>
-                        <TableHead>Depósito</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-28 text-center">QR</TableHead>
-                        {podeGerenciarPrateleiras && (
-                          <TableHead className="w-24 text-center">Ações</TableHead>
-                        )}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(prateleiras ?? []).map((shelf) => (
-                        <TableRow key={shelf.id}>
-                          <TableCell className="font-mono text-xs">{shelf.codigo}</TableCell>
-                          <TableCell className="text-xs font-semibold">{shelf.nome}</TableCell>
-                          <TableCell className="text-xs">{shelf.depositos?.nome || "—"}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={shelf.ativo ? "default" : "secondary"}
-                              className="text-[10px]"
-                            >
-                              {shelf.ativo ? "ATIVA" : "INATIVA"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Button
-                              size="icon"
-                              variant={
-                                selectedPrateleiraIds.includes(shelf.id) ? "default" : "ghost"
-                              }
-                              className="size-8"
-                              title="Selecionar etiqueta QR"
-                              onClick={() =>
-                                toggleSelected(
-                                  shelf.id,
-                                  selectedPrateleiraIds,
-                                  setSelectedPrateleiraIds,
-                                )
-                              }
-                            >
-                              {selectedPrateleiraIds.includes(shelf.id) ? (
-                                <CheckSquare className="size-4" />
-                              ) : (
-                                <QrCode className="size-4" />
-                              )}
-                            </Button>
-                          </TableCell>
-                          {podeGerenciarPrateleiras && (
-                            <TableCell className="text-center">
-                              <div className="flex justify-center gap-1">
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-8"
-                                  onClick={() => setPrateleiraModal(shelf)}
-                                  title="Editar prateleira"
-                                >
-                                  <Pencil className="size-3.5" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="size-8 text-destructive hover:text-destructive"
-                                  title="Excluir prateleira"
-                                  onClick={() => {
-                                    if (window.confirm(`Excluir a prateleira ${shelf.codigo}?`))
-                                      deletePrateleiraMutation.mutate(shelf.id);
-                                  }}
-                                  disabled={deletePrateleiraMutation.isPending}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          )}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
+              <ResponsiveTable
+                columns={prateleiraColumns}
+                rows={prateleiras ?? []}
+                getRowKey={(shelf) => shelf.id}
+                loading={
+                  loadingPrateleiras && (
+                    <div className="p-6">
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  )
+                }
+                emptyState="Nenhuma prateleira cadastrada."
+                renderActions={
+                  podeGerenciarPrateleiras
+                    ? (shelf) => (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-11"
+                            aria-label={`Editar prateleira ${shelf.codigo}`}
+                            onClick={() => setPrateleiraModal(shelf)}
+                            title="Editar prateleira"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-11 text-destructive hover:text-destructive"
+                            aria-label={`Excluir prateleira ${shelf.codigo}`}
+                            title="Excluir prateleira"
+                            onClick={() => {
+                              if (window.confirm(`Excluir a prateleira ${shelf.codigo}?`))
+                                deletePrateleiraMutation.mutate(shelf.id);
+                            }}
+                            disabled={deletePrateleiraMutation.isPending}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      )
+                    : undefined
+                }
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1226,64 +1448,19 @@ function EstoquePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {loadingPos ? (
-                <div className="p-6">
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : filteredPosicao.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  Nenhum saldo registrado.
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead>Depósito</TableHead>
-                      <TableHead className="text-center">Unidade</TableHead>
-                      <TableHead className="text-right">Saldo Físico</TableHead>
-                      <TableHead className="text-right">Min/Max</TableHead>
-                      <TableHead>Alerta</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredPosicao.map((pos) => {
-                      const isLow = pos.produtos && pos.saldo <= pos.produtos.estoque_min;
-                      const isZero = pos.saldo <= 0;
-                      return (
-                        <TableRow key={pos.id}>
-                          <TableCell className="font-bold text-xs">{pos.produtos?.sku}</TableCell>
-                          <TableCell className="font-semibold text-xs">
-                            {pos.produtos?.nome}
-                          </TableCell>
-                          <TableCell className="text-xs">{pos.depositos?.nome}</TableCell>
-                          <TableCell className="text-center text-xs">
-                            {pos.produtos?.unidade}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-xs">
-                            {pos.saldo}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            {pos.produtos?.estoque_min || 0} / {pos.produtos?.estoque_max || 0}
-                          </TableCell>
-                          <TableCell>
-                            {isZero ? (
-                              <Badge className="bg-red-600 text-white text-[10px]">ZERADO</Badge>
-                            ) : isLow ? (
-                              <Badge className="bg-amber-500 text-white text-[10px]">BAIXO</Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-green-600 text-[10px]">
-                                NORMAL
-                              </Badge>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              )}
+              <ResponsiveTable
+                columns={posicaoColumns}
+                rows={filteredPosicao}
+                getRowKey={(position) => position.id}
+                loading={
+                  loadingPos && (
+                    <div className="p-6">
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  )
+                }
+                emptyState="Nenhum saldo registrado."
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1385,157 +1562,19 @@ function EstoquePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              {loadingMovs ? (
-                <div className="p-6">
-                  <Skeleton className="h-10 w-full" />
-                </div>
-              ) : filteredMovs.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  Nenhuma movimentação registrada.
-                </div>
-              ) : (
-                <>
-                  <div className="hidden md:block overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data/Hora</TableHead>
-                          <TableHead>Material</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Quantidade</TableHead>
-                          <TableHead>Saldo anterior → após</TableHead>
-                          <TableHead>Obra</TableHead>
-                          <TableHead>Local</TableHead>
-                          <TableHead>Responsável</TableHead>
-                          <TableHead>Justificativa</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredMovs.map((mov) => (
-                          <TableRow key={mov.id}>
-                            <TableCell className="text-xs">
-                              {new Date(mov.created_at).toLocaleString("pt-BR")}
-                            </TableCell>
-                            <TableCell>
-                              <div className="font-semibold text-xs">{mov.produtos?.nome}</div>
-                              <div className="text-[10px] text-muted-foreground">
-                                SKU: {mov.produtos?.sku}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline" className="capitalize text-[10px]">
-                                {mov.tipo === "saida"
-                                  ? "Saída"
-                                  : mov.tipo === "ajuste"
-                                    ? "Ajuste"
-                                    : mov.tipo === "transferencia"
-                                      ? "Transferência"
-                                      : "Entrada"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-xs font-semibold">
-                              {mov.quantidade} {mov.produtos?.unidade || ""}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-xs">
-                              {mov.saldo_anterior ?? "—"} → {mov.saldo_apos}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              {obrasFiltro.find((obra) => obra.id === mov.obra_id)?.nome || "—"}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              {mov.estoque_prateleiras
-                                ? `${mov.estoque_prateleiras.codigo} — ${mov.estoque_prateleiras.nome}`
-                                : mov.deposito_origem?.nome || "—"}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              {perfis.find(
-                                (profile) => profile.user_id === (mov.user_id ?? mov.usuario_id),
-                              )?.nome || "—"}
-                            </TableCell>
-                            <TableCell
-                              className="max-w-56 truncate text-xs"
-                              title={mov.justificativa || mov.observacao || ""}
-                            >
-                              {mov.justificativa || mov.observacao || "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <div className="space-y-3 px-4 pb-4 md:hidden">
-                    {filteredMovs.map((mov) => (
-                      <article key={mov.id} className="rounded-lg border bg-card p-4 text-sm">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-semibold break-words">
-                              {mov.produtos?.nome || "Material"}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              SKU: {mov.produtos?.sku || "—"}
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="shrink-0 capitalize">
-                            {mov.tipo === "saida"
-                              ? "Saída"
-                              : mov.tipo === "ajuste"
-                                ? "Ajuste"
-                                : mov.tipo === "transferencia"
-                                  ? "Transferência"
-                                  : "Entrada"}
-                          </Badge>
-                        </div>
-                        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                          <div>
-                            <dt className="text-muted-foreground">Data</dt>
-                            <dd>{new Date(mov.created_at).toLocaleString("pt-BR")}</dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Quantidade</dt>
-                            <dd>
-                              {mov.quantidade} {mov.produtos?.unidade || ""}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Saldo anterior → após</dt>
-                            <dd>
-                              {mov.saldo_anterior ?? "—"} → {mov.saldo_apos}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Obra</dt>
-                            <dd className="break-words">
-                              {obrasFiltro.find((obra) => obra.id === mov.obra_id)?.nome || "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Local</dt>
-                            <dd className="break-words">
-                              {mov.estoque_prateleiras
-                                ? `${mov.estoque_prateleiras.codigo} — ${mov.estoque_prateleiras.nome}`
-                                : mov.deposito_origem?.nome || "—"}
-                            </dd>
-                          </div>
-                          <div>
-                            <dt className="text-muted-foreground">Responsável</dt>
-                            <dd className="break-words">
-                              {perfis.find(
-                                (profile) => profile.user_id === (mov.user_id ?? mov.usuario_id),
-                              )?.nome || "—"}
-                            </dd>
-                          </div>
-                          <div className="col-span-2">
-                            <dt className="text-muted-foreground">Justificativa</dt>
-                            <dd className="break-words">
-                              {mov.justificativa || mov.observacao || "—"}
-                            </dd>
-                          </div>
-                        </dl>
-                      </article>
-                    ))}
-                  </div>
-                </>
-              )}
+              <ResponsiveTable
+                columns={movimentacaoColumns}
+                rows={filteredMovs}
+                getRowKey={(movement) => movement.id}
+                loading={
+                  loadingMovs && (
+                    <div className="p-6">
+                      <Skeleton className="h-10 w-full" />
+                    </div>
+                  )
+                }
+                emptyState="Nenhuma movimentação registrada."
+              />
             </CardContent>
           </Card>
         </TabsContent>
