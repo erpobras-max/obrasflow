@@ -1,0 +1,119 @@
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+
+const mesSchema = z.object({ mes: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) });
+const timeSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+  .nullable();
+const ajusteSchema = z.object({
+  data: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  hora_entrada: timeSchema,
+  hora_saida_almoco: timeSchema,
+  hora_retorno_almoco: timeSchema,
+  hora_saida: timeSchema,
+  motivo: z.string().trim().min(5).max(1000),
+});
+const marcacaoSchema = z.object({
+  tipo: z.enum(["entrada", "saida_almoco", "retorno_almoco", "saida"]),
+  latitude: z.number().finite().min(-90).max(90).nullable(),
+  longitude: z.number().finite().min(-180).max(180).nullable(),
+  precisao: z.number().finite().nonnegative().nullable(),
+  dispositivo: z.object({
+    navegador: z.string().max(500),
+    plataforma: z.string().max(100),
+    idioma: z.string().max(30),
+  }),
+});
+
+async function requireFuncionario() {
+  const { getPontoFuncionario } = await import("./ponto-session.server");
+  const access = await getPontoFuncionario();
+  if (!access) throw new Error("Acesso ao ponto expirado. Entre novamente com CPF.");
+  return access;
+}
+
+export const obterFuncionarioPontoCpf = createServerFn({ method: "POST" }).handler(async () => {
+  const { getPontoFuncionario } = await import("./ponto-session.server");
+  const access = await getPontoFuncionario();
+  return access?.funcionario ?? null;
+});
+
+export const obterRegistrosPontoCpf = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => mesSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { funcionario, supabaseAdmin } = await requireFuncionario();
+    const primeiroDia = `${data.mes}-01`;
+    const ultimoDia = new Date(Date.UTC(Number(data.mes.slice(0, 4)), Number(data.mes.slice(5)), 0))
+      .toISOString()
+      .slice(0, 10);
+    const { data: registros, error } = await supabaseAdmin
+      .from("registros_ponto")
+      .select(
+        "id,data,hora_entrada,hora_saida_almoco,hora_retorno_almoco,hora_saida,horas_trabalhadas,tipo_dia,observacoes,entrada_localizacao,saida_almoco_localizacao,retorno_almoco_localizacao,saida_localizacao",
+      )
+      .eq("funcionario_id", funcionario.id)
+      .gte("data", primeiroDia)
+      .lte("data", ultimoDia)
+      .order("data", { ascending: false });
+    if (error) throw error;
+    return registros ?? [];
+  });
+
+export const obterAjustesPontoCpf = createServerFn({ method: "POST" }).handler(async () => {
+  const { funcionario, supabaseAdmin } = await requireFuncionario();
+  const { data, error } = await supabaseAdmin
+    .from("solicitacoes_ajuste_ponto")
+    .select(
+      "id,data,hora_entrada,hora_saida_almoco,hora_retorno_almoco,hora_saida,motivo,status,resposta,created_at",
+    )
+    .eq("funcionario_id", funcionario.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+});
+
+export const registrarPontoCpf = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => marcacaoSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { funcionario, supabaseAdmin } = await requireFuncionario();
+    const { error } = await supabaseAdmin.rpc("registrar_ponto_por_cpf", {
+      p_funcionario_id: funcionario.id,
+      p_tipo: data.tipo,
+      p_latitude: data.latitude,
+      p_longitude: data.longitude,
+      p_precisao: data.precisao,
+      p_dispositivo: data.dispositivo,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+export const solicitarAjustePontoCpf = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => ajusteSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { funcionario, supabaseAdmin } = await requireFuncionario();
+    const { data: registro, error: readError } = await supabaseAdmin
+      .from("registros_ponto")
+      .select("id")
+      .eq("funcionario_id", funcionario.id)
+      .eq("data", data.data)
+      .maybeSingle();
+    if (readError) throw readError;
+    const { error } = await supabaseAdmin.from("solicitacoes_ajuste_ponto").insert({
+      funcionario_id: funcionario.id,
+      registro_ponto_id: registro?.id ?? null,
+      ...data,
+      solicitado_por: null,
+      solicitado_via_cpf: true,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
+export const sairDoPontoCpf = createServerFn({ method: "POST" }).handler(async () => {
+  const { getPontoSession } = await import("./ponto-session.server");
+  await (await getPontoSession()).clear();
+  return { ok: true as const };
+});
+
