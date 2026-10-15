@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { accessDiagnostic } from "./acesso-diagnostico";
+import { validarCPF } from "./validacao-documento";
 
 const accessAreaSchema = z.enum(["client", "employee"]);
 const inputSchema = z.object({
@@ -69,7 +70,11 @@ function failAccess(stage: string, error?: unknown, publicMessage?: string): nev
     code: failure?.code ?? null,
     status: failure?.status ?? null,
   });
-  throw new AccessFailure({ ...diagnostic, message: publicMessage ?? diagnostic.message, reference });
+  throw new AccessFailure({
+    ...diagnostic,
+    message: publicMessage ?? diagnostic.message,
+    reference,
+  });
 }
 
 function documentVariants(documento: string) {
@@ -94,7 +99,8 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     failAccess("documento_invalido");
   }
 
-  const { createSupabaseAdminClient } = await import("@/integrations/supabase/client.server.custom");
+  const { createSupabaseAdminClient } =
+    await import("@/integrations/supabase/client.server.custom");
   let supabaseAdmin: ReturnType<typeof createSupabaseAdminClient>;
   try {
     supabaseAdmin = createSupabaseAdminClient();
@@ -103,7 +109,10 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
     // Constructor errors only: strip URLs, credentials and personal values from server diagnostics.
     console.error("[supabase-initialization]", {
       name: failure.name,
-      reason: failure.message.replace(/https?:\/\/\S+|[\w.+-]+@[\w.-]+|[A-Za-z0-9_./+=-]{24,}/g, "[redacted]"),
+      reason: failure.message.replace(
+        /https?:\/\/\S+|[\w.+-]+@[\w.-]+|[A-Za-z0-9_./+=-]{24,}/g,
+        "[redacted]",
+      ),
     });
     failAccess("configurar_servidor", error);
   }
@@ -240,6 +249,7 @@ async function findAuthorizedAccess(area: AccessArea, rawDocument: string) {
 export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => inputSchema.parse(input))
   .handler(async ({ data }) => {
+    if (data.area === "employee") failAccess("fluxo_funcionario_legado");
     const { supabaseAdmin, userId, record } = await findAuthorizedAccess(data.area, data.documento);
     const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
     if (userError || !authUser.user) failAccess("buscar_usuario_auth", userError);
@@ -286,12 +296,15 @@ export const iniciarAcessoPorDocumento = createServerFn({ method: "POST" })
   });
 
 async function gerarSenhaDeAcessoDireto(userId: string) {
-  const { getSupabaseServiceRoleKey } = await import("@/integrations/supabase/client.server.custom");
+  const { getSupabaseServiceRoleKey } =
+    await import("@/integrations/supabase/client.server.custom");
   const secret = getSupabaseServiceRoleKey();
   if (!secret) failAccess("configurar_servidor");
   const input = new TextEncoder().encode(`${userId}:${secret}`);
   const digest = await crypto.subtle.digest("SHA-256", input);
-  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const hex = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
+    "",
+  );
   // O Supabase Auth usa bcrypt, que aceita no máximo 72 bytes de senha.
   // O hash SHA-256 completo fazia a senha ultrapassar esse limite.
   return `ObrasFlow-${hex.slice(0, 32)}!a1`;
@@ -301,19 +314,50 @@ export const acessarDiretoPorDocumento = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => inputSchema.parse(input))
   .handler(async ({ data }) => {
     try {
+      if (data.area === "employee") {
+        const documento = data.documento.replace(/\D/g, "");
+        if (!validarCPF(documento)) failAccess("documento_invalido");
+
+        const [{ createSupabaseAdminClient }, { getPontoSession }] = await Promise.all([
+          import("@/integrations/supabase/client.server.custom"),
+          import("@/lib/ponto-session.server"),
+        ]);
+        const supabaseAdmin = createSupabaseAdminClient();
+        const { data: funcionario, error } = await supabaseAdmin
+          .from("funcionarios")
+          .select("id")
+          .in("cpf", documentVariants(documento))
+          .eq("status", "ativo")
+          .maybeSingle();
+        if (error) failAccess("buscar_cadastro", error);
+        if (!funcionario) failAccess("cadastro_nao_encontrado");
+
+        try {
+          const session = await getPontoSession();
+          await session.update({ funcionarioId: funcionario.id });
+        } catch (sessionError) {
+          failAccess("criar_sessao_ponto", sessionError);
+        }
+        return { ok: true as const, employeeSession: true as const };
+      }
+
       const { supabaseAdmin, userId } = await findAuthorizedAccess(data.area, data.documento);
-      const { data: authUser, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+      const { data: authUser, error: userError } =
+        await supabaseAdmin.auth.admin.getUserById(userId);
       if (userError || !authUser.user) failAccess("buscar_usuario_auth", userError);
       if (!authUser.user.email) failAccess("auth_sem_email");
 
       const password = await gerarSenhaDeAcessoDireto(userId);
-      const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, { password });
-      if (passwordError) failAccess("preparar_acesso_direto", passwordError);
-
-      const { data: sessionData, error: sessionError } = await supabaseAdmin.auth.signInWithPassword({
-        email: authUser.user.email,
+      const { error: passwordError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
         password,
       });
+      if (passwordError) failAccess("preparar_acesso_direto", passwordError);
+
+      const { data: sessionData, error: sessionError } =
+        await supabaseAdmin.auth.signInWithPassword({
+          email: authUser.user.email,
+          password,
+        });
       if (sessionError || !sessionData.session) failAccess("criar_sessao_direta", sessionError);
 
       return {
@@ -333,6 +377,7 @@ export const acessarDiretoPorDocumento = createServerFn({ method: "POST" })
 export const confirmarAcessoPorDocumento = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => confirmationSchema.parse(input))
   .handler(async ({ data }) => {
+    if (data.area === "employee") failAccess("fluxo_funcionario_legado");
     const { supabaseAdmin, userId, record } = await findAuthorizedAccess(data.area, data.documento);
     const phone = normalizeBrazilianPhone(record.celular || record.telefone);
     if (!phone) throw new Error(INVALID_CODE_ERROR);
@@ -352,3 +397,4 @@ export const confirmarAcessoPorDocumento = createServerFn({ method: "POST" })
       refreshToken: sessionData.session.refresh_token,
     };
   });
+
