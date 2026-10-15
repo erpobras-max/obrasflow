@@ -25,6 +25,14 @@ import { eachDayOfInterval, endOfMonth, format, isWeekend, parseISO, startOfMont
 import { ptBR } from "date-fns/locale";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client.custom";
+import {
+  obterAjustesPontoCpf,
+  obterFuncionarioPontoCpf,
+  obterRegistrosPontoCpf,
+  registrarPontoCpf,
+  sairDoPontoCpf,
+  solicitarAjustePontoCpf,
+} from "@/lib/ponto.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,19 +123,11 @@ function PontoPage() {
     const timer = window.setInterval(() => setAgora(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
-  useEffect(() => {
-    if (!loading && !user) navigate({ to: "/auth", replace: true });
-    else if (!loading && perfil?.ativo === false)
-      void supabase.auth.signOut().then(() => navigate({ to: "/auth", replace: true }));
-    else if (!loading && !roles.some((r) => ["funcionario", "admin", "rh", "diretor"].includes(r)))
-      navigate({ to: "/dashboard", replace: true });
-  }, [loading, user, perfil?.ativo, roles, navigate]);
-
   const { data: funcionario, isLoading: loadingFunc } = useQuery<Funcionario | null>({
-    queryKey: ["ponto-funcionario", user?.id],
-    enabled: !!user,
+    queryKey: ["ponto-funcionario", user?.id ?? "cpf"],
+    enabled: !loading,
     queryFn: async () => {
-      if (!user) return null;
+      if (!user) return (await obterFuncionarioPontoCpf()) as Funcionario | null;
       const { data, error } = await (supabase as any)
         .from("funcionarios")
         .select("id,nome,cargo,matricula,obra_id,carga_horaria_semanal")
@@ -137,6 +137,14 @@ function PontoPage() {
       return data as Funcionario | null;
     },
   });
+  useEffect(() => {
+    if (loading || loadingFunc) return;
+    if (!user && !funcionario) navigate({ to: "/auth", replace: true });
+    else if (user && perfil?.ativo === false)
+      void supabase.auth.signOut().then(() => navigate({ to: "/auth", replace: true }));
+    else if (user && !roles.some((r) => ["funcionario", "admin", "rh", "diretor"].includes(r)))
+      navigate({ to: "/dashboard", replace: true });
+  }, [loading, loadingFunc, user, funcionario, perfil?.ativo, roles, navigate]);
   const hoje = format(new Date(), "yyyy-MM-dd");
   const inicio = `${mes}-01`,
     fim = format(endOfMonth(parseISO(inicio)), "yyyy-MM-dd");
@@ -144,6 +152,7 @@ function PontoPage() {
     queryKey: ["ponto-registros", funcionario?.id, mes],
     enabled: !!funcionario,
     queryFn: async () => {
+      if (!user) return (await obterRegistrosPontoCpf({ data: { mes } })) as RegistroPonto[];
       const { data, error } = await (supabase as any)
         .from("registros_ponto")
         .select("*")
@@ -159,6 +168,7 @@ function PontoPage() {
     queryKey: ["ponto-ajustes", funcionario?.id],
     enabled: !!funcionario,
     queryFn: async () => {
+      if (!user) return (await obterAjustesPontoCpf()) as SolicitacaoAjuste[];
       const { data, error } = await (supabase as any)
         .from("solicitacoes_ajuste_ponto")
         .select("*")
@@ -214,6 +224,22 @@ function PontoPage() {
   const registrar = useMutation({
     mutationFn: async (tipo: Marcacao) => {
       const local = await gps();
+      if (!user) {
+        await registrarPontoCpf({
+          data: {
+            tipo,
+            latitude: local?.latitude ?? null,
+            longitude: local?.longitude ?? null,
+            precisao: local?.precisao ?? null,
+            dispositivo: {
+              navegador: navigator.userAgent,
+              plataforma: navigator.platform,
+              idioma: navigator.language,
+            },
+          },
+        });
+        return;
+      }
       const { error } = await (supabase as any).rpc("registrar_ponto_funcionario", {
         p_tipo: tipo,
         p_latitude: local?.latitude ?? null,
@@ -237,6 +263,19 @@ function PontoPage() {
     mutationFn: async () => {
       if (!funcionario || ajuste.motivo.trim().length < 5)
         throw new Error("Explique o motivo do ajuste.");
+      if (!user) {
+        await solicitarAjustePontoCpf({
+          data: {
+            data: ajuste.data,
+            hora_entrada: ajuste.hora_entrada || null,
+            hora_saida_almoco: ajuste.hora_saida_almoco || null,
+            hora_retorno_almoco: ajuste.hora_retorno_almoco || null,
+            hora_saida: ajuste.hora_saida || null,
+            motivo: ajuste.motivo.trim(),
+          },
+        });
+        return;
+      }
       const atual = registros.find((r) => r.data === ajuste.data);
       const { error } = await (supabase as any).from("solicitacoes_ajuste_ponto").insert({
         funcionario_id: funcionario.id,
@@ -275,7 +314,11 @@ function PontoPage() {
     setMes(format(d, "yyyy-MM"));
   }
   async function sair() {
-    await supabase.auth.signOut();
+    if (user) await supabase.auth.signOut();
+    else await sairDoPontoCpf();
+    void qc.removeQueries({ queryKey: ["ponto-funcionario"] });
+    void qc.removeQueries({ queryKey: ["ponto-registros"] });
+    void qc.removeQueries({ queryKey: ["ponto-ajustes"] });
     navigate({ to: "/auth", replace: true });
   }
   if (loading || loadingFunc)
@@ -664,3 +707,4 @@ function PontoPage() {
     </div>
   );
 }
+
