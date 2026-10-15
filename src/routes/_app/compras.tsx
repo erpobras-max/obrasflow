@@ -517,7 +517,7 @@ function ComprasPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={mudarAba} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 max-w-lg">
+        <TabsList className="gap-1">
           <TabsTrigger value="solicitacoes">Solicitações</TabsTrigger>
           <TabsTrigger value="pedidos">Pedidos</TabsTrigger>
           <TabsTrigger value="fornecedores">Fornecedores</TabsTrigger>

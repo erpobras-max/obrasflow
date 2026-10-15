@@ -482,7 +482,7 @@ function ObraFormDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
             <Tabs defaultValue="dados">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="gap-1">
                 <TabsTrigger value="dados">Dados</TabsTrigger>
                 <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
                 <TabsTrigger value="itr">ITRs</TabsTrigger>

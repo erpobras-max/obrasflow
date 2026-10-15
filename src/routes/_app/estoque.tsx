@@ -1029,24 +1029,24 @@ function EstoquePage() {
             Ficha de produtos, múltiplos depósitos e auditoria de movimentações.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
+        <div className="flex w-full flex-wrap gap-2 [&_button]:min-h-11 sm:w-auto">
           {podeEditar && (
-            <Button variant="outline" className="gap-2" onClick={() => setAjusteModalOpen(true)}>
+            <Button variant="outline" className="w-full gap-2 sm:w-auto" onClick={() => setAjusteModalOpen(true)}>
               <GitCompare className="size-4" /> Ajustar Saldo
             </Button>
           )}
           {activeTab === "produtos" && podeEditar && (
-            <Button className="gap-2" onClick={() => setProductModal("new")}>
+            <Button className="w-full gap-2 sm:w-auto" onClick={() => setProductModal("new")}>
               <Plus className="size-4" /> Novo Produto
             </Button>
           )}
           {activeTab === "depositos" && podeEditar && (
-            <Button className="gap-2" onClick={() => setDepositoModal("new")}>
+            <Button className="w-full gap-2 sm:w-auto" onClick={() => setDepositoModal("new")}>
               <Plus className="size-4" /> Novo Depósito
             </Button>
           )}
           {activeTab === "etiquetas" && (
-            <Button className="gap-2" onClick={printQrLabels}>
+            <Button className="w-full gap-2 sm:w-auto" onClick={printQrLabels}>
               <Printer className="size-4" /> Imprimir selecionadas
             </Button>
           )}
@@ -1283,13 +1283,14 @@ function EstoquePage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
+              <div className="grid min-w-0 gap-4 lg:grid-cols-2">
+                <div className="min-w-0 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold">Produtos</h3>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="min-h-11 shrink-0"
                       onClick={() =>
                         setSelectedProductIds(
                           selectedProductIds.length === (produtos ?? []).length
@@ -1304,14 +1305,14 @@ function EstoquePage() {
                         : "Selecionar todos"}
                     </Button>
                   </div>
-                  <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
+                  <div className="max-h-64 min-w-0 space-y-1 overflow-y-auto rounded-md border p-2">
                     {(produtos ?? []).map((product) => {
                       const checked = selectedProductIds.includes(product.id);
                       return (
                         <button
                           type="button"
                           key={product.id}
-                          className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-muted"
+                          className="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-muted"
                           onClick={() =>
                             toggleSelected(product.id, selectedProductIds, setSelectedProductIds)
                           }
@@ -1322,7 +1323,7 @@ function EstoquePage() {
                             <Square className="size-4 text-muted-foreground" />
                           )}
                           <span className="min-w-0 flex-1 truncate">{product.nome}</span>
-                          <span className="font-mono text-xs text-muted-foreground">
+                          <span className="max-w-24 shrink-0 truncate font-mono text-xs text-muted-foreground">
                             {product.sku}
                           </span>
                         </button>
@@ -1331,12 +1332,13 @@ function EstoquePage() {
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-sm font-semibold">Prateleiras</h3>
                     <Button
                       variant="outline"
                       size="sm"
+                      className="min-h-11 shrink-0"
                       onClick={() =>
                         setSelectedPrateleiraIds(
                           selectedPrateleiraIds.length === (prateleiras ?? []).length
@@ -1351,14 +1353,14 @@ function EstoquePage() {
                         : "Selecionar todas"}
                     </Button>
                   </div>
-                  <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border p-2">
+                  <div className="max-h-64 min-w-0 space-y-1 overflow-y-auto rounded-md border p-2">
                     {(prateleiras ?? []).map((shelf) => {
                       const checked = selectedPrateleiraIds.includes(shelf.id);
                       return (
                         <button
                           type="button"
                           key={shelf.id}
-                          className="flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-muted"
+                          className="flex min-h-11 w-full min-w-0 items-center gap-3 rounded-md px-3 text-left text-sm hover:bg-muted"
                           onClick={() =>
                             toggleSelected(
                               shelf.id,
@@ -1373,7 +1375,7 @@ function EstoquePage() {
                             <Square className="size-4 text-muted-foreground" />
                           )}
                           <span className="min-w-0 flex-1 truncate">{shelf.nome}</span>
-                          <span className="font-mono text-xs text-muted-foreground">
+                          <span className="max-w-24 shrink-0 truncate font-mono text-xs text-muted-foreground">
                             {shelf.codigo}
                           </span>
                         </button>
@@ -1415,16 +1417,16 @@ function EstoquePage() {
         {/* TAB: POSICAO */}
         <TabsContent value="posicao" className="space-y-4">
           <Card>
-            <CardHeader className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div>
+            <CardHeader className="flex min-w-0 flex-col items-stretch justify-between gap-4 p-4 sm:flex-row sm:items-center">
+              <div className="min-w-0">
                 <CardTitle className="text-md">Saldos Físicos em Estoque</CardTitle>
                 <CardDescription>
                   Consulta rápida de saldos agrupados por local de armazenamento.
                 </CardDescription>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
+              <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:w-auto sm:grid-cols-[minmax(10rem,1fr)_minmax(12rem,1fr)_auto]">
                 <Select value={filterDep} onValueChange={setFilterDep}>
-                  <SelectTrigger className="w-56 h-9">
+                  <SelectTrigger className="h-11 w-full min-w-0 sm:h-9 sm:w-56">
                     <SelectValue placeholder="Selecione o Depósito" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1440,9 +1442,9 @@ function EstoquePage() {
                   placeholder="Buscar por SKU/nome..."
                   value={searchPos}
                   onChange={(e) => setSearchPos(e.target.value)}
-                  className="w-56 h-9"
+                  className="h-11 w-full min-w-0 sm:h-9 sm:w-56"
                 />
-                <Button variant="outline" size="sm" onClick={handleExportExcel} className="gap-1">
+                <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-11 w-full gap-1 sm:w-auto">
                   <FileSpreadsheet className="size-4" /> Exportar
                 </Button>
               </div>
@@ -1719,7 +1721,7 @@ function ProductForm({
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSave)} className="space-y-4">
         <Tabs defaultValue="geral" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="gap-1">
             <TabsTrigger value="geral">Geral</TabsTrigger>
             <TabsTrigger value="precos">Preços</TabsTrigger>
             <TabsTrigger value="estoque">Estoque</TabsTrigger>

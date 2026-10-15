@@ -1149,14 +1149,14 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
       </div>
 
       {/* Global Filter Bar */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 p-4 rounded-lg border bg-card/60 backdrop-blur-sm">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+      <div className="flex min-w-0 flex-col items-stretch justify-between gap-4 rounded-lg border bg-card/60 p-4 backdrop-blur-sm md:flex-row md:items-center">
+        <div className="flex min-w-0 flex-col items-start gap-4 md:flex-row md:items-center">
+          <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
               <Search className="size-4" /> Filtrar por Obra:
             </div>
             <Select value={filtroObra} onValueChange={setFiltroObra}>
-              <SelectTrigger className="w-[240px]">
+              <SelectTrigger className="h-11 w-full min-w-0 sm:w-[240px]">
                 <SelectValue placeholder="Todas as obras" />
               </SelectTrigger>
               <SelectContent>
@@ -1171,8 +1171,8 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
             </Select>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+          <div className="flex w-full min-w-0 flex-col items-start gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
               Origem:
             </div>
             {scopedOrigin ? (
@@ -1181,7 +1181,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
               </Badge>
             ) : (
               <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="h-11 w-full min-w-0 sm:w-[180px]">
                   <SelectValue placeholder="Todos os Lançamentos" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1252,7 +1252,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
 
       {/* Primary Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6 max-w-[850px]">
+        <TabsList className="gap-1">
           <TabsTrigger value="receber">Contas a Receber</TabsTrigger>
           <TabsTrigger value="pagar">Contas a Pagar</TabsTrigger>
           <TabsTrigger value="fluxo">Fluxo de Caixa</TabsTrigger>
@@ -1293,7 +1293,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
               onValueChange={setFiltroStatusReceber}
               className="w-auto"
             >
-              <TabsList className="scale-90 origin-left">
+              <TabsList className="gap-1">
                 <TabsTrigger value="todos">Todos</TabsTrigger>
                 <TabsTrigger value="aberta">Abertas</TabsTrigger>
                 <TabsTrigger value="recebida">Recebidas</TabsTrigger>
@@ -1439,7 +1439,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
         <TabsContent value="pagar" className="space-y-4">
           <div className="flex justify-between items-center">
             <Tabs value={filtroStatusPagar} onValueChange={setFiltroStatusPagar} className="w-auto">
-              <TabsList className="scale-90 origin-left">
+              <TabsList className="gap-1">
                 <TabsTrigger value="todos">Todos</TabsTrigger>
                 <TabsTrigger value="aberta">Abertas</TabsTrigger>
                 <TabsTrigger value="paga">Pagas</TabsTrigger>

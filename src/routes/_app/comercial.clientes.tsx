@@ -26,9 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
@@ -273,9 +271,9 @@ function ClientesPage() {
         </p>
       </div>
 
-      <div className="space-y-4">
-        <div className="flex gap-3 flex-wrap items-center">
-          <div className="relative flex-1 min-w-[220px] max-w-md">
+      <div className="min-w-0 space-y-4">
+        <div className="grid min-w-0 grid-cols-2 items-center gap-3 sm:flex sm:flex-wrap">
+          <div className="relative col-span-2 min-w-0 sm:col-span-1 sm:min-w-[220px] sm:max-w-md sm:flex-1">
             <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar por nome, documento ou email..."
@@ -285,7 +283,7 @@ function ClientesPage() {
             />
           </div>
           <Select value={filterTipo} onValueChange={setFilterTipo}>
-            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-11 w-full min-w-0 sm:w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos tipos</SelectItem>
               <SelectItem value="pf">Pessoa Física</SelectItem>
@@ -293,7 +291,7 @@ function ClientesPage() {
             </SelectContent>
           </Select>
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="h-11 w-full min-w-0 sm:w-[140px]"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos status</SelectItem>
               <SelectItem value="ativo">Ativo</SelectItem>
@@ -301,23 +299,23 @@ function ClientesPage() {
               <SelectItem value="inativo">Inativo</SelectItem>
             </SelectContent>
           </Select>
-          <div className="flex gap-2 ml-auto">
+          <div className="col-span-2 grid min-w-0 grid-cols-2 gap-2 sm:ml-auto sm:flex sm:w-auto">
             <Button
               variant="outline"
               onClick={handleExportExcel}
-              className="gap-2 h-9"
+              className="min-h-11 min-w-0 gap-2 sm:h-9"
             >
               <FileSpreadsheet className="size-4 text-emerald-600" /> Exportar
             </Button>
             {podeEditar && (
               <>
-                <label className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground h-9 px-3 py-2 cursor-pointer gap-2">
+                <label className="inline-flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer sm:h-9">
                   <Upload className="size-4 text-blue-600" /> Importar
                   <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleImportExcel} />
                 </label>
                 <Button
                   onClick={() => { setEditTarget(null); setFormOpen(true); }}
-                  className="gap-2 h-9"
+                  className="col-span-2 min-h-11 min-w-0 gap-2 sm:col-span-1 sm:h-9"
                 >
                   <Plus className="size-4" /> Novo cliente
                 </Button>
@@ -326,87 +324,56 @@ function ClientesPage() {
           </div>
         </div>
 
-        <div className="rounded-lg border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome / Razão Social</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Documento</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Cidade</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : filtered.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-10">
-                    Nenhum cliente encontrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filtered.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell>
-                      <div className="font-medium">{c.nome}</div>
-                      {c.nome_fantasia && (
-                        <div className="text-xs text-muted-foreground">{c.nome_fantasia}</div>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{c.tipo === "pf" ? "PF" : "PJ"}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{formatCpfCnpj(c.cpf_cnpj)}</TableCell>
-                    <TableCell className="text-sm">
-                      <div>{c.email ?? "—"}</div>
-                      {(c.celular || c.telefone) && (
-                        <div className="text-xs text-muted-foreground">
-                          {formatTelefone(c.celular || c.telefone || "")}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {c.cidade ? `${c.cidade}${c.uf ? "/" + c.uf : ""}` : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={cn("border-0", STATUS_BADGE[c.status])}>
-                        {STATUS_LABEL[c.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button size="icon" variant="ghost" onClick={() => setViewTarget(c)}>
-                          <Eye className="size-4" />
-                        </Button>
-                        {podeEditar && (
-                          <>
-                            <Button size="icon" variant="ghost" onClick={() => { setEditTarget(c); setFormOpen(true); }}>
-                              <Pencil className="size-4" />
-                            </Button>
-                            {perfil?.perfil === "admin" && (
-                              <Button size="icon" variant="ghost" onClick={() => setDeleteTarget(c)}>
-                                <Trash2 className="size-4 text-destructive" />
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
+          <ResponsiveTable<ClienteRow>
+            columns={[
+              {
+                key: "nome",
+                header: "Nome / Razão Social",
+                mobileLabel: "Cliente",
+                priority: "essential",
+                cell: (c) => (
+                  <div className="min-w-0">
+                    <div className="break-words font-medium">{c.nome}</div>
+                    {c.nome_fantasia && <div className="break-words text-xs text-muted-foreground">{c.nome_fantasia}</div>}
+                  </div>
+                ),
+              },
+              {
+                key: "documento",
+                header: "Documento",
+                mobileLabel: "CPF / CNPJ",
+                priority: "essential",
+                cell: (c) => <span className="break-all font-mono text-xs">{formatCpfCnpj(c.cpf_cnpj)}</span>,
+              },
+              { key: "tipo", header: "Tipo", mobileLabel: "Tipo", priority: "secondary", cell: (c) => <Badge variant="outline">{c.tipo === "pf" ? "PF" : "PJ"}</Badge> },
+              {
+                key: "contato",
+                header: "Contato",
+                mobileLabel: "Contato",
+                priority: "secondary",
+                cell: (c) => (
+                  <div className="min-w-0 break-words text-sm">
+                    <div>{c.email || "—"}</div>
+                    {(c.celular || c.telefone) && <div className="text-xs text-muted-foreground">{formatTelefone(c.celular || c.telefone || "")}</div>}
+                  </div>
+                ),
+              },
+              { key: "cidade", header: "Cidade", mobileLabel: "Cidade", priority: "secondary", cell: (c) => c.cidade ? `${c.cidade}${c.uf ? `/${c.uf}` : ""}` : "—" },
+              { key: "status", header: "Status", mobileLabel: "Status", priority: "essential", cell: (c) => <Badge className={cn("border-0", STATUS_BADGE[c.status])}>{STATUS_LABEL[c.status]}</Badge> },
+            ]}
+            rows={filtered}
+            getRowKey={(c) => c.id}
+            loading={isLoading && <div className="space-y-3 p-4">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>}
+            emptyState="Nenhum cliente encontrado."
+            renderActions={(c) => (
+              <div className="flex flex-wrap justify-end gap-1">
+                <Button size="icon" variant="ghost" className="size-11" aria-label={`Ver ${c.nome}`} onClick={() => setViewTarget(c)}><Eye className="size-4" /></Button>
+                {podeEditar && <Button size="icon" variant="ghost" className="size-11" aria-label={`Editar ${c.nome}`} onClick={() => { setEditTarget(c); setFormOpen(true); }}><Pencil className="size-4" /></Button>}
+                {perfil?.perfil === "admin" && <Button size="icon" variant="ghost" className="size-11" aria-label={`Remover ${c.nome}`} onClick={() => setDeleteTarget(c)}><Trash2 className="size-4 text-destructive" /></Button>}
+              </div>
+            )}
+          />
         </div>
 
         <ClienteFormDialog

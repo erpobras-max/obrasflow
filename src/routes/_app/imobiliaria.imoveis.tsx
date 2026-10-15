@@ -523,9 +523,9 @@ function ImoveisPage() {
             className="pl-9"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <Select value={filterTipo} onValueChange={setFilterTipo}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="h-11 w-full min-w-0 sm:w-[150px]">
               <SelectValue placeholder="Tipo" />
             </SelectTrigger>
             <SelectContent>
@@ -538,7 +538,7 @@ function ImoveisPage() {
           </Select>
 
           <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[150px]">
+            <SelectTrigger className="h-11 w-full min-w-0 sm:w-[150px]">
               <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>

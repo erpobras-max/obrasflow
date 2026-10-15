@@ -29,9 +29,7 @@ import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -136,20 +134,20 @@ function UsuariosPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Usuários & Permissões</h1>
           <p className="text-sm text-muted-foreground">
             Gerencie os usuários do sistema e seus perfis de acesso.
           </p>
         </div>
-        <Button onClick={() => setInviteOpen(true)} className="gap-2">
+        <Button onClick={() => setInviteOpen(true)} className="min-h-11 max-w-full gap-2">
           <Plus className="size-4" /> Convidar usuário
         </Button>
       </div>
 
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[220px] max-w-md">
+      <div className="grid min-w-0 grid-cols-2 gap-3 sm:flex sm:flex-wrap">
+        <div className="relative col-span-2 min-w-0 sm:col-span-1 sm:min-w-[220px] sm:max-w-md sm:flex-1">
           <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Buscar por nome ou email..."
@@ -159,7 +157,7 @@ function UsuariosPage() {
           />
         </div>
         <Select value={filterRole} onValueChange={setFilterRole}>
-          <SelectTrigger className="w-[180px]"><SelectValue placeholder="Perfil" /></SelectTrigger>
+          <SelectTrigger className="h-11 w-full min-w-0 sm:w-[180px]"><SelectValue placeholder="Perfil" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos os perfis</SelectItem>
             {ROLE_OPTIONS.map((r) => (
@@ -168,7 +166,7 @@ function UsuariosPage() {
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="h-11 w-full min-w-0 sm:w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos status</SelectItem>
             <SelectItem value="active">Ativos</SelectItem>
@@ -177,77 +175,52 @@ function UsuariosPage() {
         </Select>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Cargos</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Cadastro</TableHead>
-              <TableHead className="text-right">Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
-                    <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-10">
-                  Nenhum usuário encontrado.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.nome}</TableCell>
-                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                  <TableCell>
-                    <div className="flex max-w-sm flex-wrap gap-1.5">
-                      {u.roles.map((role) => (
-                        <Badge key={role} variant="outline" className={cn("border", ROLE_BADGE_CLASS[role])}>
-                          {ROLE_LABEL[role]}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={u.ativo ? "default" : "secondary"} className={u.ativo ? "bg-green-600 hover:bg-green-600" : ""}>
-                      {u.ativo ? "Ativo" : "Inativo"}
+      <div className="min-w-0 overflow-hidden rounded-lg border bg-card">
+        <ResponsiveTable<(typeof filtered)[number]>
+          columns={[
+            { key: "nome", header: "Nome", mobileLabel: "Usuário", priority: "essential", cell: (user) => <span className="break-words font-medium">{user.nome}</span> },
+            { key: "email", header: "E-mail", mobileLabel: "E-mail", priority: "essential", cell: (user) => <span className="break-all text-muted-foreground">{user.email}</span> },
+            {
+              key: "cargos",
+              header: "Cargos",
+              mobileLabel: "Cargos",
+              priority: "essential",
+              cell: (user) => (
+                <div className="flex max-w-sm flex-wrap gap-1.5">
+                  {user.roles.map((role) => (
+                    <Badge key={role} variant="outline" className={cn("border", ROLE_BADGE_CLASS[role])}>
+                      {ROLE_LABEL[role]}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {new Date(u.created_at).toLocaleDateString("pt-BR")}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button variant="ghost" size="sm" onClick={() => setEditTarget(u)} className="gap-1">
-                        <Pencil className="size-3.5" /> Editar
-                      </Button>
-                      {u.user_id !== perfil?.user_id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteTarget(u)}
-                          className="gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 className="size-3.5" /> Excluir
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+                  ))}
+                </div>
+              ),
+            },
+            {
+              key: "status",
+              header: "Status",
+              mobileLabel: "Status",
+              priority: "essential",
+              cell: (user) => <Badge variant={user.ativo ? "default" : "secondary"} className={user.ativo ? "bg-green-600 hover:bg-green-600" : ""}>{user.ativo ? "Ativo" : "Inativo"}</Badge>,
+            },
+            { key: "cadastro", header: "Cadastro", mobileLabel: "Data de cadastro", priority: "secondary", cell: (user) => new Date(user.created_at).toLocaleDateString("pt-BR") },
+          ]}
+          rows={filtered}
+          getRowKey={(user) => user.id}
+          loading={isLoading && <div className="space-y-3 p-4">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-16 w-full" />)}</div>}
+          emptyState="Nenhum usuário encontrado."
+          renderActions={(user) => (
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" size="sm" className="min-h-11 gap-1" onClick={() => setEditTarget(user)}>
+                <Pencil className="size-3.5" /> Editar
+              </Button>
+              {user.user_id !== perfil?.user_id && (
+                <Button variant="outline" size="sm" className="min-h-11 gap-1 text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleteTarget(user)}>
+                  <Trash2 className="size-3.5" /> Excluir
+                </Button>
+              )}
+            </div>
+          )}
+        />
       </div>
 
       <InviteDialog

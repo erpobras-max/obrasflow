@@ -370,14 +370,14 @@ function PontoPage() {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 md:py-8">
         <Tabs defaultValue="hoje" className="space-y-5">
-          <TabsList className="grid h-auto w-full grid-cols-3 bg-white p-1 shadow-sm md:w-[460px] print:hidden">
-            <TabsTrigger value="hoje" className="min-h-10">
+          <TabsList className="h-auto gap-1 bg-white p-1 shadow-sm print:hidden">
+            <TabsTrigger value="hoje" className="min-h-11">
               Hoje
             </TabsTrigger>
-            <TabsTrigger value="espelho" className="min-h-10">
+            <TabsTrigger value="espelho" className="min-h-11">
               Espelho mensal
             </TabsTrigger>
-            <TabsTrigger value="ajustes" className="min-h-10">
+            <TabsTrigger value="ajustes" className="min-h-11">
               Ajustes
             </TabsTrigger>
           </TabsList>
