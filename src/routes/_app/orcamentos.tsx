@@ -14,6 +14,7 @@ import {
 import { supabase as supabaseOriginal } from "@/integrations/supabase/client.custom";
 const supabase = supabaseOriginal as any;
 import { useAuth } from "@/hooks/use-auth";
+import { importarSINAPI } from "@/lib/sinapi-import.functions";
 import {
   orcamentoItemSchema,
   type OrcamentoItemFormValues,
@@ -1127,6 +1128,16 @@ function OrcamentosPage() {
                       <Upload className="size-4" />
                       Carregar Catálogo Público
                     </Button>
+                    <Button
+                      variant="default"
+                      className="gap-2 text-sm"
+                      onClick={() => {
+                        toast.info("Funcionalidade de busca automática em implementação.");
+                      }}
+                    >
+                      <RefreshCw className="size-4" />
+                      Buscar da Caixa
+                    </Button>
                   </div>
                 )}
               </div>
@@ -1150,15 +1161,12 @@ function OrcamentosPage() {
                 {/* Tipo de Tabela */}
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-muted-foreground">Tipo de Base</label>
-                  <Select value={refType} onValueChange={(v: any) => setRefType(v)}>
-                    <SelectTrigger id="ref-filter-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="insumos">Insumos (Materiais/Mão de Obra)</SelectItem>
-                      <SelectItem value="composicoes">Composições de Serviço</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Tabs value={refType} onValueChange={(v: any) => setRefType(v)}>
+                    <TabsList className="grid w-full grid-cols-2 h-9">
+                      <TabsTrigger value="insumos" className="text-xs">Insumos</TabsTrigger>
+                      <TabsTrigger value="composicoes" className="text-xs">Composições</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </div>
 
                 {/* UF */}
