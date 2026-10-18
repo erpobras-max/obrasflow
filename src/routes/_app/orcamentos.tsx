@@ -7,8 +7,20 @@ import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import {
-  Calculator, Plus, Search, FileSpreadsheet, Database, Upload, Trash2,
-  AlertCircle, Check, Loader2, ArrowUpDown, ChevronDown, RefreshCw, HelpCircle
+  Calculator,
+  Plus,
+  Search,
+  FileSpreadsheet,
+  Database,
+  Upload,
+  Trash2,
+  AlertCircle,
+  Check,
+  Loader2,
+  ArrowUpDown,
+  ChevronDown,
+  RefreshCw,
+  HelpCircle,
 } from "lucide-react";
 
 import { supabase as supabaseOriginal } from "@/integrations/supabase/client.custom";
@@ -20,18 +32,51 @@ import {
   type ReferenciaInsumoRow,
   type ReferenciaComposicaoRow,
   type OrcamentoRow,
-  type OrcamentoItemRow
+  type OrcamentoItemRow,
 } from "@/lib/orcamentos.schema";
+import {
+  UFS_BRASIL,
+  competenciaSort,
+  sanitizeSearchTerm,
+  parseMetadataFromFileName,
+} from "@/lib/sinapi";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 
@@ -46,7 +91,7 @@ const fmtQty = (v: number) =>
   v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 
 const parseCurrencyToCentavos = (val: any): number => {
-  if (typeof val === 'number') return Math.round(val * 100);
+  if (typeof val === "number") return Math.round(val * 100);
   if (!val) return 0;
   const cleaned = String(val)
     .replace(/R\$\s*/gi, "")
@@ -58,7 +103,7 @@ const parseCurrencyToCentavos = (val: any): number => {
 };
 
 const parseQuantity = (val: any): number => {
-  if (typeof val === 'number') return val;
+  if (typeof val === "number") return val;
   if (!val) return 0;
   const cleaned = String(val).replace(/\./g, "").replace(/,/g, ".").trim();
   const num = parseFloat(cleaned);
@@ -139,9 +184,10 @@ function OrcamentosPage() {
   // Seleciona a obra indicada pela tela de Obras; se ausente, usa a primeira disponível.
   useEffect(() => {
     if (!obras?.length || selectedObraId) return;
-    const obraParam = typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("obra")
-      : null;
+    const obraParam =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("obra")
+        : null;
     const obraInicial = obras.find((obra: any) => obra.id === obraParam) ?? obras[0];
     setSelectedObraId(obraInicial.id);
   }, [obras, selectedObraId]);
@@ -156,15 +202,17 @@ function OrcamentosPage() {
     queryKey: ["orcamento-for-obra", selectedObraId],
     enabled: !!selectedObraId,
     queryFn: async () => {
-      let { data, error } = await supabase
+      let finalData: OrcamentoRow | null = null;
+      const { data, error } = await supabase
         .from("orcamentos")
         .select("*")
         .eq("obra_id", selectedObraId)
         .maybeSingle();
 
       if (error) throw error;
+      finalData = data as OrcamentoRow;
 
-      if (!data && podeEditar) {
+      if (!finalData && podeEditar) {
         // Auto-create budget entry if it doesn't exist
         const { data: newOrc, error: insertErr } = await supabase
           .from("orcamentos")
@@ -172,9 +220,9 @@ function OrcamentosPage() {
           .select("*")
           .single();
         if (insertErr) throw insertErr;
-        data = newOrc;
+        finalData = newOrc as OrcamentoRow;
       }
-      return data as OrcamentoRow;
+      return finalData;
     },
   });
 
@@ -194,24 +242,64 @@ function OrcamentosPage() {
     },
   });
 
+  // Consultar competências disponíveis no banco de dados para a fonte e UF selecionadas
+  const { data: dbCompetencias = [], isLoading: loadingCompetencias } = useQuery<string[]>({
+    queryKey: ["reference-catalog-competencias", refSource, refType, refUF],
+    queryFn: async (): Promise<string[]> => {
+      const isCompo = refType === "composicoes";
+      const table = isCompo ? "referencia_composicoes" : "referencia_insumos";
+
+      const { data, error } = await supabase
+        .from(table)
+        .select("mes_referencia")
+        .eq("fonte", refSource)
+        .eq("uf", refUF)
+        .limit(1000);
+
+      if (error) {
+        console.warn("Erro ao buscar competências disponíveis:", error.message);
+        return [];
+      }
+
+      const distinct: string[] = Array.from(
+        new Set<string>((data ?? []).map((item: any) => String(item.mes_referencia)))
+      );
+      return distinct.sort(competenciaSort);
+    },
+  });
+
+  // Se houver competências no banco e a selecionada não possuir dados,
+  // ajusta automaticamente para a competência mais recente disponível
+  useEffect(() => {
+    if (dbCompetencias.length > 0 && !dbCompetencias.includes(refMes)) {
+      setRefMes(dbCompetencias[0]);
+    }
+  }, [dbCompetencias, refMes]);
+
+  // Termo de busca sanitizado contra quebras no PostgREST
+  const safeRefSearch = useMemo(() => sanitizeSearchTerm(refSearch), [refSearch]);
+
   // Public reference catalog query
-  const { data: refCatalog, isLoading: loadingRefCatalog } = useQuery({
-    queryKey: ["reference-catalog", refSource, refType, refUF, refMes, refSearch],
+  const {
+    data: refCatalog,
+    isLoading: loadingRefCatalog,
+    error: errorRefCatalog,
+  } = useQuery({
+    queryKey: ["reference-catalog", refSource, refType, refUF, refMes, safeRefSearch],
     queryFn: async () => {
       const isCompo = refType === "composicoes";
       const table = isCompo ? "referencia_composicoes" : "referencia_insumos";
 
-      let query = supabase
-        .from(table)
-        .select("*")
-        .eq("fonte", refSource)
-        .eq("uf", refUF)
-        .eq("mes_referencia", refMes)
-        .order("codigo", { ascending: true })
-        .limit(100);
+      let query = supabase.from(table).select("*").eq("fonte", refSource).eq("uf", refUF);
 
-      if (refSearch) {
-        query = query.or(`codigo.ilike.%${refSearch}%,descricao.ilike.%${refSearch}%`);
+      if (refMes) {
+        query = query.eq("mes_referencia", refMes);
+      }
+
+      query = query.order("codigo", { ascending: true }).limit(100);
+
+      if (safeRefSearch) {
+        query = query.or(`codigo.ilike.%${safeRefSearch}%,descricao.ilike.%${safeRefSearch}%`);
       }
 
       const { data, error } = await query;
@@ -261,7 +349,7 @@ function OrcamentosPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["obras-select-orc"] });
       qc.invalidateQueries({ queryKey: ["orcamento-for-obra"] });
-    }
+    },
   });
 
   // Sync total when items change
@@ -274,10 +362,7 @@ function OrcamentosPage() {
   // Mutations for budget items
   const deleteItemMutation = useMutation({
     mutationFn: async (itemId: string) => {
-      const { error } = await supabase
-        .from("orcamento_itens")
-        .delete()
-        .eq("id", itemId);
+      const { error } = await supabase.from("orcamento_itens").delete().eq("id", itemId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -305,7 +390,7 @@ function OrcamentosPage() {
     },
     onError: (err: any) => {
       toast.error("Erro ao limpar base: " + err.message);
-    }
+    },
   });
 
   const saveItemMutation = useMutation({
@@ -339,9 +424,7 @@ function OrcamentosPage() {
           .eq("id", editingItem.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from("orcamento_itens")
-          .insert(payload);
+        const { error } = await supabase.from("orcamento_itens").insert(payload);
         if (error) throw error;
       }
     },
@@ -418,13 +501,31 @@ function OrcamentosPage() {
       };
 
       headerLabels.forEach((label, idx) => {
-        const norm = label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const norm = label
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
         if (norm.includes("codigo") || norm.includes("cod")) newMapping.codigo = idx;
-        if (norm.includes("descricao") || norm.includes("item") || norm.includes("servico") || norm.includes("insumo")) newMapping.descricao = idx;
+        if (
+          norm.includes("descricao") ||
+          norm.includes("item") ||
+          norm.includes("servico") ||
+          norm.includes("insumo")
+        )
+          newMapping.descricao = idx;
         if (norm.includes("unidade") || norm.includes("un")) newMapping.unidade = idx;
-        if (norm.includes("quantidade") || norm.includes("qtd") || norm.includes("quant")) newMapping.quantidade = idx;
-        if (norm.includes("valor unitario") || norm.includes("preco unitario") || norm.includes("preco") || norm.includes("valor_unit") || norm.includes("valor unit")) newMapping.valor_unitario = idx;
-        if (norm.includes("etapa") || norm.includes("fase") || norm.includes("grupo")) newMapping.etapa = idx;
+        if (norm.includes("quantidade") || norm.includes("qtd") || norm.includes("quant"))
+          newMapping.quantidade = idx;
+        if (
+          norm.includes("valor unitario") ||
+          norm.includes("preco unitario") ||
+          norm.includes("preco") ||
+          norm.includes("valor_unit") ||
+          norm.includes("valor unit")
+        )
+          newMapping.valor_unitario = idx;
+        if (norm.includes("etapa") || norm.includes("fase") || norm.includes("grupo"))
+          newMapping.etapa = idx;
       });
 
       setMapping(newMapping);
@@ -438,7 +539,12 @@ function OrcamentosPage() {
       toast.error("Selecione uma obra válida");
       return;
     }
-    if (mapping.descricao === -1 || mapping.unidade === -1 || mapping.quantidade === -1 || mapping.valor_unitario === -1) {
+    if (
+      mapping.descricao === -1 ||
+      mapping.unidade === -1 ||
+      mapping.quantidade === -1 ||
+      mapping.valor_unitario === -1
+    ) {
       toast.error("Mapeie pelo menos Descrição, Unidade, Quantidade e Preço Unitário");
       return;
     }
@@ -449,7 +555,9 @@ function OrcamentosPage() {
       setImportStatus("Processando planilha...");
 
       const startRowIdx = hasHeaders ? 1 : 0;
-      const rowsToImport = parsedRows.slice(startRowIdx).filter(row => row && row[mapping.descricao]);
+      const rowsToImport = parsedRows
+        .slice(startRowIdx)
+        .filter((row) => row && row[mapping.descricao]);
 
       const itemsPayload = rowsToImport.map((row) => {
         const codeVal = mapping.codigo !== -1 ? String(row[mapping.codigo] || "").trim() : null;
@@ -457,7 +565,10 @@ function OrcamentosPage() {
         const unitVal = String(row[mapping.unidade] || "").trim() || "un";
         const qtyVal = parseQuantity(row[mapping.quantidade]);
         const unitPriceCents = parseCurrencyToCentavos(row[mapping.valor_unitario]);
-        const stageVal = mapping.etapa !== -1 && row[mapping.etapa] ? String(row[mapping.etapa]).trim() : defaultEtapa;
+        const stageVal =
+          mapping.etapa !== -1 && row[mapping.etapa]
+            ? String(row[mapping.etapa]).trim()
+            : defaultEtapa;
 
         return {
           orcamento_id: orcamento.id,
@@ -473,7 +584,7 @@ function OrcamentosPage() {
       });
 
       setImportStatus(`Inserindo ${itemsPayload.length} itens no banco...`);
-      
+
       // Batch in chunks of 100 to update progress UI
       const chunkSize = 100;
       const total = itemsPayload.length;
@@ -500,68 +611,11 @@ function OrcamentosPage() {
     }
   };
 
-  // Attempt to parse state (UF) and reference month/year from file name
-  const parseMetadataFromFileName = (fileName: string) => {
-    const cleanName = fileName.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    
-    // 1. Detect UF
-    const ufs = [
-      "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", 
-      "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", 
-      "SP", "SE", "TO"
-    ];
-    
-    let detectedUF = "";
-    for (const uf of ufs) {
-      const regex = new RegExp(`(^|[\\W_])${uf}([\\W_]|$)`);
-      if (regex.test(cleanName)) {
-        detectedUF = uf;
-        break;
-      }
-    }
-    
-    // 2. Detect Date (Month/Year)
-    let detectedMes = "";
-    const mmyyyyMatch = cleanName.match(/(\d{2})_?(\d{4})/);
-    if (mmyyyyMatch) {
-      const month = mmyyyyMatch[1];
-      const year = mmyyyyMatch[2];
-      const mNum = parseInt(month, 10);
-      if (mNum >= 1 && mNum <= 12) {
-        detectedMes = `${month}/${year}`;
-      }
-    }
-
-    if (!detectedMes) {
-      const yyyymmMatch = cleanName.match(/(\d{4})_?(\d{2})/);
-      if (yyyymmMatch) {
-        const year = yyyymmMatch[1];
-        const month = yyyymmMatch[2];
-        const mNum = parseInt(month, 10);
-        if (mNum >= 1 && mNum <= 12) {
-          detectedMes = `${month}/${year}`;
-        }
-      }
-    }
-
-    // 3. Detect refType: only set if it contains ONE of them, not both
-    let detectedType: "insumos" | "composicoes" | null = null;
-    const hasInsumo = cleanName.includes("INSUMO");
-    const hasComposi = cleanName.includes("COMPOSI");
-    if (hasInsumo && !hasComposi) {
-      detectedType = "insumos";
-    } else if (hasComposi && !hasInsumo) {
-      detectedType = "composicoes";
-    }
-
-    return { detectedUF, detectedMes, detectedType };
-  };
-
   // Handle SINAPI/SICRO catalog file parsing and batched uploading
   const handleCatalogFileChange = async (file: File) => {
     try {
       const { detectedUF, detectedMes, detectedType } = parseMetadataFromFileName(file.name);
-      
+
       let typeToUse = refType;
       if (detectedType) {
         setRefType(detectedType);
@@ -583,24 +637,27 @@ function OrcamentosPage() {
       if (file.name.toLowerCase().endsWith(".zip")) {
         toast.info("Processando arquivo ZIP do SINAPI...");
         const zip = await JSZip.loadAsync(file);
-        
+
         // Try to find actual price/synthetic spreadsheets first (exclude representativeness/coefficients/analytics)
         let excelFiles = Object.keys(zip.files).filter((name) => {
           const lower = name.toLowerCase();
           const isExcel = lower.endsWith(".xlsx") || lower.endsWith(".xls");
           const isMac = lower.includes("__macosx");
-          const isExcludeKeyword = lower.includes("representat") || 
-                                   lower.includes("coef") || 
-                                   lower.includes("analitico") ||
-                                   lower.includes("grupo") ||
-                                   lower.includes("classe");
+          const isExcludeKeyword =
+            lower.includes("representat") ||
+            lower.includes("coef") ||
+            lower.includes("analitico") ||
+            lower.includes("grupo") ||
+            lower.includes("classe");
           return isExcel && !isMac && !isExcludeKeyword;
         });
 
         // Fall back to any excel file if no price-specific files found
         if (excelFiles.length === 0) {
           excelFiles = Object.keys(zip.files).filter(
-            (name) => (name.toLowerCase().endsWith(".xlsx") || name.toLowerCase().endsWith(".xls")) && !name.includes("__MACOSX")
+            (name) =>
+              (name.toLowerCase().endsWith(".xlsx") || name.toLowerCase().endsWith(".xls")) &&
+              !name.includes("__MACOSX"),
           );
         }
 
@@ -615,7 +672,11 @@ function OrcamentosPage() {
         const keyword = isCompo ? "composi" : "insumo";
 
         const matchingFile = excelFiles.find((name) =>
-          name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(keyword)
+          name
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .includes(keyword),
         );
 
         if (matchingFile) {
@@ -642,7 +703,16 @@ function OrcamentosPage() {
 
       // Scan the first 20 rows to find the real header row
       // SINAPI files usually have several metadata rows before the actual column headers
-      const HEADER_KEYWORDS = ["descri", "codigo", "insumo", "composic", "unidade", "preco", "custo", "mediano"];
+      const HEADER_KEYWORDS = [
+        "descri",
+        "codigo",
+        "insumo",
+        "composic",
+        "unidade",
+        "preco",
+        "custo",
+        "mediano",
+      ];
       let headerRowIdx = 0;
       let bestScore = 0;
 
@@ -652,9 +722,15 @@ function OrcamentosPage() {
         let score = 0;
         for (const cell of row) {
           if (!cell) continue;
-          const norm = String(cell).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const norm = String(cell)
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
           for (const kw of HEADER_KEYWORDS) {
-            if (norm.includes(kw)) { score++; break; }
+            if (norm.includes(kw)) {
+              score++;
+              break;
+            }
           }
         }
         if (score > bestScore) {
@@ -665,7 +741,7 @@ function OrcamentosPage() {
 
       const headerRow = json[headerRowIdx] || [];
       const headerLabels = headerRow.map((cell, idx) =>
-        cell ? String(cell).trim() : `Coluna ${idx + 1}`
+        cell ? String(cell).trim() : `Coluna ${idx + 1}`,
       );
 
       // Store the actual data start row (after the header row we found)
@@ -686,12 +762,17 @@ function OrcamentosPage() {
       };
 
       headerLabels.forEach((label, idx) => {
-        const norm = label.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const norm = label
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
 
         // Código: matches "codigo" / "cod" prefixes but NOT description or name columns
         if (
           (norm === "codigo" || norm.startsWith("cod") || norm.startsWith("codigo")) &&
-          !norm.includes("descr") && !norm.includes("nome") && !norm.includes("agrup")
+          !norm.includes("descr") &&
+          !norm.includes("nome") &&
+          !norm.includes("agrup")
         ) {
           if (newMapping.codigo === -1) newMapping.codigo = idx; // take first match only
         }
@@ -699,7 +780,10 @@ function OrcamentosPage() {
         // Descrição: matches "descricao" or "descricao da composicao" / "descricao do insumo"
         // but NOT "classe" or "tipo" descriptions
         if (
-          (norm.includes("descr") && !norm.includes("classe") && !norm.includes("tipo") && !norm.includes("agrup")) ||
+          (norm.includes("descr") &&
+            !norm.includes("classe") &&
+            !norm.includes("tipo") &&
+            !norm.includes("agrup")) ||
           norm.includes("nome")
         ) {
           if (newMapping.descricao === -1) newMapping.descricao = idx; // take first match only
@@ -710,11 +794,16 @@ function OrcamentosPage() {
         }
 
         if (
-          (norm.includes("preco") || norm.includes("mediano") ||
-           (norm.includes("custo") && norm.includes("total")) ||
-           norm.includes("valor")) &&
-          !norm.includes("cod") && !norm.includes("mao") && !norm.includes("material") &&
-          !norm.includes("equip") && !norm.includes("servico") && !norm.includes("outro")
+          (norm.includes("preco") ||
+            norm.includes("mediano") ||
+            (norm.includes("custo") && norm.includes("total")) ||
+            norm.includes("valor")) &&
+          !norm.includes("cod") &&
+          !norm.includes("mao") &&
+          !norm.includes("material") &&
+          !norm.includes("equip") &&
+          !norm.includes("servico") &&
+          !norm.includes("outro")
         ) {
           if (newMapping.valor_unitario === -1) newMapping.valor_unitario = idx;
         }
@@ -728,14 +817,21 @@ function OrcamentosPage() {
       });
 
       setMapping(newMapping);
-      toast.success(`Planilha "${fileName.split("/").pop()}" carregada! Cabeçalhos encontrados na linha ${headerRowIdx + 1}.`);
+      toast.success(
+        `Planilha "${fileName.split("/").pop()}" carregada! Cabeçalhos encontrados na linha ${headerRowIdx + 1}.`,
+      );
     } catch (err: any) {
       toast.error("Erro ao ler arquivo: " + err.message);
     }
   };
 
   const runCatalogImport = async () => {
-    if (mapping.codigo === -1 || mapping.descricao === -1 || mapping.unidade === -1 || mapping.valor_unitario === -1) {
+    if (
+      mapping.codigo === -1 ||
+      mapping.descricao === -1 ||
+      mapping.unidade === -1 ||
+      mapping.valor_unitario === -1
+    ) {
       toast.error("Mapeie Código, Descrição, Unidade e Preço/Custo");
       return;
     }
@@ -746,12 +842,12 @@ function OrcamentosPage() {
       setImportStatus("Processando planilha do catálogo...");
 
       const startRowIdx = hasHeaders ? 1 : 0;
-      const rawRows = parsedRows.slice(startRowIdx).filter(row => row && row[mapping.codigo]);
+      const rawRows = parsedRows.slice(startRowIdx).filter((row) => row && row[mapping.codigo]);
 
       // Deduplicate rows by the "codigo" column value to handle Analítico files (which repeat composition codes for each sub-item)
       const seenCodes = new Set<string>();
       const rowsToImport: any[][] = [];
-      
+
       for (const row of rawRows) {
         const code = String(row[mapping.codigo] || "").trim();
         if (code && !seenCodes.has(code)) {
@@ -774,7 +870,8 @@ function OrcamentosPage() {
         };
 
         if (isCompo) {
-          const classVal = mapping.etapa !== -1 && row[mapping.etapa] ? String(row[mapping.etapa]).trim() : null;
+          const classVal =
+            mapping.etapa !== -1 && row[mapping.etapa] ? String(row[mapping.etapa]).trim() : null;
           return {
             ...base,
             custo_total: parseCurrencyToCentavos(row[mapping.valor_unitario]),
@@ -796,21 +893,24 @@ function OrcamentosPage() {
 
       for (let i = 0; i < total; i += chunkSize) {
         const chunk = catalogPayload.slice(i, i + chunkSize);
-        
+
         // Upsert on conflict to prevent primary key errors
         const { error } = await supabase
           .from(table)
           .upsert(chunk, { onConflict: "fonte,uf,mes_referencia,codigo" });
 
         if (error) throw error;
-        
+
         insertedCount += chunk.length;
         setImportProgress(Math.round((insertedCount / total) * 100));
-        setImportStatus(`Enviado lote ${Math.ceil(insertedCount / chunkSize)}: ${insertedCount} de ${total} registros...`);
+        setImportStatus(
+          `Enviado lote ${Math.ceil(insertedCount / chunkSize)}: ${insertedCount} de ${total} registros...`,
+        );
       }
 
       toast.success("Catálogo público importado e atualizado com sucesso!");
       qc.invalidateQueries({ queryKey: ["reference-catalog"] });
+      qc.invalidateQueries({ queryKey: ["reference-catalog-competencias"] });
       setImportCatalogOpen(false);
       setParsedRows([]);
     } catch (e) {
@@ -831,10 +931,11 @@ function OrcamentosPage() {
             Módulo de Orçamentos e Custos
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Planejamento orçamentário de projetos, custos estimativos por etapa e base de preços públicos.
+            Planejamento orçamentário de projetos, custos estimativos por etapa e base de preços
+            públicos.
           </p>
         </div>
-        
+
         {activeTab === "obras" && (
           <div className="flex items-center gap-2">
             <Select value={selectedObraId} onValueChange={setSelectedObraId}>
@@ -855,8 +956,12 @@ function OrcamentosPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full md:w-[480px] grid-cols-2">
-          <TabsTrigger value="obras" id="tab-orcamento-obras">Orçamento de Obras</TabsTrigger>
-          <TabsTrigger value="referencias" id="tab-sinapi-sicro">Base de Referência (SINAPI/SICRO)</TabsTrigger>
+          <TabsTrigger value="obras" id="tab-orcamento-obras">
+            Orçamento de Obras
+          </TabsTrigger>
+          <TabsTrigger value="referencias" id="tab-sinapi-sicro">
+            Base de Referência (SINAPI/SICRO)
+          </TabsTrigger>
         </TabsList>
 
         {/* Tab 1: Orçamento de Obras */}
@@ -872,7 +977,10 @@ function OrcamentosPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold tracking-tight text-foreground" id="lbl-total-orcado">
+                    <div
+                      className="text-2xl font-bold tracking-tight text-foreground"
+                      id="lbl-total-orcado"
+                    >
                       {fmtBRL(totalCalculado)}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -888,7 +996,10 @@ function OrcamentosPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold tracking-tight text-foreground" id="lbl-total-executado">
+                    <div
+                      className="text-2xl font-bold tracking-tight text-foreground"
+                      id="lbl-total-executado"
+                    >
                       {fmtBRL((currentObra?.valor_executado ?? 0) * 100)}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
@@ -907,17 +1018,18 @@ function OrcamentosPage() {
                     <div className="flex justify-between items-baseline">
                       <span className="text-lg font-bold">
                         {totalCalculado > 0
-                          ? `${(( (currentObra?.valor_executado ?? 0) * 100 / totalCalculado) * 100).toFixed(1)}%`
+                          ? `${((((currentObra?.valor_executado ?? 0) * 100) / totalCalculado) * 100).toFixed(1)}%`
                           : "0.0%"}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        Medido vs Orçado
-                      </span>
+                      <span className="text-xs text-muted-foreground">Medido vs Orçado</span>
                     </div>
                     <Progress
                       value={
                         totalCalculado > 0
-                          ? Math.min(((currentObra?.valor_executado ?? 0) * 100 / totalCalculado) * 100, 100)
+                          ? Math.min(
+                              (((currentObra?.valor_executado ?? 0) * 100) / totalCalculado) * 100,
+                              100,
+                            )
                           : 0
                       }
                       className="h-2"
@@ -935,7 +1047,7 @@ function OrcamentosPage() {
                     {orcamentoItens?.length ?? 0} itens
                   </Badge>
                 </h2>
-                
+
                 {podeEditar && (
                   <div className="flex flex-wrap gap-2">
                     <Button
@@ -950,7 +1062,7 @@ function OrcamentosPage() {
                       <Upload className="size-4" />
                       Importar Planilha (.xlsx)
                     </Button>
-                    
+
                     <Button
                       className="gap-2 text-sm"
                       onClick={() => {
@@ -970,14 +1082,17 @@ function OrcamentosPage() {
               {loadingItens ? (
                 <div className="space-y-3">
                   <Loader2 className="size-8 animate-spin text-primary mx-auto" />
-                  <p className="text-center text-sm text-muted-foreground">Carregando itens orçamentários...</p>
+                  <p className="text-center text-sm text-muted-foreground">
+                    Carregando itens orçamentários...
+                  </p>
                 </div>
               ) : Object.keys(itemsByEtapa).length === 0 ? (
                 <Card className="border border-dashed py-12 flex flex-col items-center justify-center text-center">
                   <FileSpreadsheet className="size-12 text-muted-foreground/40 mb-3" />
                   <h3 className="font-medium text-foreground">Orçamento vazio</h3>
                   <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-4">
-                    Não há itens cadastrados no orçamento desta obra. Comece importando uma planilha ou adicionando itens manualmente.
+                    Não há itens cadastrados no orçamento desta obra. Comece importando uma planilha
+                    ou adicionando itens manualmente.
                   </p>
                   {podeEditar && (
                     <div className="flex gap-2">
@@ -996,7 +1111,10 @@ function OrcamentosPage() {
                     <Card key={etapa} className="border shadow-none overflow-hidden">
                       <CardHeader className="bg-accent/30 py-3 px-4 flex flex-row items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="px-2 py-0.5 font-semibold text-xs tracking-wider uppercase">
+                          <Badge
+                            variant="secondary"
+                            className="px-2 py-0.5 font-semibold text-xs tracking-wider uppercase"
+                          >
                             Etapa
                           </Badge>
                           <span className="font-bold text-foreground text-sm">{etapa}</span>
@@ -1021,20 +1139,41 @@ function OrcamentosPage() {
                           </TableHeader>
                           <TableBody>
                             {group.items.map((item) => (
-                              <TableRow key={item.id} className="hover:bg-muted/50 transition-colors">
-                                <TableCell className="font-mono text-xs pl-4">{item.codigo ?? "—"}</TableCell>
-                                <TableCell className="text-sm font-medium">{item.descricao}</TableCell>
-                                <TableCell className="text-center text-xs">{item.unidade}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{fmtQty(Number(item.quantidade))}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{fmtBRL(item.valor_unitario)}</TableCell>
-                                <TableCell className="text-right font-mono text-xs font-bold">{fmtBRL(item.valor_total)}</TableCell>
+                              <TableRow
+                                key={item.id}
+                                className="hover:bg-muted/50 transition-colors"
+                              >
+                                <TableCell className="font-mono text-xs pl-4">
+                                  {item.codigo ?? "—"}
+                                </TableCell>
+                                <TableCell className="text-sm font-medium">
+                                  {item.descricao}
+                                </TableCell>
+                                <TableCell className="text-center text-xs">
+                                  {item.unidade}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-xs">
+                                  {fmtQty(Number(item.quantidade))}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-xs">
+                                  {fmtBRL(item.valor_unitario)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-xs font-bold">
+                                  {fmtBRL(item.valor_total)}
+                                </TableCell>
                                 <TableCell className="text-center">
-                                  <Badge variant="outline" className={cn(
-                                    "text-[10px] px-1.5 py-0 capitalize",
-                                    item.fonte_referencia === "sinapi" && "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800",
-                                    item.fonte_referencia === "sicro" && "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800",
-                                    item.fonte_referencia === "proprio" && "bg-neutral-50 text-neutral-700 border-neutral-200 dark:bg-neutral-900 dark:text-neutral-400 dark:border-neutral-800"
-                                  )}>
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] px-1.5 py-0 capitalize",
+                                      item.fonte_referencia === "sinapi" &&
+                                        "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-800",
+                                      item.fonte_referencia === "sicro" &&
+                                        "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-800",
+                                      item.fonte_referencia === "proprio" &&
+                                        "bg-neutral-50 text-neutral-700 border-neutral-200 dark:bg-neutral-900 dark:text-neutral-400 dark:border-neutral-800",
+                                    )}
+                                  >
                                     {item.fonte_referencia}
                                   </Badge>
                                 </TableCell>
@@ -1106,7 +1245,11 @@ function OrcamentosPage() {
                       variant="destructive"
                       className="gap-2 text-sm"
                       onClick={() => {
-                        if (confirm(`Aviso: Isso excluirá TODOS os registros de ${refType === "insumos" ? "Insumos" : "Composições"} da fonte ${refSource.toUpperCase()} para o estado ${refUF} na referência ${refMes}. Deseja continuar?`)) {
+                        if (
+                          confirm(
+                            `Aviso: Isso excluirá TODOS os registros de ${refType === "insumos" ? "Insumos" : "Composições"} da fonte ${refSource.toUpperCase()} para o estado ${refUF} na referência ${refMes}. Deseja continuar?`,
+                          )
+                        ) {
                           clearCatalogMutation.mutate();
                         }
                       }}
@@ -1149,7 +1292,9 @@ function OrcamentosPage() {
 
                 {/* Tipo de Tabela */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">Tipo de Base</label>
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Tipo de Base
+                  </label>
                   <Select value={refType} onValueChange={(v: any) => setRefType(v)}>
                     <SelectTrigger id="ref-filter-type">
                       <SelectValue />
@@ -1169,8 +1314,38 @@ function OrcamentosPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"].map((uf) => (
-                        <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                      {[
+                        "AC",
+                        "AL",
+                        "AP",
+                        "AM",
+                        "BA",
+                        "CE",
+                        "DF",
+                        "ES",
+                        "GO",
+                        "MA",
+                        "MT",
+                        "MS",
+                        "MG",
+                        "PA",
+                        "PB",
+                        "PR",
+                        "PE",
+                        "PI",
+                        "RJ",
+                        "RN",
+                        "RS",
+                        "RO",
+                        "RR",
+                        "SC",
+                        "SP",
+                        "SE",
+                        "TO",
+                      ].map((uf) => (
+                        <SelectItem key={uf} value={uf}>
+                          {uf}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1178,26 +1353,60 @@ function OrcamentosPage() {
 
                 {/* Mês Referência */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">Referência (Mês/Ano)</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-muted-foreground">
+                      Referência (Mês/Ano)
+                    </label>
+                    {dbCompetencias.length > 0 && (
+                      <span className="text-[10px] text-primary font-medium">
+                        {dbCompetencias.length} base(s) no sistema
+                      </span>
+                    )}
+                  </div>
                   <Select value={refMes} onValueChange={(v: string) => setRefMes(v)}>
-                    <SelectTrigger id="ref-filter-mes" className="text-center">
+                    <SelectTrigger id="ref-filter-mes" className="text-center font-mono">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableMonths.map((m) => (
-                        <SelectItem key={m} value={m}>{m}</SelectItem>
-                      ))}
+                      {dbCompetencias.length > 0 && (
+                        <>
+                          <div className="px-2 py-1 text-[10px] font-bold text-primary uppercase tracking-wider">
+                            Carregadas no Banco
+                          </div>
+                          {dbCompetencias.map((m) => (
+                            <SelectItem
+                              key={`db-${m}`}
+                              value={m}
+                              className="font-semibold text-primary font-mono"
+                            >
+                              {m} (Disponível)
+                            </SelectItem>
+                          ))}
+                          <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider border-t mt-1 pt-1">
+                            Outros Períodos
+                          </div>
+                        </>
+                      )}
+                      {availableMonths
+                        .filter((m) => !dbCompetencias.includes(m))
+                        .map((m) => (
+                          <SelectItem key={m} value={m} className="font-mono">
+                            {m}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 {/* Search Term */}
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">Buscar Código / Descrição</label>
+                  <label className="text-xs font-semibold text-muted-foreground">
+                    Buscar Código / Descrição
+                  </label>
                   <div className="relative">
                     <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar..."
+                      placeholder="Ex: Cimento, Tijolo ou Código..."
                       className="pl-9"
                       value={refSearch}
                       onChange={(e) => setRefSearch(e.target.value)}
@@ -1220,36 +1429,74 @@ function OrcamentosPage() {
                   <TableHead className="w-32 text-right">
                     {refType === "composicoes" ? "Custo Total" : "Preço Mediano"}
                   </TableHead>
-                  {refType === "composicoes" && <TableHead className="w-48 pl-4">Classe/Tipo</TableHead>}
+                  {refType === "composicoes" && (
+                    <TableHead className="w-48 pl-4">Classe/Tipo</TableHead>
+                  )}
                   {podeEditar && selectedObraId && <TableHead className="w-28" />}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loadingRefCatalog ? (
+                {loadingRefCatalog || loadingCompetencias ? (
                   <TableRow>
-                    <TableCell colSpan={(refType === "composicoes" ? 5 : 4) + (podeEditar && selectedObraId ? 1 : 0)} className="text-center py-12">
+                    <TableCell
+                      colSpan={
+                        (refType === "composicoes" ? 5 : 4) + (podeEditar && selectedObraId ? 1 : 0)
+                      }
+                      className="text-center py-12"
+                    >
                       <Loader2 className="size-6 animate-spin text-primary mx-auto mb-2" />
-                      <span className="text-sm text-muted-foreground">Carregando catálogo de referência...</span>
+                      <span className="text-sm text-muted-foreground">
+                        Carregando catálogo de referência...
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ) : errorRefCatalog ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={
+                        (refType === "composicoes" ? 5 : 4) + (podeEditar && selectedObraId ? 1 : 0)
+                      }
+                      className="text-center py-12 text-destructive"
+                    >
+                      <AlertCircle className="size-8 mx-auto mb-2 opacity-70" />
+                      Não foi possível carregar a lista: {(errorRefCatalog as Error).message}
                     </TableCell>
                   </TableRow>
                 ) : refCatalog?.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={(refType === "composicoes" ? 5 : 4) + (podeEditar && selectedObraId ? 1 : 0)} className="text-center py-12 text-muted-foreground">
+                    <TableCell
+                      colSpan={
+                        (refType === "composicoes" ? 5 : 4) + (podeEditar && selectedObraId ? 1 : 0)
+                      }
+                      className="text-center py-12 text-muted-foreground"
+                    >
                       <Database className="size-8 mx-auto mb-2 opacity-50" />
-                      Nenhum registro encontrado para esta pesquisa ou base vazia.
+                      Nenhum registro encontrado para {refSource.toUpperCase()} ({refUF} - {refMes}
+                      ).
+                      {dbCompetencias.length === 0 && (
+                        <p className="text-xs text-muted-foreground/80 mt-1">
+                          Esta base/UF ainda não foi importada. Utilize o botão &ldquo;Carregar
+                          Catálogo Público&rdquo; para importar a planilha ou ZIP oficial.
+                        </p>
+                      )}
                     </TableCell>
                   </TableRow>
                 ) : (
                   refCatalog?.map((row) => (
                     <TableRow key={row.id}>
-                      <TableCell className="font-mono text-xs font-bold pl-4">{row.codigo}</TableCell>
+                      <TableCell className="font-mono text-xs font-bold pl-4">
+                        {row.codigo}
+                      </TableCell>
                       <TableCell className="text-sm">{row.descricao}</TableCell>
                       <TableCell className="text-center text-xs">{row.unidade}</TableCell>
                       <TableCell className="text-right font-mono text-xs">
                         {fmtBRL(refType === "composicoes" ? row.custo_total : row.preco_mediano)}
                       </TableCell>
                       {refType === "composicoes" && (
-                        <TableCell className="text-xs pl-4 truncate max-w-[200px]" title={row.tipo_classe}>
+                        <TableCell
+                          className="text-xs pl-4 truncate max-w-[200px]"
+                          title={row.tipo_classe}
+                        >
                           {row.tipo_classe ?? "—"}
                         </TableCell>
                       )}
@@ -1293,7 +1540,8 @@ function OrcamentosPage() {
           <DialogHeader>
             <DialogTitle>Importar Planilha de Orçamento (.xlsx)</DialogTitle>
             <DialogDescription>
-              Selecione a planilha de orçamento do seu projeto e associe as colunas correspondentes para carregar no sistema.
+              Selecione a planilha de orçamento do seu projeto e associe as colunas correspondentes
+              para carregar no sistema.
             </DialogDescription>
           </DialogHeader>
 
@@ -1303,7 +1551,9 @@ function OrcamentosPage() {
               <p className="font-medium">{importStatus}</p>
               <div className="max-w-md mx-auto">
                 <Progress value={importProgress} className="h-2" />
-                <span className="text-xs text-muted-foreground mt-1 block">{importProgress}% Concluído</span>
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  {importProgress}% Concluído
+                </span>
               </div>
             </div>
           ) : (
@@ -1343,7 +1593,10 @@ function OrcamentosPage() {
                         onChange={(e) => setHasHeaders(e.target.checked)}
                         className="rounded border-gray-300"
                       />
-                      <label htmlFor="chk-has-headers-budget" className="text-xs font-semibold text-foreground">
+                      <label
+                        htmlFor="chk-has-headers-budget"
+                        className="text-xs font-semibold text-foreground"
+                      >
                         A primeira linha da planilha contém os cabeçalhos das colunas
                       </label>
                     </div>
@@ -1354,14 +1607,18 @@ function OrcamentosPage() {
                         <label className="text-xs font-medium text-foreground">Descrição *</label>
                         <Select
                           value={String(mapping.descricao)}
-                          onValueChange={(val) => setMapping({ ...mapping, descricao: Number(val) })}
+                          onValueChange={(val) =>
+                            setMapping({ ...mapping, descricao: Number(val) })
+                          }
                         >
                           <SelectTrigger id="import-map-desc">
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1379,7 +1636,9 @@ function OrcamentosPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1390,14 +1649,18 @@ function OrcamentosPage() {
                         <label className="text-xs font-medium text-foreground">Quantidade *</label>
                         <Select
                           value={String(mapping.quantidade)}
-                          onValueChange={(val) => setMapping({ ...mapping, quantidade: Number(val) })}
+                          onValueChange={(val) =>
+                            setMapping({ ...mapping, quantidade: Number(val) })
+                          }
                         >
                           <SelectTrigger id="import-map-qty">
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1405,17 +1668,23 @@ function OrcamentosPage() {
 
                       {/* Preco Unitario (req) */}
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-foreground">Preço Unitário *</label>
+                        <label className="text-xs font-medium text-foreground">
+                          Preço Unitário *
+                        </label>
                         <Select
                           value={String(mapping.valor_unitario)}
-                          onValueChange={(val) => setMapping({ ...mapping, valor_unitario: Number(val) })}
+                          onValueChange={(val) =>
+                            setMapping({ ...mapping, valor_unitario: Number(val) })
+                          }
                         >
                           <SelectTrigger id="import-map-price">
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1423,7 +1692,9 @@ function OrcamentosPage() {
 
                       {/* Código */}
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-foreground">Código (Opcional)</label>
+                        <label className="text-xs font-medium text-foreground">
+                          Código (Opcional)
+                        </label>
                         <Select
                           value={String(mapping.codigo)}
                           onValueChange={(val) => setMapping({ ...mapping, codigo: Number(val) })}
@@ -1434,7 +1705,9 @@ function OrcamentosPage() {
                           <SelectContent>
                             <SelectItem value="-1">— Nenhum —</SelectItem>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1442,7 +1715,9 @@ function OrcamentosPage() {
 
                       {/* Etapa */}
                       <div className="space-y-1">
-                        <label className="text-xs font-medium text-foreground">Etapa/Fase (Opcional)</label>
+                        <label className="text-xs font-medium text-foreground">
+                          Etapa/Fase (Opcional)
+                        </label>
                         <Select
                           value={String(mapping.etapa)}
                           onValueChange={(val) => setMapping({ ...mapping, etapa: Number(val) })}
@@ -1453,7 +1728,9 @@ function OrcamentosPage() {
                           <SelectContent>
                             <SelectItem value="-1">— Usar Etapa Padrão —</SelectItem>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1475,7 +1752,9 @@ function OrcamentosPage() {
 
                   {/* Preview Grid */}
                   <div className="space-y-2">
-                    <h4 className="text-xs font-bold text-foreground">Pré-visualização dos Dados Mapeados</h4>
+                    <h4 className="text-xs font-bold text-foreground">
+                      Pré-visualização dos Dados Mapeados
+                    </h4>
                     <div className="border rounded-lg overflow-x-auto">
                       <Table>
                         <TableHeader>
@@ -1489,25 +1768,53 @@ function OrcamentosPage() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {parsedRows.slice(hasHeaders ? 1 : 0, hasHeaders ? 6 : 5).map((row, idx) => {
-                            const descVal = mapping.descricao !== -1 ? String(row[mapping.descricao] || "") : "";
-                            const unitVal = mapping.unidade !== -1 ? String(row[mapping.unidade] || "") : "";
-                            const qtyVal = mapping.quantidade !== -1 ? parseQuantity(row[mapping.quantidade]) : 0;
-                            const priceVal = mapping.valor_unitario !== -1 ? parseCurrencyToCentavos(row[mapping.valor_unitario]) : 0;
-                            const codeVal = mapping.codigo !== -1 ? String(row[mapping.codigo] || "") : "";
-                            const stageVal = mapping.etapa !== -1 && row[mapping.etapa] ? String(row[mapping.etapa]) : defaultEtapa;
+                          {parsedRows
+                            .slice(hasHeaders ? 1 : 0, hasHeaders ? 6 : 5)
+                            .map((row, idx) => {
+                              const descVal =
+                                mapping.descricao !== -1
+                                  ? String(row[mapping.descricao] || "")
+                                  : "";
+                              const unitVal =
+                                mapping.unidade !== -1 ? String(row[mapping.unidade] || "") : "";
+                              const qtyVal =
+                                mapping.quantidade !== -1
+                                  ? parseQuantity(row[mapping.quantidade])
+                                  : 0;
+                              const priceVal =
+                                mapping.valor_unitario !== -1
+                                  ? parseCurrencyToCentavos(row[mapping.valor_unitario])
+                                  : 0;
+                              const codeVal =
+                                mapping.codigo !== -1 ? String(row[mapping.codigo] || "") : "";
+                              const stageVal =
+                                mapping.etapa !== -1 && row[mapping.etapa]
+                                  ? String(row[mapping.etapa])
+                                  : defaultEtapa;
 
-                            return (
-                              <TableRow key={idx}>
-                                <TableCell className="font-mono text-xs pl-4">{codeVal || "—"}</TableCell>
-                                <TableCell className="text-xs max-w-[200px] truncate">{descVal || "—"}</TableCell>
-                                <TableCell className="text-center text-xs">{unitVal || "—"}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{fmtQty(qtyVal)}</TableCell>
-                                <TableCell className="text-right font-mono text-xs">{fmtBRL(priceVal)}</TableCell>
-                                <TableCell className="text-xs truncate max-w-[100px]">{stageVal}</TableCell>
-                              </TableRow>
-                            );
-                          })}
+                              return (
+                                <TableRow key={idx}>
+                                  <TableCell className="font-mono text-xs pl-4">
+                                    {codeVal || "—"}
+                                  </TableCell>
+                                  <TableCell className="text-xs max-w-[200px] truncate">
+                                    {descVal || "—"}
+                                  </TableCell>
+                                  <TableCell className="text-center text-xs">
+                                    {unitVal || "—"}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-xs">
+                                    {fmtQty(qtyVal)}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-xs">
+                                    {fmtBRL(priceVal)}
+                                  </TableCell>
+                                  <TableCell className="text-xs truncate max-w-[100px]">
+                                    {stageVal}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                         </TableBody>
                       </Table>
                     </div>
@@ -1547,7 +1854,8 @@ function OrcamentosPage() {
           <DialogHeader>
             <DialogTitle>Importar Catálogo Público (SINAPI/SICRO)</DialogTitle>
             <DialogDescription>
-              Insira arquivos oficiais de insumos ou composições. Os itens serão processados em lotes progressivos para atualização do banco.
+              Insira arquivos oficiais de insumos ou composições. Os itens serão processados em
+              lotes progressivos para atualização do banco.
             </DialogDescription>
           </DialogHeader>
 
@@ -1557,7 +1865,9 @@ function OrcamentosPage() {
               <p className="font-medium">{importStatus}</p>
               <div className="max-w-md mx-auto">
                 <Progress value={importProgress} className="h-2" />
-                <span className="text-xs text-muted-foreground mt-1 block">{importProgress}% Concluído</span>
+                <span className="text-xs text-muted-foreground mt-1 block">
+                  {importProgress}% Concluído
+                </span>
               </div>
             </div>
           ) : (
@@ -1593,26 +1903,63 @@ function OrcamentosPage() {
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-foreground">UF</label>
                   <Select value={refUF} onValueChange={(v: string) => setRefUF(v)}>
-                    <SelectTrigger id="catalog-import-uf" className="font-mono text-center bg-white">
+                    <SelectTrigger
+                      id="catalog-import-uf"
+                      className="font-mono text-center bg-white"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"].map((uf) => (
-                        <SelectItem key={uf} value={uf}>{uf}</SelectItem>
+                      {[
+                        "AC",
+                        "AL",
+                        "AP",
+                        "AM",
+                        "BA",
+                        "CE",
+                        "DF",
+                        "ES",
+                        "GO",
+                        "MA",
+                        "MT",
+                        "MS",
+                        "MG",
+                        "PA",
+                        "PB",
+                        "PR",
+                        "PE",
+                        "PI",
+                        "RJ",
+                        "RN",
+                        "RS",
+                        "RO",
+                        "RR",
+                        "SC",
+                        "SP",
+                        "SE",
+                        "TO",
+                      ].map((uf) => (
+                        <SelectItem key={uf} value={uf}>
+                          {uf}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-xs font-semibold text-foreground">Mês/Ano Referência</label>
+                  <label className="text-xs font-semibold text-foreground">
+                    Mês/Ano Referência
+                  </label>
                   <Select value={refMes} onValueChange={(v: string) => setRefMes(v)}>
                     <SelectTrigger id="catalog-import-mes" className="text-center bg-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {availableMonths.map((m) => (
-                        <SelectItem key={m} value={m}>{m}</SelectItem>
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1654,7 +2001,10 @@ function OrcamentosPage() {
                         onChange={(e) => setHasHeaders(e.target.checked)}
                         className="rounded border-gray-300"
                       />
-                      <label htmlFor="chk-has-headers-catalog" className="text-xs font-semibold text-foreground">
+                      <label
+                        htmlFor="chk-has-headers-catalog"
+                        className="text-xs font-semibold text-foreground"
+                      >
                         A primeira linha da planilha contém os cabeçalhos das colunas
                       </label>
                     </div>
@@ -1672,7 +2022,9 @@ function OrcamentosPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1683,14 +2035,18 @@ function OrcamentosPage() {
                         <label className="text-xs font-medium text-foreground">Descrição *</label>
                         <Select
                           value={String(mapping.descricao)}
-                          onValueChange={(val) => setMapping({ ...mapping, descricao: Number(val) })}
+                          onValueChange={(val) =>
+                            setMapping({ ...mapping, descricao: Number(val) })
+                          }
                         >
                           <SelectTrigger id="catalog-map-desc">
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1708,7 +2064,9 @@ function OrcamentosPage() {
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1721,14 +2079,18 @@ function OrcamentosPage() {
                         </label>
                         <Select
                           value={String(mapping.valor_unitario)}
-                          onValueChange={(val) => setMapping({ ...mapping, valor_unitario: Number(val) })}
+                          onValueChange={(val) =>
+                            setMapping({ ...mapping, valor_unitario: Number(val) })
+                          }
                         >
                           <SelectTrigger id="catalog-map-price">
                             <SelectValue placeholder="Selecione..." />
                           </SelectTrigger>
                           <SelectContent>
                             {headers.map((h, idx) => (
-                              <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                              <SelectItem key={idx} value={String(idx)}>
+                                {h}
+                              </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1737,7 +2099,9 @@ function OrcamentosPage() {
                       {/* Tipo/Classe (composições apenas) */}
                       {refType === "composicoes" && (
                         <div className="space-y-1 col-span-2">
-                          <label className="text-xs font-medium text-foreground">Classe/Grupo (Opcional)</label>
+                          <label className="text-xs font-medium text-foreground">
+                            Classe/Grupo (Opcional)
+                          </label>
                           <Select
                             value={String(mapping.etapa)}
                             onValueChange={(val) => setMapping({ ...mapping, etapa: Number(val) })}
@@ -1748,7 +2112,9 @@ function OrcamentosPage() {
                             <SelectContent>
                               <SelectItem value="-1">— Nenhum —</SelectItem>
                               {headers.map((h, idx) => (
-                                <SelectItem key={idx} value={String(idx)}>{h}</SelectItem>
+                                <SelectItem key={idx} value={String(idx)}>
+                                  {h}
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -1869,7 +2235,7 @@ function ManualItemFormDialog({
     try {
       toast.loading("Buscando dados no catálogo...", { id: "lookup" });
       const table = sourceVal === "sinapi" ? "referencia_insumos" : "referencia_insumos"; // fallback or check composicoes too
-      
+
       // Check in insumos
       let { data, error } = await supabase
         .from("referencia_insumos")
@@ -1888,14 +2254,14 @@ function ManualItemFormDialog({
           .eq("codigo", codeVal.trim())
           .limit(1)
           .maybeSingle();
-        
+
         error = compErr;
         if (compData) {
           data = {
             id: compData.id,
             descricao: compData.descricao,
             unidade: compData.unidade,
-            preco_mediano: compData.custo_total
+            preco_mediano: compData.custo_total,
           } as any;
         }
       }
@@ -1919,7 +2285,9 @@ function ManualItemFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{editingItem ? "Editar Item de Custo" : "Adicionar Item de Custo"}</DialogTitle>
+          <DialogTitle>
+            {editingItem ? "Editar Item de Custo" : "Adicionar Item de Custo"}
+          </DialogTitle>
           <DialogDescription>
             Insira os dados do insumo ou serviço próprio, ou preencha usando um código SINAPI/SICRO.
           </DialogDescription>
@@ -1988,7 +2356,11 @@ function ManualItemFormDialog({
                 <FormItem>
                   <FormLabel>Descrição do Insumo/Serviço *</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: AJUDANTE DE CARPINTEIRO COM ENCARGOS COMPLEMENTARES" {...field} id="manual-item-desc" />
+                    <Input
+                      placeholder="Ex: AJUDANTE DE CARPINTEIRO COM ENCARGOS COMPLEMENTARES"
+                      {...field}
+                      id="manual-item-desc"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -2019,7 +2391,13 @@ function ManualItemFormDialog({
                   <FormItem>
                     <FormLabel>Quantidade *</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.0001" min={0.0001} {...field} id="manual-item-qty" />
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        min={0.0001}
+                        {...field}
+                        id="manual-item-qty"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -2050,7 +2428,11 @@ function ManualItemFormDialog({
                 <FormItem>
                   <FormLabel>Etapa / Fase da Obra *</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ex: Fundação, Alvenaria, Acabamento" {...field} id="manual-item-stage" />
+                    <Input
+                      placeholder="Ex: Fundação, Alvenaria, Acabamento"
+                      {...field}
+                      id="manual-item-stage"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
