@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "voltagent": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@voltagent/docs-mcp"
+      ],
+      "type": "stdio"
+    }
+  }
+}
