@@ -40,6 +40,7 @@ import {
   sanitizeSearchTerm,
   parseMetadataFromFileName,
 } from "@/lib/sinapi";
+import { ConsultaSinapiOficialModal } from "@/components/sinapi/ConsultaSinapiOficialModal";
 import { cn } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
@@ -126,6 +127,7 @@ function OrcamentosPage() {
   const [itemModalOpen, setItemModalOpen] = useState(false);
   const [importBudgetOpen, setImportBudgetOpen] = useState(false);
   const [importCatalogOpen, setImportCatalogOpen] = useState(false);
+  const [consultaOficialOpen, setConsultaOficialOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrcamentoItemRow | null>(null);
 
   // Search filter for reference list
@@ -262,7 +264,7 @@ function OrcamentosPage() {
       }
 
       const distinct: string[] = Array.from(
-        new Set<string>((data ?? []).map((item: any) => String(item.mes_referencia)))
+        new Set<string>((data ?? []).map((item: any) => String(item.mes_referencia))),
       );
       return distinct.sort(competenciaSort);
     },
@@ -1064,6 +1066,16 @@ function OrcamentosPage() {
                     </Button>
 
                     <Button
+                      variant="outline"
+                      className="gap-2 text-sm border-[#005CA9]/40 text-[#005CA9] hover:bg-[#005CA9]/10 font-semibold"
+                      onClick={() => setConsultaOficialOpen(true)}
+                      id="btn-consulta-sinapi-caixa-orcamento"
+                    >
+                      <Search className="size-4 text-[#005CA9]" />
+                      Buscar no SINAPI Oficial (Caixa)
+                    </Button>
+
+                    <Button
                       className="gap-2 text-sm"
                       onClick={() => {
                         setEditingItem(null);
@@ -1091,16 +1103,24 @@ function OrcamentosPage() {
                   <FileSpreadsheet className="size-12 text-muted-foreground/40 mb-3" />
                   <h3 className="font-medium text-foreground">Orçamento vazio</h3>
                   <p className="text-sm text-muted-foreground max-w-sm mt-1 mb-4">
-                    Não há itens cadastrados no orçamento desta obra. Comece importando uma planilha
-                    ou adicionando itens manualmente.
+                    Não há itens cadastrados no orçamento desta obra. Comece importando uma
+                    planilha, consultando a base oficial do SINAPI ou adicionando itens manualmente.
                   </p>
                   {podeEditar && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <Button
+                        size="sm"
+                        className="bg-[#005CA9] hover:bg-[#004b8a] text-white font-semibold"
+                        onClick={() => setConsultaOficialOpen(true)}
+                      >
+                        <Search className="size-4 mr-1.5" />
+                        Buscar no SINAPI Oficial
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => setImportBudgetOpen(true)}>
                         Importar Excel
                       </Button>
-                      <Button size="sm" onClick={() => setItemModalOpen(true)}>
-                        Adicionar Item
+                      <Button size="sm" variant="outline" onClick={() => setItemModalOpen(true)}>
+                        Adicionar Manual
                       </Button>
                     </div>
                   )}
@@ -1257,6 +1277,14 @@ function OrcamentosPage() {
                     >
                       <Trash2 className="size-4" />
                       {clearCatalogMutation.isPending ? "Limpando..." : "Limpar Base"}
+                    </Button>
+                    <Button
+                      className="gap-2 text-sm bg-[#005CA9] hover:bg-[#004b8a] text-white shadow-sm font-semibold"
+                      onClick={() => setConsultaOficialOpen(true)}
+                      id="btn-consulta-oficial-sinapi"
+                    >
+                      <Search className="size-4" />
+                      Consulta Oficial SINAPI (Caixa)
                     </Button>
                     <Button
                       variant="outline"
@@ -2150,6 +2178,20 @@ function OrcamentosPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Consulta Oficial SINAPI Caixa */}
+      <ConsultaSinapiOficialModal
+        open={consultaOficialOpen}
+        onOpenChange={setConsultaOficialOpen}
+        defaultUf={refUF}
+        defaultAnoMes={refMes ? `${refMes.split("/")[1]}-${refMes.split("/")[0]}` : undefined}
+        orcamentoId={orcamento?.id}
+        etapasDisponiveis={Object.keys(itemsByEtapa)}
+        onItemAdicionado={() => {
+          queryClient.invalidateQueries({ queryKey: ["orcamento-itens", orcamento?.id] });
+          queryClient.invalidateQueries({ queryKey: ["orcamento-for-obra", selectedObraId] });
+        }}
+      />
     </div>
   );
 }
