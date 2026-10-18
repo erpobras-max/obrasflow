@@ -12,6 +12,7 @@ export const ROLE_LABEL: Record<AppRole, string> = {
   cliente: "Cliente",
   funcionario: "Funcionário (Ponto)",
   imobiliaria: "Imobiliária",
+  mestre_obras: "Mestre de Obras",
 };
 
 // Tailwind classes for role badge colors (distinct per role)
@@ -27,9 +28,10 @@ export const ROLE_BADGE_CLASS: Record<AppRole, string> = {
   cliente: "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300",
   funcionario: "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300",
   imobiliaria: "bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300",
+  mestre_obras: "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300",
 };
 
 export const ROLE_OPTIONS: AppRole[] = [
   "admin","diretor","financeiro_civil","financeiro_imobiliaria","compras",
-  "engenharia","almoxarifado","rh","cliente","funcionario","imobiliaria",
+  "engenharia","almoxarifado","rh","cliente","funcionario","imobiliaria","mestre_obras",
 ];

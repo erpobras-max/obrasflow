@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PortalRouteImport } from './routes/portal'
+import { Route as PontoMestreRouteImport } from './routes/ponto-mestre'
 import { Route as PontoRouteImport } from './routes/ponto'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AuthRouteImport } from './routes/auth'
@@ -47,13 +48,13 @@ import { Route as AppComprasRouteImport } from './routes/_app/compras'
 import { Route as AppComercialRouteImport } from './routes/_app/comercial'
 import { Route as AppCotacoesIndexRouteImport } from './routes/_app/cotacoes/index'
 import { Route as AppVendasPedidosRouteImport } from './routes/_app/vendas.pedidos'
-import { Route as AppImobiliariaVendasRouteImport } from './routes/_app/imobiliaria.vendas'
 import { Route as AppImobiliariaLocacoesRouteImport } from './routes/_app/imobiliaria.locacoes'
 import { Route as AppImobiliariaImoveisRouteImport } from './routes/_app/imobiliaria.imoveis'
 import { Route as AppImobiliariaFinanceiroRouteImport } from './routes/_app/imobiliaria.financeiro'
 import { Route as AppImobiliariaFiadoresRouteImport } from './routes/_app/imobiliaria/fiadores'
 import { Route as AppImobiliariaDashboardRouteImport } from './routes/_app/imobiliaria.dashboard'
 import { Route as AppImobiliariaClientesRouteImport } from './routes/_app/imobiliaria.clientes'
+import { Route as AppEstoqueMovimentacaoRouteImport } from './routes/_app/estoque.movimentacao'
 import { Route as AppCotacoesCotacaoIdRouteImport } from './routes/_app/cotacoes/$cotacaoId'
 import { Route as AppComercialPropostasRouteImport } from './routes/_app/comercial.propostas'
 import { Route as AppComercialLicitacoesRouteImport } from './routes/_app/comercial.licitacoes'
@@ -69,6 +70,11 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const PortalRoute = PortalRouteImport.update({
   id: '/portal',
   path: '/portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PontoMestreRoute = PontoMestreRouteImport.update({
+  id: '/ponto-mestre',
+  path: '/ponto-mestre',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PontoRoute = PontoRouteImport.update({
@@ -250,11 +256,6 @@ const AppVendasPedidosRoute = AppVendasPedidosRouteImport.update({
   path: '/vendas/pedidos',
   getParentRoute: () => AppRoute,
 } as any)
-const AppImobiliariaVendasRoute = AppImobiliariaVendasRouteImport.update({
-  id: '/vendas',
-  path: '/vendas',
-  getParentRoute: () => AppImobiliariaRoute,
-} as any)
 const AppImobiliariaLocacoesRoute = AppImobiliariaLocacoesRouteImport.update({
   id: '/locacoes',
   path: '/locacoes',
@@ -285,6 +286,11 @@ const AppImobiliariaClientesRoute = AppImobiliariaClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
   getParentRoute: () => AppImobiliariaRoute,
+} as any)
+const AppEstoqueMovimentacaoRoute = AppEstoqueMovimentacaoRouteImport.update({
+  id: '/movimentacao',
+  path: '/movimentacao',
+  getParentRoute: () => AppEstoqueRoute,
 } as any)
 const AppCotacoesCotacaoIdRoute = AppCotacoesCotacaoIdRouteImport.update({
   id: '/cotacoes/$cotacaoId',
@@ -323,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/ponto': typeof PontoRoute
+  '/ponto-mestre': typeof PontoMestreRoute
   '/portal': typeof PortalRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/comercial': typeof AppComercialRouteWithChildren
@@ -333,7 +340,7 @@ export interface FileRoutesByFullPath {
   '/documentos': typeof AppDocumentosRoute
   '/empresa': typeof AppEmpresaRoute
   '/equipamentos': typeof AppEquipamentosRoute
-  '/estoque': typeof AppEstoqueRoute
+  '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/fiscal': typeof AppFiscalRoute
   '/imobiliaria': typeof AppImobiliariaRouteWithChildren
@@ -359,13 +366,13 @@ export interface FileRoutesByFullPath {
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
   '/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
+  '/estoque/movimentacao': typeof AppEstoqueMovimentacaoRoute
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
   '/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
-  '/imobiliaria/vendas': typeof AppImobiliariaVendasRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
   '/cotacoes/': typeof AppCotacoesIndexRoute
   '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
@@ -375,6 +382,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/ponto': typeof PontoRoute
+  '/ponto-mestre': typeof PontoMestreRoute
   '/reset-password': typeof ResetPasswordRoute
   '/comercial': typeof AppComercialRouteWithChildren
   '/compras': typeof AppComprasRoute
@@ -384,7 +392,7 @@ export interface FileRoutesByTo {
   '/documentos': typeof AppDocumentosRoute
   '/empresa': typeof AppEmpresaRoute
   '/equipamentos': typeof AppEquipamentosRoute
-  '/estoque': typeof AppEstoqueRoute
+  '/estoque': typeof AppEstoqueRouteWithChildren
   '/financeiro': typeof AppFinanceiroRoute
   '/fiscal': typeof AppFiscalRoute
   '/imobiliaria': typeof AppImobiliariaRouteWithChildren
@@ -410,13 +418,13 @@ export interface FileRoutesByTo {
   '/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/comercial/propostas': typeof AppComercialPropostasRoute
   '/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
+  '/estoque/movimentacao': typeof AppEstoqueMovimentacaoRoute
   '/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
   '/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
-  '/imobiliaria/vendas': typeof AppImobiliariaVendasRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
   '/cotacoes': typeof AppCotacoesIndexRoute
   '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
@@ -428,6 +436,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/ponto': typeof PontoRoute
+  '/ponto-mestre': typeof PontoMestreRoute
   '/portal': typeof PortalRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
   '/_app/comercial': typeof AppComercialRouteWithChildren
@@ -438,7 +447,7 @@ export interface FileRoutesById {
   '/_app/documentos': typeof AppDocumentosRoute
   '/_app/empresa': typeof AppEmpresaRoute
   '/_app/equipamentos': typeof AppEquipamentosRoute
-  '/_app/estoque': typeof AppEstoqueRoute
+  '/_app/estoque': typeof AppEstoqueRouteWithChildren
   '/_app/financeiro': typeof AppFinanceiroRoute
   '/_app/fiscal': typeof AppFiscalRoute
   '/_app/imobiliaria': typeof AppImobiliariaRouteWithChildren
@@ -464,13 +473,13 @@ export interface FileRoutesById {
   '/_app/comercial/licitacoes': typeof AppComercialLicitacoesRoute
   '/_app/comercial/propostas': typeof AppComercialPropostasRoute
   '/_app/cotacoes/$cotacaoId': typeof AppCotacoesCotacaoIdRouteWithChildren
+  '/_app/estoque/movimentacao': typeof AppEstoqueMovimentacaoRoute
   '/_app/imobiliaria/clientes': typeof AppImobiliariaClientesRoute
   '/_app/imobiliaria/dashboard': typeof AppImobiliariaDashboardRoute
   '/_app/imobiliaria/fiadores': typeof AppImobiliariaFiadoresRoute
   '/_app/imobiliaria/financeiro': typeof AppImobiliariaFinanceiroRoute
   '/_app/imobiliaria/imoveis': typeof AppImobiliariaImoveisRoute
   '/_app/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
-  '/_app/imobiliaria/vendas': typeof AppImobiliariaVendasRoute
   '/_app/vendas/pedidos': typeof AppVendasPedidosRoute
   '/_app/cotacoes/': typeof AppCotacoesIndexRoute
   '/_app/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
@@ -482,6 +491,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/forgot-password'
     | '/ponto'
+    | '/ponto-mestre'
     | '/portal'
     | '/reset-password'
     | '/comercial'
@@ -518,13 +528,13 @@ export interface FileRouteTypes {
     | '/comercial/licitacoes'
     | '/comercial/propostas'
     | '/cotacoes/$cotacaoId'
+    | '/estoque/movimentacao'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
     | '/imobiliaria/financeiro'
     | '/imobiliaria/imoveis'
     | '/imobiliaria/locacoes'
-    | '/imobiliaria/vendas'
     | '/vendas/pedidos'
     | '/cotacoes/'
     | '/cotacoes/$cotacaoId/comparativo'
@@ -534,6 +544,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/forgot-password'
     | '/ponto'
+    | '/ponto-mestre'
     | '/reset-password'
     | '/comercial'
     | '/compras'
@@ -569,13 +580,13 @@ export interface FileRouteTypes {
     | '/comercial/licitacoes'
     | '/comercial/propostas'
     | '/cotacoes/$cotacaoId'
+    | '/estoque/movimentacao'
     | '/imobiliaria/clientes'
     | '/imobiliaria/dashboard'
     | '/imobiliaria/fiadores'
     | '/imobiliaria/financeiro'
     | '/imobiliaria/imoveis'
     | '/imobiliaria/locacoes'
-    | '/imobiliaria/vendas'
     | '/vendas/pedidos'
     | '/cotacoes'
     | '/cotacoes/$cotacaoId/comparativo'
@@ -586,6 +597,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/forgot-password'
     | '/ponto'
+    | '/ponto-mestre'
     | '/portal'
     | '/reset-password'
     | '/_app/comercial'
@@ -622,13 +634,13 @@ export interface FileRouteTypes {
     | '/_app/comercial/licitacoes'
     | '/_app/comercial/propostas'
     | '/_app/cotacoes/$cotacaoId'
+    | '/_app/estoque/movimentacao'
     | '/_app/imobiliaria/clientes'
     | '/_app/imobiliaria/dashboard'
     | '/_app/imobiliaria/fiadores'
     | '/_app/imobiliaria/financeiro'
     | '/_app/imobiliaria/imoveis'
     | '/_app/imobiliaria/locacoes'
-    | '/_app/imobiliaria/vendas'
     | '/_app/vendas/pedidos'
     | '/_app/cotacoes/'
     | '/_app/cotacoes/$cotacaoId/comparativo'
@@ -640,6 +652,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   PontoRoute: typeof PontoRoute
+  PontoMestreRoute: typeof PontoMestreRoute
   PortalRoute: typeof PortalRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
   AssinarTokenRoute: typeof AssinarTokenRoute
@@ -661,6 +674,13 @@ declare module '@tanstack/react-router' {
       path: '/portal'
       fullPath: '/portal'
       preLoaderRoute: typeof PortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ponto-mestre': {
+      id: '/ponto-mestre'
+      path: '/ponto-mestre'
+      fullPath: '/ponto-mestre'
+      preLoaderRoute: typeof PontoMestreRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ponto': {
@@ -915,13 +935,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppVendasPedidosRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/imobiliaria/vendas': {
-      id: '/_app/imobiliaria/vendas'
-      path: '/vendas'
-      fullPath: '/imobiliaria/vendas'
-      preLoaderRoute: typeof AppImobiliariaVendasRouteImport
-      parentRoute: typeof AppImobiliariaRoute
-    }
     '/_app/imobiliaria/locacoes': {
       id: '/_app/imobiliaria/locacoes'
       path: '/locacoes'
@@ -963,6 +976,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/imobiliaria/clientes'
       preLoaderRoute: typeof AppImobiliariaClientesRouteImport
       parentRoute: typeof AppImobiliariaRoute
+    }
+    '/_app/estoque/movimentacao': {
+      id: '/_app/estoque/movimentacao'
+      path: '/movimentacao'
+      fullPath: '/estoque/movimentacao'
+      preLoaderRoute: typeof AppEstoqueMovimentacaoRouteImport
+      parentRoute: typeof AppEstoqueRoute
     }
     '/_app/cotacoes/$cotacaoId': {
       id: '/_app/cotacoes/$cotacaoId'
@@ -1027,6 +1047,18 @@ const AppComercialRouteWithChildren = AppComercialRoute._addFileChildren(
   AppComercialRouteChildren,
 )
 
+interface AppEstoqueRouteChildren {
+  AppEstoqueMovimentacaoRoute: typeof AppEstoqueMovimentacaoRoute
+}
+
+const AppEstoqueRouteChildren: AppEstoqueRouteChildren = {
+  AppEstoqueMovimentacaoRoute: AppEstoqueMovimentacaoRoute,
+}
+
+const AppEstoqueRouteWithChildren = AppEstoqueRoute._addFileChildren(
+  AppEstoqueRouteChildren,
+)
+
 interface AppImobiliariaRouteChildren {
   AppImobiliariaClientesRoute: typeof AppImobiliariaClientesRoute
   AppImobiliariaDashboardRoute: typeof AppImobiliariaDashboardRoute
@@ -1034,7 +1066,6 @@ interface AppImobiliariaRouteChildren {
   AppImobiliariaFinanceiroRoute: typeof AppImobiliariaFinanceiroRoute
   AppImobiliariaImoveisRoute: typeof AppImobiliariaImoveisRoute
   AppImobiliariaLocacoesRoute: typeof AppImobiliariaLocacoesRoute
-  AppImobiliariaVendasRoute: typeof AppImobiliariaVendasRoute
 }
 
 const AppImobiliariaRouteChildren: AppImobiliariaRouteChildren = {
@@ -1044,7 +1075,6 @@ const AppImobiliariaRouteChildren: AppImobiliariaRouteChildren = {
   AppImobiliariaFinanceiroRoute: AppImobiliariaFinanceiroRoute,
   AppImobiliariaImoveisRoute: AppImobiliariaImoveisRoute,
   AppImobiliariaLocacoesRoute: AppImobiliariaLocacoesRoute,
-  AppImobiliariaVendasRoute: AppImobiliariaVendasRoute,
 }
 
 const AppImobiliariaRouteWithChildren = AppImobiliariaRoute._addFileChildren(
@@ -1071,7 +1101,7 @@ interface AppRouteChildren {
   AppDocumentosRoute: typeof AppDocumentosRoute
   AppEmpresaRoute: typeof AppEmpresaRoute
   AppEquipamentosRoute: typeof AppEquipamentosRoute
-  AppEstoqueRoute: typeof AppEstoqueRoute
+  AppEstoqueRoute: typeof AppEstoqueRouteWithChildren
   AppFinanceiroRoute: typeof AppFinanceiroRoute
   AppFiscalRoute: typeof AppFiscalRoute
   AppImobiliariaRoute: typeof AppImobiliariaRouteWithChildren
@@ -1098,7 +1128,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppDocumentosRoute: AppDocumentosRoute,
   AppEmpresaRoute: AppEmpresaRoute,
   AppEquipamentosRoute: AppEquipamentosRoute,
-  AppEstoqueRoute: AppEstoqueRoute,
+  AppEstoqueRoute: AppEstoqueRouteWithChildren,
   AppFinanceiroRoute: AppFinanceiroRoute,
   AppFiscalRoute: AppFiscalRoute,
   AppImobiliariaRoute: AppImobiliariaRouteWithChildren,
@@ -1143,6 +1173,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   PontoRoute: PontoRoute,
+  PontoMestreRoute: PontoMestreRoute,
   PortalRoute: PortalRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   AssinarTokenRoute: AssinarTokenRoute,

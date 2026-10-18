@@ -344,10 +344,13 @@ export const importarPedidosVenda = createServerFn({ method: "POST" })
         const { error: itemsErr } = await supabase.from("pedidos_venda_itens").insert(finalItens);
         if (itemsErr) throw itemsErr;
 
-        // If marked as 'atendido', trigger automatic stock reduction and billing
+        // If marked as 'atendido', call the explicit RPC to process inventory and billing
         if (row.situacao === "atendido") {
-          // The AFTER UPDATE trigger on pedidos_venda handles this. Let's fire it by doing a dummy update.
-          await supabase.from("pedidos_venda").update({ updated_at: new Date().toISOString() }).eq("id", order.id);
+          // Use the new explicit RPC instead of dummy update to trigger
+          const { error: faturaError } = await supabase.rpc("faturar_pedido_venda", {
+            p_pedido_id: order.id
+          });
+          if (faturaError) throw faturaError;
         }
 
         sucesso++;

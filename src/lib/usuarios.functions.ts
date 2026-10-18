@@ -7,14 +7,14 @@ const inviteSchema = z.object({
   email: z.string().trim().email().max(255).optional().nullable(),
   roles: z.array(z.enum([
     "admin", "diretor", "financeiro_civil", "financeiro_imobiliaria", "compras",
-    "engenharia", "almoxarifado", "rh", "cliente", "funcionario", "imobiliaria",
-  ])).min(1).max(11),
+    "engenharia", "almoxarifado", "rh", "cliente", "funcionario", "imobiliaria", "mestre_obras",
+  ])).min(1).max(12),
   funcionarioId: z.string().uuid().optional().nullable(),
 });
 
 const ROLE_PRIORITY = [
   "admin", "diretor", "financeiro_civil", "financeiro_imobiliaria", "engenharia",
-  "imobiliaria", "compras", "almoxarifado", "rh", "funcionario", "cliente",
+  "imobiliaria", "compras", "almoxarifado", "rh", "funcionario", "mestre_obras", "cliente",
 ] as const;
 
 function getPrimaryRole(roles: Array<(typeof ROLE_PRIORITY)[number]>) {
