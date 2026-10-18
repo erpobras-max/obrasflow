@@ -21,11 +21,22 @@ export const importarSINAPI = createServerFn({ method: "POST" })
     const baseUrl = "https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Documents/busca";
 
     try {
-      // 1. Fetch dos dados
+      // 1. Fetch dos dados - Manter manual para evitar subrequests excessivas de redirect
+      const fetchWithCookie = async (url: string) => {
+        // Tenta buscar com cache e controle manual de redirect
+        const response = await fetch(url, { redirect: 'manual' });
+        if (response.status === 302) {
+          // Se 302, captura o cookie e tenta novamente sem redirect
+          const cookie = response.headers.get('set-cookie');
+          return fetch(url, { headers: { Cookie: cookie || '' } }).then(r => r.json());
+        }
+        return response.json();
+      };
+
       const [descricoes, analitico, precos] = await Promise.all([
-        fetch(`${baseUrl}/dados/${apiMes}/descricoes.json`).then(r => r.json()),
-        fetch(`${baseUrl}/dados/${apiMes}/analitico.json`).then(r => r.json()),
-        fetch(`${baseUrl}/dados/${apiMes}/${uf}.json`).then(r => r.json())
+        fetchWithCookie(`${baseUrl}/dados/${apiMes}/descricoes.json`),
+        fetchWithCookie(`${baseUrl}/dados/${apiMes}/analitico.json`),
+        fetchWithCookie(`${baseUrl}/dados/${apiMes}/${uf}.json`)
       ]);
 
       const insumosMap = new Map();
