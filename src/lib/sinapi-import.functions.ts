@@ -15,20 +15,73 @@ export const importarSINAPI = createServerFn({ method: "POST" })
     const supabase = context.supabase;
     const { fonte, uf, mesReferencia } = data;
 
-    // Converte MM/AAAA para YYYY-MM para a API da Caixa
+    // Converte MM/AAAA para YYYY-MM
     const [mes, ano] = mesReferencia.split("/");
     const apiMes = `${ano}-${mes}`;
+    const baseUrl = "https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/Documents/busca";
 
-    // Lógica principal de importação:
-    // 1. Warm up cookie com https://www.caixa.gov.br/... (usando o cookie jar conforme descoberto)
-    // 2. Fetch JSON:
-    //    - .../dados/${apiMes}/descricoes.json (para descrição/unidade)
-    //    - .../dados/${apiMes}/${uf}.json (para sd/cd)
-    //    - .../dados/${apiMes}/analitico.json (para identificar composicoes vs insumos e material)
+    try {
+      // 1. Fetch dos dados
+      const [descricoes, analitico, precos] = await Promise.all([
+        fetch(`${baseUrl}/dados/${apiMes}/descricoes.json`).then(r => r.json()),
+        fetch(`${baseUrl}/dados/${apiMes}/analitico.json`).then(r => r.json()),
+        fetch(`${baseUrl}/dados/${apiMes}/${uf}.json`).then(r => r.json())
+      ]);
 
-    // 3. Processar lotes (500) e upsert na tabela correta (referencia_insumos/composicoes)
-    //    - sd -> preco_mediano (insumo) ou custo_total (composicao)
-    //    - cd -> preco_desonerado (insumo) ou custo_desonerado (composicao)
+      const insumosMap = new Map();
+      descricoes.forEach((d: any) => insumosMap.set(String(d.c), d));
 
-    return { success: true, message: "Implementação em andamento" };
+      const compositionCodes = new Set(analitico.map((a: any) => String(a.c)));
+
+      const insumosBatch: any[] = [];
+      const composicoesBatch: any[] = [];
+
+      precos.forEach((p: any) => {
+        const d = insumosMap.get(String(p.c));
+        if (!d) return;
+
+        if (compositionCodes.has(String(p.c))) {
+          composicoesBatch.push({
+            fonte,
+            uf,
+            mes_referencia: mesReferencia,
+            codigo: String(p.c),
+            descricao: d.d,
+            unidade: d.u,
+            custo_total: Math.round(p.sd * 100),
+            custo_desonerado: Math.round(p.cd * 100),
+          });
+        } else {
+          insumosBatch.push({
+            fonte,
+            uf,
+            mes_referencia: mesReferencia,
+            codigo: String(p.c),
+            descricao: d.d,
+            unidade: d.u,
+            preco_mediano: Math.round(p.sd * 100),
+            preco_desonerado: Math.round(p.cd * 100),
+          });
+        }
+      });
+
+      // 3. Upsert
+      if (insumosBatch.length > 0) {
+        const { error } = await supabase
+          .from("referencia_insumos")
+          .upsert(insumosBatch, { onConflict: "fonte,uf,mes_referencia,codigo" });
+        if (error) throw error;
+      }
+      if (composicoesBatch.length > 0) {
+        const { error } = await supabase
+          .from("referencia_composicoes")
+          .upsert(composicoesBatch, { onConflict: "fonte,uf,mes_referencia,codigo" });
+        if (error) throw error;
+      }
+
+      return { success: true, insumos: insumosBatch.length, composicoes: composicoesBatch.length };
+    } catch (e: any) {
+      console.error("Erro na importação SINAPI:", e);
+      throw new Error(`Falha: ${e.message}`);
+    }
   });
