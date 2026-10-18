@@ -15,6 +15,7 @@ import { supabase as supabaseOriginal } from "@/integrations/supabase/client.cus
 const supabase = supabaseOriginal as any;
 import { useAuth } from "@/hooks/use-auth";
 import { importarSINAPI } from "@/lib/sinapi-import.functions";
+import { useServerFn } from "@tanstack/react-start";
 import {
   orcamentoItemSchema,
   type OrcamentoItemFormValues,
@@ -69,9 +70,12 @@ const parseQuantity = (val: any): number => {
 function OrcamentosPage() {
   const { perfil, user } = useAuth();
   const qc = useQueryClient();
+  const sfnImportarSinapi = useServerFn(importarSINAPI);
 
   const podeEditar =
     perfil?.perfil === "admin" || perfil?.perfil === "diretor" || perfil?.perfil === "engenharia";
+
+  const sfnImportarSINAPI = useServerFn(importarSINAPI);
 
   const [activeTab, setActiveTab] = useState("obras");
 
@@ -1131,9 +1135,19 @@ function OrcamentosPage() {
                     <Button
                       variant="default"
                       className="gap-2 text-sm"
-                      onClick={() => {
-                        toast.info("Funcionalidade de busca automática em implementação.");
+                      onClick={async () => {
+                        try {
+                          toast.loading(`Buscando dados da Caixa (${refSource.toUpperCase()}, UF: ${refUF}, Referência: ${refMes})...`, { id: "import-sinapi" });
+                          const result = await sfnImportarSinapi({
+                            data: { fonte: refSource as any, uf: refUF, mesReferencia: refMes }
+                          });
+                          toast.success(`Importação concluída! ${result.insumos} insumos e ${result.composicoes} composições atualizados.`, { id: "import-sinapi" });
+                          qc.invalidateQueries({ queryKey: ["reference-catalog"] });
+                        } catch (e: any) {
+                          toast.error(`Erro na importação: ${e.message}`, { id: "import-sinapi" });
+                        }
                       }}
+                      disabled={isImporting}
                     >
                       <RefreshCw className="size-4" />
                       Buscar da Caixa

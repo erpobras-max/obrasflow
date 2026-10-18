@@ -9,7 +9,8 @@ export type AppRole =
   | "rh"
   | "cliente"
   | "funcionario"
-  | "imobiliaria";
+  | "imobiliaria"
+  | "mestre_obras";
 
 export type ModuleKey =
   | "dashboard"
@@ -54,6 +55,7 @@ export const ROLE_MODULES: Record<string, string[]> = {
   cliente: ["dashboard","obras","documentos"],
   funcionario: ["ponto"],
   imobiliaria: ["dashboard","imobiliaria"],
+  mestre_obras: ["dashboard", "obras", "ponto"],
 };
 
 export function canAccess(role: string | null | undefined, mod: string): boolean {

@@ -679,9 +679,12 @@ function PedidoFormDialog({
         const { error: itemsErr } = await supabase.from("pedidos_venda_itens").insert(finalItens);
         if (itemsErr) throw itemsErr;
 
-        // Dummy update to fire atendido trigger if situation was set to atendido
+        // Call explicit RPC to process order as 'atendido' (inventory reduction + billing)
         if (values.situacao === "atendido" && target.situacao !== "atendido") {
-          await supabase.from("pedidos_venda").update({ updated_at: new Date().toISOString() } as any).eq("id", target.id);
+          const { error: faturaError } = await supabase.rpc("faturar_pedido_venda", {
+            p_pedido_id: target.id
+          });
+          if (faturaError) throw faturaError;
         }
 
         toast.success("Pedido atualizado!");
@@ -717,9 +720,12 @@ function PedidoFormDialog({
         const { error: itemsErr } = await supabase.from("pedidos_venda_itens").insert(finalItens);
         if (itemsErr) throw itemsErr;
 
-        // Dummy update to trigger atendido triggers if initial state was atendido
+        // Call explicit RPC to process new order as 'atendido' (inventory reduction + billing)
         if (values.situacao === "atendido") {
-          await supabase.from("pedidos_venda").update({ updated_at: new Date().toISOString() } as any).eq("id", newOrder.id);
+          const { error: faturaError } = await supabase.rpc("faturar_pedido_venda", {
+            p_pedido_id: newOrder.id
+          });
+          if (faturaError) throw faturaError;
         }
 
         toast.success("Pedido de venda gerado!");

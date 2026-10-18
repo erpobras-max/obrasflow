@@ -24,7 +24,7 @@ function AppLayout() {
     }
     else if (!loading && roles.length > 0 && roles.every((role) => role === "cliente")) {
       navigate({ to: "/portal", replace: true });
-    } else if (!loading && roles.length > 0 && roles.every((role) => role === "funcionario")) {
+    } else if (!loading && roles.length > 0 && (roles.every((role) => role === "funcionario") || roles.includes("mestre_obras"))) {
       navigate({ to: "/ponto" as any, replace: true });
     }
   }, [loading, user, perfil?.ativo, roles, navigate, currentHref]);

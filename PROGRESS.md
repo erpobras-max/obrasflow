@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 13/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 17/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -195,3 +195,56 @@ O módulo também cria notificações para a equipe quando uma proposta é receb
 - Adicionar envio automático dos links por e-mail/WhatsApp com provedor configurado.
 - Melhorar o recebimento para aceitar quantidades parciais por item em uma tela dedicada; a primeira versão registra todo o saldo restante do pedido.
 - Executar uma validação funcional no ambiente publicado para materiais, solicitações e permissões de edição/exclusão.
+
+## 18. Correções de alto risco aplicadas em 17/10/2026
+
+Foram resolvidos dois problemas críticos identificados na análise de sistema:
+
+### 18.1 Migrations com prefixos duplicados
+- Renomeadas as migrations com prefixos idênticos para timestamps únicos:
+  - `20260923000000_fix_service_role_cliente_link.sql` → `20260923000001_fix_service_role_cliente_link.sql`
+  - `20261013000005_fix_solicitacao_itens_valor_estimado.sql` → `20261013000007_fix_solicitacao_itens_valor_estimado.sql`
+  - `20261014000006_ponto_por_cpf_sem_auth.sql` → `20261014000007_ponto_por_cpf_sem_auth.sql`
+- A ordem lógica de aplicação foi preservada: as migrations de schema (correção de coluna, permissões) mantiveram a posição relativa.
+
+### 18.2 Remoção do padrão frágil de triggers via update "dummy"
+- Criada nova RPC `faturar_pedido_venda` (migration `20261018000000_faturar_pedido_venda_rpc.sql`) que:
+  - Valida permissões (admin, diretor, financeiro_civil)
+  - Baixa estoque chamando `registrar_movimentacao_produto`
+  - Gera conta a receber com vencimento 30 dias
+  - Atualiza `situacao = 'atendido'` e registra observação
+- Substituídas as chamadas de update dummy em:
+  - `src/lib/importacoes.functions.ts` (importação de pedidos)
+  - `src/routes/_app/vendas.pedidos.tsx` (tela de vendas)
+- A função garante atomicidade (FOR UPDATE SKIP LOCKED) e trata erros específicos (já faturado, cancelado, etc.)
+- O trigger `trg_baixa_estoque_e_faturamento_venda` continua presente como fallback para operações diretas no banco, mas não será mais o caminho principal.
+
+## 19. Correções de alto risco aplicadas em 17/10/2026 (continuação)
+
+### 18.3 Implementação do cargo "Mestre de Obras"
+- Criada migration `20261018000001_mestre_obras_cargo_final.sql` com:
+  - Adição do papel `'mestre_obras'` ao enum `app_role`
+  - Tabela `obra_mestres` para vincular mestres às obras que supervisionam
+  - RPC `registrar_ponto_por_mestre` que permite ao mestre registrar pontos para funcionários das suas obras, com suporte a justificativa para saída antecipada
+  - Políticas RLS para controle de acesso às vinculações obra-mestre
+  - Coluna `obra_id` adicionada à tabela `registros_ponto` (se não existir)
+- Atualizados arquivos do frontend:
+  - `src/lib/permissions.ts`: adicionado `mestre_obras` ao tipo `AppRole` e módulos de acesso (dashboard, obras, ponto)
+  - `src/lib/role-meta.ts`: atualizados `ROLE_LABEL`, `ROLE_BADGE_CLASS` e `ROLE_OPTIONS`
+  - `src/lib/usuarios.functions.ts`: atualizados schemas e prioridade de papéis
+  - `src/routes/_app.tsx`: redirecionamento para `/ponto` quando usuário tem papel de mestre de obras
+  - `src/routes/ponto-mestre.tsx`: nova página completa para o mestre de obras gerenciar pontos dos funcionários
+- O mestre de obras pode:
+  - Acessar seu próprio ponto na rota `/ponto` (redirecionamento automático)
+  - Acessar a interface de gestão em `/ponto-mestre`
+  - Registrar pontos para funcionários das obras que supervisiona
+  - Informar justificativa para saída antecipada (registrada automaticamente como solicitação de ajuste para o RH)
+  - Visualizar funcionários das obras vinculadas e histórico de registros recentes
+
+## 20. Próximas etapas de correção (risco médio)
+
+Conforme análise do relatório, pendem as correções de risco médio:
+- Artifatos de deploy divergentes (`wrangler.jsonc` da raiz vs `.output`, `netlify.toml` órfão)
+- `src/integrations/supabase/types.ts` desatualizado
+- Duplo lockfile (npm + Bun)
+- Pendências de negócio dependentes de infraestrutura externa (Edge Functions/cron)
