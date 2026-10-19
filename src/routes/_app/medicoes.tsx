@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Database, FileOutput, Plus, Pencil, Trash2, Ruler, X } from "lucide-react";
+import { Database, FileOutput, Plus, Pencil, Trash2, Ruler, X, Boxes } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -338,6 +338,71 @@ function MedicaoFormDialog({
     }
   };
 
+  const importarDoProjeto3D = async () => {
+    const obraId = form.getValues("obra_id");
+    if (!obraId) {
+      toast.error("Selecione uma obra primeiro para importar os quantitativos do 3D.");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("obra_projetos_cad")
+        .select("quantitativos_calculados, config_bdi")
+        .eq("obra_id", obraId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data || !data.quantitativos_calculados) {
+        toast.info("Esta obra ainda não possui projeto 3D salvo com quantitativos calculados.");
+        return;
+      }
+
+      const quantitativos = data.quantitativos_calculados as any;
+      const itensBim = quantitativos.itens || [];
+      const bdiTaxa = quantitativos.bdiTaxa || 0;
+
+      if (itensBim.length === 0) {
+        toast.info("O projeto 3D desta obra não possui paredes ou serviços para quantificar.");
+        return;
+      }
+
+      const novosItens = itensBim.map((it: any) => {
+        const precoComBdi = (Number(it.precoUnitario) || 0) * (1 + bdiTaxa / 100);
+        return {
+          descricao: it.descricao,
+          unidade: it.unidade || "un",
+          qtd_contratada: Number(it.quantidade) || 1,
+          qtd_executada: Number(it.quantidade) || 1,
+          valor_unitario: Number(precoComBdi.toFixed(2)),
+          referencia_id: null,
+          fonte_referencia: it.codigoSinapi ? ("sinapi" as const) : null,
+          tipo_referencia: null,
+          codigo_referencia: it.codigoSinapi || it.codigo,
+          referencia_uf: null,
+          referencia_mes: null,
+          proposta_item_id: null,
+          etapa_codigo: "BIM-3D",
+          etapa_nome: "Projeto 3D",
+          item_codigo: it.codigo,
+          item_nome: it.tipoItem || "Serviço",
+          subitem_codigo: null,
+          percentual_anterior_item: 0,
+          percentual_executado: 100,
+        };
+      });
+
+      if (fields.length === 1 && !form.getValues("itens.0.descricao")) {
+        replace(novosItens);
+      } else {
+        novosItens.forEach((ni: any) => append(ni));
+      }
+
+      toast.success(`${novosItens.length} itens do Projeto 3D importados com sucesso!`);
+    } catch (e: any) {
+      toast.error(`Erro ao importar quantitativos do 3D: ${e.message}`);
+    }
+  };
+
   const adicionarReferencia = (referencia: ReferenciaCustoSelecionada) => {
     const novoItem = {
       descricao: referencia.descricao,
@@ -606,6 +671,11 @@ function MedicaoFormDialog({
               <div className="flex items-center justify-between mb-2">
                 <label className="text-sm font-semibold">Itens medidos *</label>
                 <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" className="gap-1 border-emerald-500/30 text-emerald-700 hover:bg-emerald-50"
+                    disabled={escopoConcluido}
+                    onClick={importarDoProjeto3D}>
+                    <Boxes className="size-3.5 text-emerald-600" /> Do Projeto 3D
+                  </Button>
                   <Button type="button" size="sm" variant="outline" className="gap-1"
                     disabled={escopoConcluido}
                     onClick={() => setReferenciaOpen(true)}>

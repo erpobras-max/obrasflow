@@ -349,6 +349,8 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
               setConfigBdi(nova);
               setTemAlteracoes(true);
             }}
+            obraId={obraId}
+            obraNome={obra?.nome}
           />
         )}
 

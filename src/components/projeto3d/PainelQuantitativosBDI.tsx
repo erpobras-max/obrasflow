@@ -1,10 +1,14 @@
 import { useState } from "react";
-import type { DadosProjetoBIM, ConfiguracaoBDI } from "@/types/projeto3d";
+import { Link, useNavigate } from "@tanstack/react-router";
+import type { DadosProjetoBIM, ConfiguracaoBDI, ItemQuantitativo } from "@/types/projeto3d";
 import {
   calcularQuantitativosBIM,
   formatarMoeda,
   BDI_PADRAO_INICIAL,
 } from "@/lib/projeto3d.utils";
+import { supabase } from "@/integrations/supabase/client.custom";
+import { useAuth } from "@/hooks/use-auth";
+import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +17,15 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
   Calculator,
   Percent,
   Coins,
@@ -20,6 +33,10 @@ import {
   TrendingUp,
   RotateCcw,
   Info,
+  Send,
+  Calendar,
+  CheckCircle2,
+  ArrowRight,
 } from "lucide-react";
 
 interface PainelQuantitativosBDIProps {
@@ -27,6 +44,8 @@ interface PainelQuantitativosBDIProps {
   configBdi: ConfiguracaoBDI;
   onChangeBdi: (novaConfig: ConfiguracaoBDI) => void;
   somenteLeitura?: boolean;
+  obraId?: string;
+  obraNome?: string;
 }
 
 export function PainelQuantitativosBDI({
@@ -34,8 +53,130 @@ export function PainelQuantitativosBDI({
   configBdi,
   onChangeBdi,
   somenteLeitura = false,
+  obraId,
+  obraNome,
 }: PainelQuantitativosBDIProps) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const resumo = calcularQuantitativosBIM(dados, configBdi);
+
+  // Estados para o diálogo de criação de medição a partir do 3D
+  const [modalMedicaoAberto, setModalMedicaoAberto] = useState(false);
+  const [itensSelecionados, setItensSelecionados] = useState<Record<string, boolean>>({});
+  const [periodoInicio, setPeriodoInicio] = useState(() => new Date().toISOString().split("T")[0]);
+  const [periodoFim, setPeriodoFim] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 15);
+    return d.toISOString().split("T")[0];
+  });
+  const [observacoesMedicao, setObservacoesMedicao] = useState("");
+  const [criandoMedicao, setCriandoMedicao] = useState(false);
+
+  // Inicializar seleção quando abrir o modal
+  const abrirModalMedicao = () => {
+    const selecaoInicial: Record<string, boolean> = {};
+    resumo.itens.forEach((it) => {
+      selecaoInicial[it.id] = true;
+    });
+    setItensSelecionados(selecaoInicial);
+    setObservacoesMedicao(`Medição gerada a partir dos quantitativos do Projeto 3D/BIM da obra.`);
+    setModalMedicaoAberto(true);
+  };
+
+  const toggleItem = (id: string) => {
+    setItensSelecionados((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const selecionarTodos = (marcar: boolean) => {
+    const nova: Record<string, boolean> = {};
+    resumo.itens.forEach((it) => {
+      nova[it.id] = marcar;
+    });
+    setItensSelecionados(nova);
+  };
+
+  const itensFiltradosParaExportar = resumo.itens.filter((it) => itensSelecionados[it.id]);
+  const valorTotalExportacao = itensFiltradosParaExportar.reduce((acc, it) => {
+    const subtotal = it.quantidade * it.precoUnitario;
+    return acc + subtotal * (1 + resumo.bdiTaxa / 100);
+  }, 0);
+
+  const handleConfirmarEnvioMedicao = async () => {
+    if (!obraId) {
+      toast.error("Identificador da obra não encontrado.");
+      return;
+    }
+    if (itensFiltradosParaExportar.length === 0) {
+      toast.error("Selecione pelo menos um serviço do projeto para incluir na medição.");
+      return;
+    }
+    if (!periodoInicio || !periodoFim) {
+      toast.error("Informe a data de início e fim da medição.");
+      return;
+    }
+
+    setCriandoMedicao(true);
+    try {
+      // 1. Criar cabeçalho da medição
+      const baseMed = {
+        obra_id: obraId,
+        contrato_id: null,
+        periodo_inicio: periodoInicio,
+        periodo_fim: periodoFim,
+        percentual_total: 100, // Primeira medição de quantitativo base
+        status: "rascunho",
+        observacoes: observacoesMedicao || `Extraído do Modelo 3D / BIM - Obra: ${obraNome || ""}`,
+        created_by: user?.id ?? null,
+      };
+
+      const { data: medData, error: medError } = await supabase
+        .from("medicoes")
+        .insert(baseMed)
+        .select("id, numero")
+        .single();
+
+      if (medError) throw medError;
+      const medicaoId = medData.id;
+
+      // 2. Inserir itens da medição com seus quantitativos e valores unitários com BDI
+      const itensInsert = itensFiltradosParaExportar.map((it) => {
+        const precoComBdi = it.precoUnitario * (1 + resumo.bdiTaxa / 100);
+        return {
+          medicao_id: medicaoId,
+          descricao: it.descricao,
+          unidade: it.unidade,
+          qtd_contratada: it.quantidade,
+          qtd_executada: it.quantidade,
+          valor_unitario: Number(precoComBdi.toFixed(2)),
+          valor_total: Number((it.quantidade * precoComBdi).toFixed(2)),
+          codigo_referencia: it.codigoSinapi || it.codigo,
+          fonte_referencia: it.codigoSinapi ? "sinapi" : null,
+          percentual_executado: 100,
+        };
+      });
+
+      const { error: itensError } = await (supabase as any)
+        .from("medicoes_itens")
+        .insert(itensInsert);
+
+      if (itensError) throw itensError;
+
+      toast.success(
+        `Medição ${medData.numero ? `#${medData.numero}` : ""} criada com sucesso a partir do projeto 3D! Ela já está pronta em Medições & Financeiro.`
+      );
+      setModalMedicaoAberto(false);
+
+      // Redirecionar para a tela de medições
+      navigate({ to: "/medicoes" });
+    } catch (err: any) {
+      toast.error(`Falha ao criar medição: ${err.message}`);
+    } finally {
+      setCriandoMedicao(false);
+    }
+  };
 
   const handleUpdateCampo = (campo: keyof ConfiguracaoBDI, valorStr: string) => {
     const valor = parseFloat(valorStr) || 0;
@@ -229,10 +370,24 @@ export function PainelQuantitativosBDI({
               </CardDescription>
             </div>
 
-            <Badge variant="outline" className="text-xs gap-1.5 text-slate-600 font-normal">
-              <Info className="w-3.5 h-3.5 text-blue-500" />
-              Desconto real de vãos: {resumo.areaTotalVaos.toFixed(2)} m²
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs gap-1.5 text-slate-600 font-normal">
+                <Info className="w-3.5 h-3.5 text-blue-500" />
+                Desconto real de vãos: {resumo.areaTotalVaos.toFixed(2)} m²
+              </Badge>
+
+              {!somenteLeitura && obraId && (
+                <Button
+                  size="sm"
+                  onClick={abrirModalMedicao}
+                  disabled={resumo.itens.length === 0}
+                  className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  Gerar Medição / Financeiro
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -293,6 +448,173 @@ export function PainelQuantitativosBDI({
           </Table>
         </CardContent>
       </Card>
+
+      {/* Modal de Exportação para Medição / Financeiro */}
+      <Dialog open={modalMedicaoAberto} onOpenChange={setModalMedicaoAberto}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base text-slate-900">
+              <Send className="w-5 h-5 text-emerald-600" />
+              Lançar Medição no Financeiro a partir do Projeto 3D
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Ideal para reformas ou obras novas: selecione apenas os serviços do projeto que serão executados neste período (ex: gesso, troca de pisos ou pintura).
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Datas do período da medição */}
+            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-700 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  Período Inicial da Medição *
+                </Label>
+                <Input
+                  type="date"
+                  value={periodoInicio}
+                  onChange={(e) => setPeriodoInicio(e.target.value)}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-slate-700 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  Período Final da Medição *
+                </Label>
+                <Input
+                  type="date"
+                  value={periodoFim}
+                  onChange={(e) => setPeriodoFim(e.target.value)}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+            </div>
+
+            {/* Seleção de serviços/escopo da reforma */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold text-slate-800">
+                  Selecione os Serviços a Medir / Faturar:
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] px-2 text-primary"
+                    onClick={() => selecionarTodos(true)}
+                  >
+                    Marcar Todos
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] px-2 text-slate-500"
+                    onClick={() => selecionarTodos(false)}
+                  >
+                    Desmarcar Todos
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-60 overflow-y-auto bg-white">
+                {resumo.itens.map((it) => {
+                  const subtotal = it.quantidade * it.precoUnitario;
+                  const totalComBdi = subtotal * (1 + resumo.bdiTaxa / 100);
+                  const marcado = !!itensSelecionados[it.id];
+
+                  return (
+                    <div
+                      key={it.id}
+                      onClick={() => toggleItem(it.id)}
+                      className={`p-2.5 flex items-center justify-between text-xs cursor-pointer transition-colors ${
+                        marcado ? "bg-emerald-50/40 hover:bg-emerald-50/70" : "hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Checkbox
+                          checked={marcado}
+                          onCheckedChange={() => toggleItem(it.id)}
+                        />
+                        <div>
+                          <div className="font-medium text-slate-800 flex items-center gap-1.5">
+                            <span>{it.descricao}</span>
+                            {it.codigoSinapi && (
+                              <Badge variant="outline" className="text-[10px] py-0 px-1 font-mono">
+                                #{it.codigoSinapi}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Quantitativo BIM: {it.quantidade.toFixed(2)} {it.unidade}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <div className="font-mono font-semibold text-slate-900">
+                          {formatarMoeda(totalComBdi)}
+                        </div>
+                        <div className="text-[10px] text-slate-400">c/ BDI incluso</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Resumo do Valor que será lançado */}
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
+              <div>
+                <div className="text-xs font-semibold text-emerald-900 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  {itensFiltradosParaExportar.length} serviço(s) selecionado(s)
+                </div>
+                <div className="text-[11px] text-emerald-700">
+                  O valor será enviado como medição pronta para faturamento financeiro.
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="text-[11px] text-emerald-800 font-medium">Valor Total da Medição:</div>
+                <div className="text-lg font-bold font-mono text-emerald-900">
+                  {formatarMoeda(valorTotalExportacao)}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalMedicaoAberto(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConfirmarEnvioMedicao}
+              disabled={criandoMedicao || itensFiltradosParaExportar.length === 0}
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium"
+            >
+              {criandoMedicao ? (
+                "Gerando Medição..."
+              ) : (
+                <>
+                  Confirmar e Ir para Medições
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
