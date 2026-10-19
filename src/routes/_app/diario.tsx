@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, ClipboardList, Image as ImageIcon, Upload, X } from "lucide-react";
+import { Plus, Pencil, Trash2, ClipboardList, Image as ImageIcon, Upload, X, Users, Loader2 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -290,6 +290,59 @@ function DiarioFormDialog({
   }, [open, target, form]);
 
   const submitting = form.formState.isSubmitting;
+  const [importandoPonto, setImportandoPonto] = useState(false);
+
+  const importarEfetivoDoPonto = async () => {
+    const obraId = form.getValues("obra_id");
+    const dataReg = form.getValues("data");
+    if (!obraId) {
+      toast.error("Selecione a Obra antes de puxar o efetivo do ponto.");
+      return;
+    }
+    setImportandoPonto(true);
+    try {
+      const { data: pontos, error: errPontos } = await (supabase as any)
+        .from("registros_ponto")
+        .select("funcionario_id, hora_entrada")
+        .eq("data", dataReg)
+        .eq("obra_id", obraId)
+        .not("hora_entrada", "is", null);
+
+      if (errPontos) throw errPontos;
+
+      if (!pontos || pontos.length === 0) {
+        toast.info("Nenhum registro de ponto encontrado para esta obra nesta data.");
+        setImportandoPonto(false);
+        return;
+      }
+
+      const funcIds = pontos.map((p: any) => p.funcionario_id);
+      const { data: funcs, error: errFuncs } = await (supabase as any)
+        .from("funcionarios")
+        .select("id, cargo")
+        .in("id", funcIds);
+
+      if (errFuncs) throw errFuncs;
+
+      const contagemPorCargo: Record<string, number> = {};
+      (funcs ?? []).forEach((f: any) => {
+        const cargo = f.cargo?.trim() || "Operacional";
+        contagemPorCargo[cargo] = (contagemPorCargo[cargo] || 0) + 1;
+      });
+
+      const novoEfetivo = Object.entries(contagemPorCargo).map(([funcao, quantidade]) => ({
+        funcao,
+        quantidade,
+      }));
+
+      form.setValue("efetivo", novoEfetivo);
+      toast.success(`${pontos.length} colaborador(es) importado(s) do ponto com sucesso!`);
+    } catch (e: any) {
+      toast.error(e.message || "Erro ao puxar dados do ponto.");
+    } finally {
+      setImportandoPonto(false);
+    }
+  };
 
   const onSubmit = async (values: DiarioFormValues) => {
     const payload = {
@@ -375,11 +428,37 @@ function DiarioFormDialog({
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="text-sm font-semibold">Efetivo (mão de obra)</label>
-                <Button type="button" size="sm" variant="outline" className="gap-1"
-                  onClick={() => append({ funcao: "", quantidade: 1 })}>
-                  <Plus className="size-3.5" /> Adicionar
-                </Button>
+                <div>
+                  <label className="text-sm font-semibold">Efetivo (mão de obra)</label>
+                  <p className="text-[11px] text-muted-foreground">Pessoas presentes no canteiro hoje.</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5 text-xs text-amber-900 border-amber-300 bg-amber-50 hover:bg-amber-100"
+                    onClick={importarEfetivoDoPonto}
+                    disabled={importandoPonto}
+                    title="Preencher automaticamente com base nos colaboradores que bateram ponto nesta obra hoje"
+                  >
+                    {importandoPonto ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Users className="size-3.5 text-amber-700" />
+                    )}
+                    Puxar do Ponto
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 text-xs"
+                    onClick={() => append({ funcao: "", quantidade: 1 })}
+                  >
+                    <Plus className="size-3.5" /> Adicionar
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 {fields.length === 0 && (

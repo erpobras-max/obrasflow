@@ -25,6 +25,9 @@ import {
   ShieldCheck,
   Check,
   Search,
+  CheckSquare,
+  Square,
+  UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { eachDayOfInterval, endOfMonth, format, isWeekend, parseISO, startOfMonth } from "date-fns";
@@ -41,6 +44,8 @@ import {
   obterObrasPonto,
   obterEquipePonto,
   registrarPontoEquipeCpf,
+  registrarPontoEmLoteCpf,
+  obterRegistrosEquipeHojeServer,
 } from "@/lib/ponto.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -237,18 +242,26 @@ function PontoPage() {
     return lista;
   }, [todosFuncionariosAtivos, apenasDestaObra, obraSelecionadaId, buscaEquipe]);
 
+  const [selecionadosIds, setSelecionadosIds] = useState<string[]>([]);
+
   const { data: registrosEquipeHoje = [], refetch: refetchRegistrosEquipe } = useQuery<
     (RegistroPonto & { funcionario_id: string })[]
   >({
     queryKey: ["ponto-equipe-hoje", hoje],
     enabled: isMestreDeObras,
     queryFn: async () => {
+      try {
+        const serverRegs = await obterRegistrosEquipeHojeServer({ data: { data: hoje } });
+        if (serverRegs && serverRegs.length > 0) return serverRegs as any;
+      } catch {
+        // Fallback
+      }
       const { data, error } = await (supabase as any)
         .from("registros_ponto")
         .select("*")
         .eq("data", hoje);
       if (error) return [];
-      return data ?? [];
+      return (data ?? []) as any;
     },
   });
 
@@ -411,6 +424,70 @@ function PontoPage() {
     },
     onSuccess: () => {
       toast.success("Ponto do membro da equipe registrado com sucesso!");
+      void qc.invalidateQueries({ queryKey: ["ponto-equipe-hoje"] });
+      void qc.invalidateQueries({ queryKey: ["ponto-registros"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const registrarLoteEquipe = useMutation({
+    mutationFn: async ({ tipo }: { tipo: Marcacao }) => {
+      if (!obraSelecionadaId || obraSelecionadaId === "todas") {
+        throw new Error("Selecione a Obra em que a equipe está presente.");
+      }
+      if (selecionadosIds.length === 0) {
+        throw new Error("Selecione ao menos um colaborador na lista.");
+      }
+      const local = await gps();
+      if (!user) {
+        return await registrarPontoEmLoteCpf({
+          data: {
+            funcionarioIds: selecionadosIds,
+            tipo,
+            obraId: obraSelecionadaId,
+            latitude: local?.latitude ?? null,
+            longitude: local?.longitude ?? null,
+            precisao: local?.precisao ?? null,
+            dispositivo: {
+              navegador: navigator.userAgent,
+              plataforma: navigator.platform,
+              idioma: navigator.language,
+              registrado_por_mestre: true,
+              em_lote: true,
+            },
+          },
+        });
+      }
+      let sucessos = 0;
+      const erros: string[] = [];
+      for (const funcId of selecionadosIds) {
+        const { error } = await (supabase as any).rpc("registrar_ponto_equipe", {
+          p_funcionario_id: funcId,
+          p_tipo: tipo,
+          p_obra_id: obraSelecionadaId,
+          p_latitude: local?.latitude ?? null,
+          p_longitude: local?.longitude ?? null,
+          p_precisao: local?.precisao ?? null,
+          p_dispositivo: {
+            navegador: navigator.userAgent,
+            plataforma: navigator.platform,
+            idioma: navigator.language,
+            registrado_por_mestre: true,
+            em_lote: true,
+          },
+        });
+        if (error) erros.push(error.message);
+        else sucessos++;
+      }
+      return { ok: true as const, sucessos, erros };
+    },
+    onSuccess: (res) => {
+      if (res?.erros && res.erros.length > 0) {
+        toast.warning(`${res.sucessos} pontos registrados. Houve avisos em ${res.erros.length} marcações.`);
+      } else {
+        toast.success(`Ponto registrado com sucesso para ${res?.sucessos ?? selecionadosIds.length} colaboradores!`);
+      }
+      setSelecionadosIds([]);
       void qc.invalidateQueries({ queryKey: ["ponto-equipe-hoje"] });
       void qc.invalidateQueries({ queryKey: ["ponto-registros"] });
     },
@@ -643,19 +720,104 @@ function PontoPage() {
                           className="h-8 pl-8 text-xs bg-white"
                         />
                       </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs gap-1.5 bg-white print:hidden"
+                        onClick={() => window.print()}
+                        title="Imprimir Lista de Presença do Canteiro"
+                      >
+                        <Printer className="size-3.5" /> Presença
+                      </Button>
                       <Badge variant="outline" className="flex items-center gap-1.5 bg-white text-xs h-8">
                         <ShieldCheck className="size-3.5 text-emerald-600" />
                         GPS Ativo
                       </Badge>
                     </div>
                   </div>
+
+                  {/* Barra de Ações em Lote */}
+                  {selecionadosIds.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-300 bg-amber-100/80 px-3 py-2 text-xs text-amber-950 animate-in fade-in">
+                      <div className="flex items-center gap-2 font-medium">
+                        <UserCheck className="size-4 text-amber-800" />
+                        <span><b>{selecionadosIds.length}</b> colaborador(es) selecionado(s)</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-xs text-amber-900 underline"
+                          onClick={() => setSelecionadosIds([])}
+                        >
+                          Limpar seleção
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                          disabled={registrarLoteEquipe.isPending || !obraSelecionadaId || obraSelecionadaId === "todas"}
+                          onClick={() => registrarLoteEquipe.mutate({ tipo: "entrada" })}
+                        >
+                          <Play className="size-3" />
+                          Marcar Entrada em Lote
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1"
+                          disabled={registrarLoteEquipe.isPending || !obraSelecionadaId || obraSelecionadaId === "todas"}
+                          onClick={() => registrarLoteEquipe.mutate({ tipo: "saida_almoco" })}
+                        >
+                          <Coffee className="size-3" />
+                          Almoço
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs bg-sky-600 hover:bg-sky-700 text-white gap-1"
+                          disabled={registrarLoteEquipe.isPending || !obraSelecionadaId || obraSelecionadaId === "todas"}
+                          onClick={() => registrarLoteEquipe.mutate({ tipo: "retorno_almoco" })}
+                        >
+                          <SkipForward className="size-3" />
+                          Retorno
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="h-7 text-xs bg-slate-800 hover:bg-slate-900 text-white gap-1"
+                          disabled={registrarLoteEquipe.isPending || !obraSelecionadaId || obraSelecionadaId === "todas"}
+                          onClick={() => registrarLoteEquipe.mutate({ tipo: "saida" })}
+                        >
+                          <LogOut className="size-3" />
+                          Saída
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[240px]">Colaborador</TableHead>
+                          <TableHead className="w-10 text-center">
+                            <button
+                              type="button"
+                              className="flex size-5 items-center justify-center rounded border border-slate-300 hover:bg-slate-100"
+                              onClick={() => {
+                                if (selecionadosIds.length === membrosEquipe.length) {
+                                  setSelecionadosIds([]);
+                                } else {
+                                  setSelecionadosIds(membrosEquipe.map((m) => m.id));
+                                }
+                              }}
+                              title="Selecionar todos os colaboradores visíveis"
+                            >
+                              {selecionadosIds.length > 0 && selecionadosIds.length === membrosEquipe.length ? (
+                                <CheckSquare className="size-3.5 text-amber-600" />
+                              ) : (
+                                <Square className="size-3.5 text-slate-400" />
+                              )}
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-[230px]">Colaborador</TableHead>
                           <TableHead>Cargo</TableHead>
                           <TableHead className="text-center">1º Entrada</TableHead>
                           <TableHead className="text-center">Almoço</TableHead>
@@ -667,13 +829,13 @@ function PontoPage() {
                       <TableBody>
                         {loadingEquipe ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="py-10 text-center">
+                            <TableCell colSpan={8} className="py-10 text-center">
                               <Loader2 className="mx-auto size-5 animate-spin" />
                             </TableCell>
                           </TableRow>
                         ) : membrosEquipe.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={7} className="py-10 text-center text-slate-500">
+                            <TableCell colSpan={8} className="py-10 text-center text-slate-500">
                               Nenhum funcionário encontrado para esta obra.
                             </TableCell>
                           </TableRow>
@@ -687,8 +849,27 @@ function PontoPage() {
                             const podeRetorno = !!reg?.hora_saida_almoco && !reg?.hora_retorno_almoco;
                             const podeSaida = !!reg?.hora_entrada && !reg?.hora_saida && (!reg?.hora_saida_almoco || !!reg?.hora_retorno_almoco);
 
+                            const isSelecionado = selecionadosIds.includes(m.id);
+
                             return (
-                              <TableRow key={m.id}>
+                              <TableRow key={m.id} className={isSelecionado ? "bg-amber-50/60" : undefined}>
+                                <TableCell className="text-center">
+                                  <button
+                                    type="button"
+                                    className="flex size-5 items-center justify-center rounded border border-slate-300 hover:bg-slate-100"
+                                    onClick={() => {
+                                      setSelecionadosIds((prev) =>
+                                        prev.includes(m.id) ? prev.filter((id) => id !== m.id) : [...prev, m.id],
+                                      );
+                                    }}
+                                  >
+                                    {isSelecionado ? (
+                                      <CheckSquare className="size-3.5 text-amber-600" />
+                                    ) : (
+                                      <Square className="size-3.5 text-slate-400" />
+                                    )}
+                                  </button>
+                                </TableCell>
                                 <TableCell>
                                   <div className="font-semibold text-sm">{m.nome}</div>
                                   <div className="text-xs text-slate-400">
