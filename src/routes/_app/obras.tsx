@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Calculator, Plus, Pencil, Trash2, HardHat, Ruler, ListTree } from "lucide-react";
+import { Calculator, Plus, Pencil, Trash2, HardHat, Ruler, ListTree, Boxes } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -291,6 +291,15 @@ function ObrasPage() {
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button size="sm" variant="outline" className="h-8 gap-1" title="Ver etapas, itens, subitens e avanço" onClick={() => setEscopoTarget(o)}><ListTree className="size-3.5" /> Escopo</Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1 border-primary/40 text-primary hover:bg-primary/10"
+                      title="Abrir Projeto CAD, Modelagem 3D e Dossiê da Obra"
+                      onClick={() => navigate({ to: `/obras/${o.id}/projeto` as any })}
+                    >
+                      <Boxes className="size-3.5" /> Projeto 3D
+                    </Button>
                     {podeEditar && (
                       <Button
                         size="sm"
