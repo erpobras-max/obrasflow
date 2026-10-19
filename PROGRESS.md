@@ -239,16 +239,68 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
    - **Aviso `beforeunload`**: alerta nativo se o usuário tentar sair da tela com alterações não salvas.
    - **Badge de Pendência**: indicador visual `● Alterações não salvas`.
 
-## 19. Última entrega publicada
+## 20. Módulo de Ponto Eletrônico & Gestão de Canteiro (Perfil Mestre de Obras)
 
-- **Commit**: `feat(projeto3d): correcao de vaos de janelas 3D, biblioteca de moveis 2D/3D, pintura de paredes e acabamentos de piso`
+Entregue e publicado em 19/10/2026. Habilita o controle operacional diário de presença nos canteiros com alocação dinâmica e sincronização com o Diário de Obra.
+
+### Funcionalidades implementadas:
+1. **Perfil & Permissão de Mestre de Obras (`mestre_obras`)**:
+   - Cadastrado no RH com controle de funções operacionais.
+   - Restrição de escopo: pedreiros e ajudantes batem apenas o próprio ponto; mestre de obras possui acesso ao registro individual e em lote da sua equipe.
+2. **Bate-Ponto em Lote com Geolocalização**:
+   - Painel em `/ponto` com seleção da obra onde a equipe está atuando no dia.
+   - Seleção múltipla de colaboradores presentes com marcação simultânea.
+   - Captura de coordenadas GPS (`latitude`, `longitude` e `precisão`) para auditoria de presença no canteiro.
+3. **Alocação Flexível de Mão de Obra**:
+   - Funcionários não ficam travados a uma única obra, permitindo alternância diária (Obra X hoje, Obra Y amanhã).
+   - Visualização de todas as obras ativas para o mestre de obras selecionar no momento do registro.
+4. **Integração Nativa com Diário de Obra (`/diario`)**:
+   - Botão **"Puxar do Ponto"** no Diário de Obra.
+   - Consolida automaticamente o efetivo presente do dia (agrupado por função e quantidade) direto dos registros de ponto da obra selecionada.
+
+---
+
+## 21. Auditoria e Integração Ponta a Ponta do Fluxo de Construção
+
+Realizada varredura completa em todo o pipeline operacional do sistema: **Cadastro de Cliente → Proposta Comercial → Contrato → Obra → Cronograma → Medições → Diário de Obra → Financeiro**.
+
+### Correções e melhorias implementadas:
+1. **Contratos (`/comercial/contratos`)**:
+   - **Correção de bug**: Query `propostas-opt` atualizada para incluir `cliente_id`.
+   - **Auto-preenchimento**: Ao selecionar uma proposta no modal de contrato, o cliente, o título e o valor total são preenchidos automaticamente.
+   - **Deep Linking**: Ao ser acionado com `propostaId` na URL, o modal de contrato abre preenchido e pronto para gravação.
+   - **Atalho operacional**: Botão direto na tabela de contratos para navegar para as obras daquele cliente.
+2. **Propostas Comerciais (`/comercial/propostas`)**:
+   - **Gatilho de Aceite Conectado à Interface**: Ao aprovar uma proposta (`status = "aceita"`), além da criação automática da obra via gatilho de banco, são exibidos botões rápidos de ação:
+     - 👷‍♂️ **Ver Obra gerada**: abre `/obras` já filtrando a obra correspondente.
+     - 📄 **Gerar / Ver Contrato**: abre `/comercial/contratos` pré-preenchido com a proposta e o cliente.
+   - Suporte a filtros de busca e `clienteId` via query params.
+3. **Obras (`/obras`)**:
+   - **Correção de layout**: Corrigido `TabsList` no modal `ObraFormDialog` de `grid-cols-3` para `grid-cols-4` (comportando perfeitamente as 4 abas: *Dados*, *Cronograma*, *ITRs*, *Endereço*).
+   - **Badges de Origem**: Exibição visual de badges <kbd>Proposta</kbd> e <kbd>Contrato</kbd> abaixo do nome da obra.
+   - **Atalhos Operacionais na Tabela**: Botões diretos para abrir o **Cronograma** da obra e o **Diário de Obra** sem necessidade de busca manual.
+   - Suporte a filtros de URL (`busca`, `clienteId`).
+4. **Clientes (`/comercial/clientes`)**:
+   - Modal de detalhes (`ClienteViewDialog`) enriquecido com a barra de **Ações Comerciais e Obras** com atalhos diretos para Propostas, Contratos e Obras do cliente.
+5. **Cronograma (`/cronograma`), Medições (`/medicoes`) e Diário (`/diario`)**:
+   - Sincronização via parâmetro `obraId` em todas as rotas para carregamento contextual imediato.
+   - Inclusão de seletor de Obra no cabeçalho de Medições para filtragem rápida.
+
+---
+
+## 22. Última entrega publicada
+
+- **Commit**: `fix(fluxo): integracao completa ponta a ponta de cliente, proposta, contrato, obras, cronograma, medicoes e diario`
 - **Branch**: `main` (enviado com sucesso para `origin/main`).
-- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 17.60s.
+- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 16.98s.
 - **Deploy**: Publicação automática em andamento via Cloudflare Worker `obrasflow`.
 
-## 20. Pendências prioritárias após esta atualização
+---
+
+## 23. Pendências prioritárias após esta atualização
 
 - Executar testes de aceitação visual com os usuários engenheiros desenhando plantas reais de casas no estúdio 2D.
 - Adicionar opção de salvar templates de cômodos frequentes (ex: banheiro padrão 1.5x2.5m).
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
+
 
