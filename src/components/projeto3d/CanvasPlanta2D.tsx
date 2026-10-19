@@ -1,11 +1,18 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import type { DadosProjetoBIM, Parede, Abertura, Ponto2D, Ambiente } from "@/types/projeto3d";
+import type {
+  DadosProjetoBIM,
+  Parede,
+  Abertura,
+  Ponto2D,
+  Ambiente,
+  Movel,
+  TipoMovel,
+} from "@/types/projeto3d";
 import { snapAoGrid, calcularComprimentoParede } from "@/lib/projeto3d.utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +48,10 @@ import {
   ChevronLeft,
   ChevronRight,
   GripHorizontal,
+  Armchair,
+  RotateCw,
+  Palette,
+  Bed,
 } from "lucide-react";
 import { extrairParedesDoDxf, exportarParaDxf } from "@/lib/dxf-parser";
 import { toast } from "sonner";
@@ -50,6 +61,7 @@ export type FerramentaAtiva =
   | "parede"
   | "porta"
   | "janela"
+  | "movel"
   | "apagar"
   | "medir"
   | "texto";
@@ -60,6 +72,39 @@ interface SnapInfo {
   tipo: "endpoint" | "midpoint";
   paredeId?: string;
 }
+
+export const CATALOGO_MOVEIS: Record<
+  TipoMovel,
+  { nome: string; categoria: string; largura: number; comprimento: number; altura: number; icone: string }
+> = {
+  cama_casal: { nome: "Cama de Casal", categoria: "Quarto", largura: 1.6, comprimento: 2.0, altura: 0.65, icone: "🛏️" },
+  cama_solteiro: { nome: "Cama de Solteiro", categoria: "Quarto", largura: 0.9, comprimento: 1.9, altura: 0.65, icone: "🛌" },
+  sofa: { nome: "Sofá 3 Lugares", categoria: "Sala", largura: 2.2, comprimento: 0.9, altura: 0.85, icone: "🛋️" },
+  mesa_jantar: { nome: "Mesa de Jantar 6L", categoria: "Sala", largura: 1.6, comprimento: 0.9, altura: 0.75, icone: "🪑" },
+  bancada_pia: { nome: "Bancada com Pia", categoria: "Cozinha", largura: 1.8, comprimento: 0.6, altura: 0.9, icone: "🍳" },
+  geladeira: { nome: "Geladeira Inox", categoria: "Cozinha", largura: 0.75, comprimento: 0.7, altura: 1.8, icone: "❄️" },
+  fogao: { nome: "Fogão 4 Bocas", categoria: "Cozinha", largura: 0.6, comprimento: 0.6, altura: 0.85, icone: "🔥" },
+  vaso_sanitario: { nome: "Vaso Sanitário", categoria: "Banheiro", largura: 0.4, comprimento: 0.65, altura: 0.8, icone: "🚽" },
+  bancada_banheiro: { nome: "Bancada com Cuba", categoria: "Banheiro", largura: 0.8, comprimento: 0.5, altura: 0.85, icone: "🪞" },
+};
+
+export const CORES_PINTURA = [
+  { nome: "Branco Neve", hex: "#ffffff", border: "#cbd5e1" },
+  { nome: "Cinza Moderno", hex: "#94a3b8", border: "#64748b" },
+  { nome: "Bege Areia", hex: "#fef3c7", border: "#fde68a" },
+  { nome: "Terracota", hex: "#c2410c", border: "#9a3412" },
+  { nome: "Verde Sálvia", hex: "#047857", border: "#065f46" },
+  { nome: "Azul Petróleo", hex: "#0369a1", border: "#075985" },
+  { nome: "Chumbo Grafite", hex: "#334155", border: "#1e293b" },
+];
+
+export const PRESETS_PISOS = [
+  { nome: "Porcelanato Retificado 84x84 (Polido Claro)", tag: "🏛️ Porcelanato Polido" },
+  { nome: "Madeira / Piso Laminado (Aconchegante)", tag: "🪵 Madeira Laminada" },
+  { nome: "Cimento Queimado (Moderno Industrial)", tag: "🏭 Cimento Queimado" },
+  { nome: "Cerâmica / Terracota (Rústico)", tag: "🧱 Cerâmica Terracota" },
+  { nome: "Grama / Área Externa (Verde)", tag: "🌿 Grama Verde" },
+];
 
 interface CanvasPlanta2DProps {
   dados: DadosProjetoBIM;
@@ -75,18 +120,21 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const [ferramenta, setFerramenta] = useState<FerramentaAtiva>("selecionar");
   const [elementoSelecionadoId, setElementoSelecionadoId] = useState<string | null>(null);
 
+  // Mobília ativa para inserção
+  const [tipoMovelAtivo, setTipoMovelAtivo] = useState<TipoMovel>("cama_casal");
+  const [modalMobiliaAberto, setModalMobiliaAberto] = useState(false);
+
   // Hover feedback para interações
   const [elementoHover, setElementoHover] = useState<{
     id: string;
-    tipo: "abertura" | "parede" | "ambiente" | "vertice";
-    vertice?: "p1" | "p2";
+    tipo: "abertura" | "parede" | "ambiente" | "movel";
   } | null>(null);
 
-  // Configurações ativas para novas inserções (customizáveis pelo engenheiro)
-  const [espessuraAtiva, setEspessuraAtiva] = useState(0.15); // metros (15cm padrão)
-  const [peDireitoAtivo, setPeDireitoAtivo] = useState(2.80); // metros
-  const [larguraPortaAtiva, setLarguraPortaAtiva] = useState(0.80); // metros (80cm padrão)
-  const [larguraJanelaAtiva, setLarguraJanelaAtiva] = useState(1.20); // metros (1.20m padrão)
+  // Configurações ativas para novas inserções
+  const [espessuraAtiva, setEspessuraAtiva] = useState(0.15);
+  const [peDireitoAtivo, setPeDireitoAtivo] = useState(2.8);
+  const [larguraPortaAtiva, setLarguraPortaAtiva] = useState(0.8);
+  const [larguraJanelaAtiva, setLarguraJanelaAtiva] = useState(1.2);
 
   // Modo Ortogonal (Ortho Lock como no AutoCAD tecla F8)
   const [modoOrtho, setModoOrtho] = useState(true);
@@ -105,13 +153,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   // Snap Inteligente (OSNAP) ativo no cursor
   const [pontoSnapAtivo, setPontoSnapAtivo] = useState<SnapInfo | null>(null);
 
-  // Estado de Arrastar Abertura (Porta/Janela) ou Vértice de Parede
+  // Estado de Arrastar Abertura ou Móvel
   const arrastoAberturaId = useRef<string | null>(null);
-  const arrastoVertice = useRef<{ paredeId: string; vertice: "p1" | "p2" } | null>(null);
+  const arrastoMovelId = useRef<string | null>(null);
+  const dragOffsetMovel = useRef<Ponto2D>({ x: 0, y: 0 });
 
   // Ferramenta Medir (Régua CAD)
   const [pontoMedirInicio, setPontoMedirInicio] = useState<Ponto2D | null>(null);
-  const [medicaoFixa, setMedicaoFixa] = useState<{ p1: Ponto2D; p2: Ponto2D; distancia: number } | null>(null);
 
   // Modais de Criação Rápida e Edição de Ambientes
   const [modalComodoAberto, setModalComodoAberto] = useState(false);
@@ -123,7 +171,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const [ambienteEmEdicao, setAmbienteEmEdicao] = useState<Ambiente | null>(null);
 
   // Transformação de visualização (Pan & Zoom no Canvas 2D)
-  const [zoom, setZoom] = useState(50); // pixels por metro (ex: 50px = 1 metro)
+  const [zoom, setZoom] = useState(50);
   const [offset, setOffset] = useState<Ponto2D>({ x: 150, y: 150 });
   const isDraggingCanvas = useRef(false);
   const dragStartPos = useRef<Ponto2D>({ x: 0, y: 0 });
@@ -185,10 +233,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [offset, zoom]
   );
 
-  // Detecção de Snap Inteligente (OSNAP: Endpoints e Midpoints)
+  // Detecção de Snap Inteligente (OSNAP)
   const detectarSnap = useCallback(
     (posMundo: Ponto2D, raioSnapMundo: number = 0.35): SnapInfo | null => {
-      // 1. Prioridade para Endpoints de paredes
       for (const p of dados.paredes) {
         const dist1 = Math.hypot(posMundo.x - p.p1.x, posMundo.y - p.p1.y);
         if (dist1 <= raioSnapMundo) {
@@ -200,7 +247,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         }
       }
 
-      // 2. Pontos médios de paredes
       for (const p of dados.paredes) {
         const midX = (p.p1.x + p.p2.x) / 2;
         const midY = (p.p1.y + p.p2.y) / 2;
@@ -254,6 +300,22 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [dados.aberturas, dados.paredes]
   );
 
+  // Encontrar Móvel Mais Próximo
+  const encontrarMovelMaisProximo = useCallback(
+    (pos: Ponto2D): Movel | null => {
+      if (!dados.moveis || dados.moveis.length === 0) return null;
+      for (const m of dados.moveis) {
+        const dx = Math.abs(pos.x - m.x);
+        const dy = Math.abs(pos.y - m.y);
+        if (dx <= m.largura / 1.8 && dy <= m.comprimento / 1.8) {
+          return m;
+        }
+      }
+      return null;
+    },
+    [dados.moveis]
+  );
+
   // Encontrar Parede Mais Próxima
   const encontrarParedeMaisProxima = useCallback(
     (pos: Ponto2D) => {
@@ -286,16 +348,15 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [dados.paredes]
   );
 
-  // Abertura e Parede selecionadas atualmente
+  // Elementos selecionados atualmente
   const aberturaSelecionada = dados.aberturas.find((a) => a.id === elementoSelecionadoId);
   const paredeSelecionada = dados.paredes.find((p) => p.id === elementoSelecionadoId);
-  const ambienteSelecionado = dados.ambientes.find((amb) => amb.id === elementoSelecionadoId);
+  const movelSelecionado = dados.moveis?.find((m) => m.id === elementoSelecionadoId);
 
   // -------------------------------------------------------------
-  // OPERAÇÕES EM ABERTURAS (Portas / Janelas)
+  // OPERAÇÕES EM ELEMENTOS (Apagar, Deslocar, Girar)
   // -------------------------------------------------------------
 
-  // Apagar EXCLUSIVAMENTE a abertura selecionada ou especificada
   const handleApagarAbertura = useCallback(
     (aberturaId: string) => {
       const ab = dados.aberturas.find((a) => a.id === aberturaId);
@@ -305,15 +366,39 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         ...dados,
         aberturas: dados.aberturas.filter((a) => a.id !== aberturaId),
       });
-      if (elementoSelecionadoId === aberturaId) {
-        setElementoSelecionadoId(null);
-      }
+      if (elementoSelecionadoId === aberturaId) setElementoSelecionadoId(null);
       toast.success(`${ab.tipo === "porta" ? "Porta" : "Janela"} removida com sucesso!`);
     },
     [dados, elementoSelecionadoId, onChangeDados, registrarHistorico]
   );
 
-  // Deslocar abertura ao longo da parede (+/- delta metros)
+  const handleApagarMovel = useCallback(
+    (movelId: string) => {
+      registrarHistorico();
+      onChangeDados({
+        ...dados,
+        moveis: (dados.moveis || []).filter((m) => m.id !== movelId),
+      });
+      if (elementoSelecionadoId === movelId) setElementoSelecionadoId(null);
+      toast.success("Móvel removido!");
+    },
+    [dados, elementoSelecionadoId, onChangeDados, registrarHistorico]
+  );
+
+  const handleGirarMovel = useCallback(
+    (movelId: string) => {
+      registrarHistorico();
+      onChangeDados({
+        ...dados,
+        moveis: (dados.moveis || []).map((m) =>
+          m.id === movelId ? { ...m, rotacao: ((m.rotacao || 0) + 90) % 360 } : m
+        ),
+      });
+      toast.info("Móvel rotacionado em 90°");
+    },
+    [dados, onChangeDados, registrarHistorico]
+  );
+
   const handleDeslocarAbertura = useCallback(
     (aberturaId: string, deltaMetros: number) => {
       const ab = dados.aberturas.find((a) => a.id === aberturaId);
@@ -336,7 +421,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [dados, onChangeDados, registrarHistorico]
   );
 
-  // Centralizar abertura na parede
   const handleCentralizarAbertura = useCallback(
     (aberturaId: string) => {
       const ab = dados.aberturas.find((a) => a.id === aberturaId);
@@ -357,7 +441,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [dados, onChangeDados, registrarHistorico]
   );
 
-  // Inverter sentido da folha / arco de abertura da porta
   const handleInverterPorta = useCallback(
     (aberturaId: string) => {
       registrarHistorico();
@@ -372,7 +455,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [dados, onChangeDados, registrarHistorico]
   );
 
-  // Apagar parede selecionada
   const handleApagarParede = useCallback(
     (paredeId: string) => {
       registrarHistorico();
@@ -381,30 +463,31 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         paredes: dados.paredes.filter((p) => p.id !== paredeId),
         aberturas: dados.aberturas.filter((a) => a.paredeId !== paredeId),
       });
-      if (elementoSelecionadoId === paredeId) {
-        setElementoSelecionadoId(null);
-      }
+      if (elementoSelecionadoId === paredeId) setElementoSelecionadoId(null);
       toast.success("Parede e suas esquadrias removidas!");
     },
     [dados, elementoSelecionadoId, onChangeDados, registrarHistorico]
   );
 
   // -------------------------------------------------------------
-  // ATALHOS DE TECLADO CAD (Delete, Backspace, Esc, Ctrl+Z, Ctrl+Y, F8)
+  // ATALHOS DE TECLADO CAD
   // -------------------------------------------------------------
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignorar se o usuário estiver digitando em um input
       const target = e.target as HTMLElement;
       if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
 
-      // 1. Tecla DELETE ou BACKSPACE -> Apaga o elemento selecionado
       if (e.key === "Delete" || e.key === "Backspace") {
         if (elementoSelecionadoId) {
           e.preventDefault();
           const ab = dados.aberturas.find((a) => a.id === elementoSelecionadoId);
           if (ab) {
             handleApagarAbertura(ab.id);
+            return;
+          }
+          const mov = dados.moveis?.find((m) => m.id === elementoSelecionadoId);
+          if (mov) {
+            handleApagarMovel(mov.id);
             return;
           }
           const par = dados.paredes.find((p) => p.id === elementoSelecionadoId);
@@ -415,7 +498,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         }
       }
 
-      // 2. Tecla ESC -> Cancela parede contínua ou desseleciona
       if (e.key === "Escape") {
         if (pontoInicial) {
           setPontoInicial(null);
@@ -428,13 +510,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         }
       }
 
-      // 3. Ctrl+Z / Cmd+Z -> Desfazer
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && !e.shiftKey) {
         e.preventDefault();
         handleDesfazer();
       }
 
-      // 4. Ctrl+Y ou Ctrl+Shift+Z -> Refazer
       if (
         ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") ||
         ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "z")
@@ -443,7 +523,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         handleRefazer();
       }
 
-      // 5. Tecla F8 ou 'O' -> Alternar Modo Ortho
       if (e.key === "F8" || e.key.toLowerCase() === "o") {
         e.preventDefault();
         setModoOrtho((prev) => !prev);
@@ -458,6 +537,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     pontoInicial,
     pontoMedirInicio,
     handleApagarAbertura,
+    handleApagarMovel,
     handleApagarParede,
     handleDesfazer,
     handleRefazer,
@@ -480,12 +560,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
-    // 1. Limpar fundo
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
 
-    // 2. Grid Arquitetônico
-    const gridSize = zoom; // 1 metro principal
+    // 1. Grid Arquitetônico
+    const gridSize = zoom;
     ctx.lineWidth = 0.5;
     ctx.strokeStyle = "#e2e8f0";
 
@@ -505,11 +584,24 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.stroke();
     }
 
-    // 3. Desenhar Ambientes (Pisos)
+    // 2. Ambientes (Pisos com cores estilizadas)
     dados.ambientes.forEach((amb) => {
       if (amb.pontos.length >= 3) {
         const isHover = elementoHover?.id === amb.id && ferramenta === "texto";
-        ctx.fillStyle = isHover ? "rgba(224, 231, 255, 0.7)" : "rgba(241, 245, 249, 0.6)";
+        const acabamento = (amb.pisoAcabamento || "").toLowerCase();
+
+        let corFundo = "rgba(241, 245, 249, 0.6)";
+        if (acabamento.includes("madeira") || acabamento.includes("laminado")) {
+          corFundo = "rgba(254, 243, 199, 0.65)"; // Bege amadeirado suave
+        } else if (acabamento.includes("cimento")) {
+          corFundo = "rgba(226, 232, 240, 0.7)"; // Cinza cimento
+        } else if (acabamento.includes("cerâmica") || acabamento.includes("ceramica")) {
+          corFundo = "rgba(255, 237, 213, 0.7)"; // Terracota suave
+        } else if (acabamento.includes("grama") || acabamento.includes("externo")) {
+          corFundo = "rgba(220, 252, 231, 0.7)"; // Verde grama suave
+        }
+
+        ctx.fillStyle = isHover ? "rgba(224, 231, 255, 0.85)" : corFundo;
         ctx.beginPath();
         const first = worldToScreen(amb.pontos[0].x, amb.pontos[0].y);
         ctx.moveTo(first.x, first.y);
@@ -520,7 +612,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         ctx.closePath();
         ctx.fill();
 
-        // Rótulo do ambiente
         const centroX = amb.pontos.reduce((acc, p) => acc + p.x, 0) / amb.pontos.length;
         const centroY = amb.pontos.reduce((acc, p) => acc + p.y, 0) / amb.pontos.length;
         const screenLabel = worldToScreen(centroX, centroY);
@@ -535,7 +626,105 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       }
     });
 
-    // 4. Desenhar Paredes
+    // 3. Móveis Paramétricos no 2D
+    (dados.moveis || []).forEach((movel) => {
+      const isSelected = movel.id === elementoSelecionadoId;
+      const isHover = elementoHover?.id === movel.id;
+      const isHoverApagar = ferramenta === "apagar" && isHover;
+      const pCenter = worldToScreen(movel.x, movel.y);
+      const wPx = movel.largura * zoom;
+      const lPx = movel.comprimento * zoom;
+      const rotRad = ((movel.rotacao || 0) * Math.PI) / 180;
+
+      ctx.save();
+      ctx.translate(pCenter.x, pCenter.y);
+      ctx.rotate(rotRad);
+
+      if (isSelected || isHover) {
+        ctx.fillStyle = isHoverApagar
+          ? "rgba(239, 68, 68, 0.25)"
+          : isSelected
+          ? "rgba(245, 158, 11, 0.2)"
+          : "rgba(59, 130, 246, 0.15)";
+        ctx.fillRect(-wPx / 2 - 3, -lPx / 2 - 3, wPx + 6, lPx + 6);
+      }
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(-wPx / 2, -lPx / 2, wPx, lPx);
+      ctx.strokeStyle = isHoverApagar ? "#dc2626" : isSelected ? "#f59e0b" : "#475569";
+      ctx.lineWidth = isSelected ? 2 : 1.2;
+      ctx.strokeRect(-wPx / 2, -lPx / 2, wPx, lPx);
+
+      if (movel.tipo === "cama_casal" || movel.tipo === "cama_solteiro") {
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-wPx / 2, -lPx / 2, wPx, lPx * 0.15);
+        ctx.fillStyle = "#f1f5f9";
+        ctx.strokeStyle = "#94a3b8";
+        ctx.lineWidth = 1;
+        if (movel.tipo === "cama_casal") {
+          ctx.fillRect(-wPx * 0.45, -lPx * 0.32, wPx * 0.4, lPx * 0.2);
+          ctx.strokeRect(-wPx * 0.45, -lPx * 0.32, wPx * 0.4, lPx * 0.2);
+          ctx.fillRect(wPx * 0.05, -lPx * 0.32, wPx * 0.4, lPx * 0.2);
+          ctx.strokeRect(wPx * 0.05, -lPx * 0.32, wPx * 0.4, lPx * 0.2);
+        } else {
+          ctx.fillRect(-wPx * 0.35, -lPx * 0.32, wPx * 0.7, lPx * 0.2);
+          ctx.strokeRect(-wPx * 0.35, -lPx * 0.32, wPx * 0.7, lPx * 0.2);
+        }
+      } else if (movel.tipo === "sofa") {
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(-wPx / 2, -lPx / 2, wPx, lPx * 0.25);
+        ctx.fillRect(-wPx / 2, -lPx / 2, wPx * 0.12, lPx);
+        ctx.fillRect(wPx / 2 - wPx * 0.12, -lPx / 2, wPx * 0.12, lPx);
+      } else if (movel.tipo === "mesa_jantar") {
+        ctx.strokeStyle = "#94a3b8";
+        ctx.strokeRect(-wPx * 0.35, -lPx * 0.48, wPx * 0.3, lPx * 0.15);
+        ctx.strokeRect(wPx * 0.05, -lPx * 0.48, wPx * 0.3, lPx * 0.15);
+        ctx.strokeRect(-wPx * 0.35, lPx * 0.33, wPx * 0.3, lPx * 0.15);
+        ctx.strokeRect(wPx * 0.05, lPx * 0.33, wPx * 0.3, lPx * 0.15);
+      } else if (movel.tipo === "bancada_pia") {
+        ctx.fillStyle = "#e2e8f0";
+        ctx.fillRect(-wPx * 0.25, -lPx * 0.25, wPx * 0.5, lPx * 0.5);
+        ctx.strokeStyle = "#94a3b8";
+        ctx.strokeRect(-wPx * 0.25, -lPx * 0.25, wPx * 0.5, lPx * 0.5);
+      } else if (movel.tipo === "fogao") {
+        ctx.fillStyle = "#334155";
+        const r = Math.min(wPx, lPx) * 0.12;
+        [
+          [-wPx * 0.25, -lPx * 0.25],
+          [wPx * 0.25, -lPx * 0.25],
+          [-wPx * 0.25, lPx * 0.25],
+          [wPx * 0.25, lPx * 0.25],
+        ].forEach(([bx, by]) => {
+          ctx.beginPath();
+          ctx.arc(bx, by, r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      } else if (movel.tipo === "vaso_sanitario") {
+        ctx.fillStyle = "#e2e8f0";
+        ctx.fillRect(-wPx / 2, -lPx / 2, wPx, lPx * 0.3);
+        ctx.beginPath();
+        ctx.ellipse(0, lPx * 0.15, wPx * 0.35, lPx * 0.3, 0, 0, Math.PI * 2);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fill();
+        ctx.stroke();
+      } else if (movel.tipo === "bancada_banheiro") {
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.min(wPx, lPx) * 0.25, 0, Math.PI * 2);
+        ctx.fillStyle = "#f8fafc";
+        ctx.fill();
+        ctx.strokeStyle = "#94a3b8";
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = isSelected ? "#b45309" : "#64748b";
+      ctx.font = "bold 9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(movel.nome, 0, lPx / 2 + 10);
+
+      ctx.restore();
+    });
+
+    // 4. Paredes
     dados.paredes.forEach((parede) => {
       const isSelected = parede.id === elementoSelecionadoId;
       const isHoverApagar = ferramenta === "apagar" && elementoHover?.id === parede.id;
@@ -543,22 +732,22 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       const p2 = worldToScreen(parede.p2.x, parede.p2.y);
       const espessuraPx = Math.max(parede.espessura * zoom, 4);
 
-      // Traço da parede
       ctx.beginPath();
       ctx.lineWidth = espessuraPx;
       ctx.lineCap = "square";
       if (isHoverApagar) {
-        ctx.strokeStyle = "#ef4444"; // Vermelho no modo apagar
+        ctx.strokeStyle = "#ef4444";
       } else if (isSelected) {
-        ctx.strokeStyle = "#f59e0b"; // Amarelo/âmbar de seleção
+        ctx.strokeStyle = "#f59e0b";
+      } else if (parede.cor) {
+        ctx.strokeStyle = parede.cor; // Cor da pintura
       } else {
-        ctx.strokeStyle = "#334155"; // Ardósia escuro padrão CAD
+        ctx.strokeStyle = "#334155";
       }
       ctx.moveTo(p1.x, p1.y);
       ctx.lineTo(p2.x, p2.y);
       ctx.stroke();
 
-      // Cota de comprimento da parede
       const comp = calcularComprimentoParede(parede.p1, parede.p2);
       const midX = (p1.x + p2.x) / 2;
       const midY = (p1.y + p2.y) / 2;
@@ -567,22 +756,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.font = "bold 10px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(`${comp.toFixed(2)} m`, midX, midY - espessuraPx / 2 - 4);
-
-      // Se a parede estiver selecionada, desenhar os nós (handles) dos vértices
-      if (isSelected) {
-        [p1, p2].forEach((ptNode) => {
-          ctx.beginPath();
-          ctx.arc(ptNode.x, ptNode.y, 5, 0, Math.PI * 2);
-          ctx.fillStyle = "#ffffff";
-          ctx.fill();
-          ctx.lineWidth = 2;
-          ctx.strokeStyle = "#f59e0b";
-          ctx.stroke();
-        });
-      }
     });
 
-    // 5. Desenhar Aberturas (Portas e Janelas)
+    // 5. Aberturas (Portas e Janelas)
     dados.aberturas.forEach((ab) => {
       const parede = dados.paredes.find((p) => p.id === ab.paredeId);
       if (!parede) return;
@@ -603,7 +779,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       const angulo = Math.atan2(parede.p2.y - parede.p1.y, parede.p2.x - parede.p1.x);
       ctx.rotate(angulo);
 
-      // Caixa de destaque quando selecionada ou em hover
       if (isSelected || isHover) {
         ctx.fillStyle = isHoverApagar
           ? "rgba(239, 68, 68, 0.3)"
@@ -614,14 +789,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       }
 
       if (ab.tipo === "porta") {
-        // Vão da porta em branco com moldura
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(-tamPx / 2, -5, tamPx, 10);
         ctx.strokeStyle = isHoverApagar ? "#dc2626" : isSelected ? "#f59e0b" : "#854d0e";
         ctx.lineWidth = 2;
         ctx.strokeRect(-tamPx / 2, -5, tamPx, 10);
 
-        // Folha da porta e arco de 90°
         const flip = ab.invertida ? -1 : 1;
         ctx.beginPath();
         ctx.moveTo(-tamPx / 2, 0);
@@ -638,7 +811,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         ctx.stroke();
         ctx.setLineDash([]);
       } else if (ab.tipo === "janela") {
-        // Janela com três linhas paralelas
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(-tamPx / 2, -5, tamPx, 10);
         ctx.strokeStyle = isHoverApagar ? "#dc2626" : isSelected ? "#f59e0b" : "#0284c7";
@@ -651,7 +823,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         ctx.stroke();
       }
 
-      // Rótulo de largura e cota
       ctx.fillStyle = isHoverApagar ? "#dc2626" : isSelected ? "#b45309" : "#64748b";
       ctx.font = "bold 9px sans-serif";
       ctx.textAlign = "center";
@@ -660,7 +831,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.restore();
     });
 
-    // 6. Desenhar Prévia de Parede Sendo Criada
+    // 6. Prévia de Parede Sendo Criada
     if (ferramenta === "parede" && pontoInicial && pontoCursor) {
       const p1 = worldToScreen(pontoInicial.x, pontoInicial.y);
       const p2 = worldToScreen(pontoCursor.x, pontoCursor.y);
@@ -702,19 +873,19 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.fillText(`📏 ${dist.toFixed(2)} m`, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 8);
     }
 
-    // 8. Snap Visual (OSNAP Marker estilo AutoCAD)
+    // 8. Snap Visual (OSNAP Marker)
     if (pontoSnapAtivo) {
       const pSnapScreen = worldToScreen(pontoSnapAtivo.x, pontoSnapAtivo.y);
       ctx.save();
       if (pontoSnapAtivo.tipo === "endpoint") {
-        ctx.strokeStyle = "#10b981"; // Verde esmeralda
+        ctx.strokeStyle = "#10b981";
         ctx.lineWidth = 2;
         ctx.strokeRect(pSnapScreen.x - 6, pSnapScreen.y - 6, 12, 12);
         ctx.fillStyle = "#059669";
         ctx.font = "bold 9px sans-serif";
         ctx.fillText("Extremidade", pSnapScreen.x + 10, pSnapScreen.y - 8);
       } else if (pontoSnapAtivo.tipo === "midpoint") {
-        ctx.strokeStyle = "#06b6d4"; // Ciano
+        ctx.strokeStyle = "#06b6d4";
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.moveTo(pSnapScreen.x, pSnapScreen.y - 7);
@@ -749,7 +920,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button === 1 || e.shiftKey) {
-      // Arrastar tela com botão do meio ou Shift
       isDraggingCanvas.current = true;
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
@@ -766,8 +936,17 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     const screenY = e.clientY - rect.top;
     const worldPos = screenToWorld(screenX, screenY);
 
-    // Se estiver no modo selecionar, verificar se clicou em uma abertura para arrastar
     if (ferramenta === "selecionar") {
+      // 1. Verificar móvel
+      const movelAlvo = encontrarMovelMaisProximo(worldPos);
+      if (movelAlvo) {
+        setElementoSelecionadoId(movelAlvo.id);
+        arrastoMovelId.current = movelAlvo.id;
+        dragOffsetMovel.current = { x: worldPos.x - movelAlvo.x, y: worldPos.y - movelAlvo.y };
+        return;
+      }
+
+      // 2. Verificar abertura
       const abAlvo = encontrarAberturaMaisProxima(worldPos);
       if (abAlvo) {
         setElementoSelecionadoId(abAlvo.id);
@@ -794,14 +973,28 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     let worldPos = screenToWorld(screenX, screenY);
 
-    // 1. Detectar snap automático nos vértices existentes
     const snap = detectarSnap(worldPos);
     setPontoSnapAtivo(snap);
     if (snap) {
       worldPos = { x: snap.x, y: snap.y };
     }
 
-    // 2. Se estiver arrastando uma abertura (porta/janela) pela parede
+    // Arrastar móvel
+    if (arrastoMovelId.current) {
+      const movelId = arrastoMovelId.current;
+      const movel = dados.moveis?.find((m) => m.id === movelId);
+      if (movel) {
+        const novoX = snapAoGrid(worldPos.x - dragOffsetMovel.current.x, 0.05);
+        const novoY = snapAoGrid(worldPos.y - dragOffsetMovel.current.y, 0.05);
+        onChangeDados({
+          ...dados,
+          moveis: dados.moveis?.map((m) => (m.id === movelId ? { ...m, x: novoX, y: novoY } : m)),
+        });
+      }
+      return;
+    }
+
+    // Arrastar abertura
     if (arrastoAberturaId.current) {
       const ab = dados.aberturas.find((a) => a.id === arrastoAberturaId.current);
       if (ab) {
@@ -811,7 +1004,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           const dy = parede.p2.y - parede.p1.y;
           const comp = Math.sqrt(dx * dx + dy * dy);
           if (comp > 0) {
-            const t = Math.max(0, Math.min(1, ((worldPos.x - parede.p1.x) * dx + (worldPos.y - parede.p1.y) * dy) / (comp * comp)));
+            const t = Math.max(
+              0,
+              Math.min(1, ((worldPos.x - parede.p1.x) * dx + (worldPos.y - parede.p1.y) * dy) / (comp * comp))
+            );
             const margem = ab.largura / 2 + 0.05;
             const novaDist = Math.max(margem, Math.min(comp - margem, t * comp));
 
@@ -827,20 +1023,24 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       return;
     }
 
-    // 3. Atualizar elemento em Hover
-    const abHover = encontrarAberturaMaisProxima(worldPos);
-    if (abHover) {
-      setElementoHover({ id: abHover.id, tipo: "abertura" });
+    // Hover
+    const movHover = encontrarMovelMaisProximo(worldPos);
+    if (movHover) {
+      setElementoHover({ id: movHover.id, tipo: "movel" });
     } else {
-      const parHover = encontrarParedeMaisProxima(worldPos);
-      if (parHover && parHover.distanciaPontoReta < 0.35) {
-        setElementoHover({ id: parHover.parede.id, tipo: "parede" });
+      const abHover = encontrarAberturaMaisProxima(worldPos);
+      if (abHover) {
+        setElementoHover({ id: abHover.id, tipo: "abertura" });
       } else {
-        setElementoHover(null);
+        const parHover = encontrarParedeMaisProxima(worldPos);
+        if (parHover && parHover.distanciaPontoReta < 0.35) {
+          setElementoHover({ id: parHover.parede.id, tipo: "parede" });
+        } else {
+          setElementoHover(null);
+        }
       }
     }
 
-    // 4. Se estiver desenhando parede, aplicar modo Ortho
     if (ferramenta === "parede" && pontoInicial) {
       worldPos = aplicarOrtho(worldPos, pontoInicial, e.altKey);
     }
@@ -851,7 +1051,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const handleMouseUp = () => {
     isDraggingCanvas.current = false;
     arrastoAberturaId.current = null;
-    arrastoVertice.current = null;
+    arrastoMovelId.current = null;
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -863,19 +1063,42 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     const screenY = e.clientY - rect.top;
     let worldPos = screenToWorld(screenX, screenY);
 
-    // Aplicar Snap se ativo
     if (pontoSnapAtivo) {
       worldPos = { x: pontoSnapAtivo.x, y: pontoSnapAtivo.y };
     }
 
-    // 1. FERRAMENTA PAREDE (Desenho Contínuo / Polyline)
+    // 1. INSERIR MÓVEL
+    if (ferramenta === "movel") {
+      const configMovel = CATALOGO_MOVEIS[tipoMovelAtivo];
+      const novoMovel: Movel = {
+        id: `mov_${Date.now()}`,
+        tipo: tipoMovelAtivo,
+        nome: configMovel.nome,
+        x: Number(worldPos.x.toFixed(2)),
+        y: Number(worldPos.y.toFixed(2)),
+        largura: configMovel.largura,
+        comprimento: configMovel.comprimento,
+        altura: configMovel.altura,
+        rotacao: 0,
+      };
+
+      registrarHistorico();
+      onChangeDados({
+        ...dados,
+        moveis: [...(dados.moveis || []), novoMovel],
+      });
+      setFerramenta("selecionar");
+      setElementoSelecionadoId(novoMovel.id);
+      toast.success(`${configMovel.nome} inserido no 2D e 3D!`);
+      return;
+    }
+
+    // 2. FERRAMENTA PAREDE (Desenho Contínuo)
     if (ferramenta === "parede") {
       if (!pontoInicial) {
-        // Primeiro clique: inicia cadeia
         setPontoInicial(worldPos);
         cadeiaParedes.current = [worldPos];
       } else {
-        // Segundo clique: fecha segmento
         worldPos = aplicarOrtho(worldPos, pontoInicial, e.altKey);
         const comp = calcularComprimentoParede(pontoInicial, worldPos);
 
@@ -890,12 +1113,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             tipo: "alvenaria_vedacao",
           };
 
-          // Verificar se fechou ciclo no ponto inicial da cadeia
           const primeiroPonto = cadeiaParedes.current[0];
           const distAoInicio = Math.hypot(worldPos.x - primeiroPonto.x, worldPos.y - primeiroPonto.y);
 
           if (cadeiaParedes.current.length >= 3 && distAoInicio <= 0.3) {
-            // Ciclo fechado: gera ambiente automático
             novaParede.p2 = primeiroPonto;
             const ptsAmbiente = [...cadeiaParedes.current];
             const novoAmbiente: Ambiente = {
@@ -904,7 +1125,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               pontos: ptsAmbiente,
               area: Number(calcularAreaPoligono(ptsAmbiente).toFixed(2)),
               perimetro: Number(comp.toFixed(2)),
-              pisoAcabamento: "Porcelanato Retificado 84x84",
+              pisoAcabamento: "Porcelanato Retificado 84x84 (Polido Claro)",
               tetoAcabamento: "Forro de Gesso",
               paredeAcabamento: "Pintura Acrílica Fosca Lavável",
             };
@@ -926,7 +1147,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             paredes: [...dados.paredes, novaParede],
           });
 
-          // Continua desenhando a partir do ponto final (estilo AutoCAD)
           setPontoInicial(worldPos);
           cadeiaParedes.current.push(worldPos);
         }
@@ -934,7 +1154,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       return;
     }
 
-    // 2. FERRAMENTAS PORTA E JANELA
+    // 3. FERRAMENTAS PORTA E JANELA
     if (ferramenta === "porta" || ferramenta === "janela") {
       const paredeAlvo = encontrarParedeMaisProxima(worldPos);
       if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.6) {
@@ -967,7 +1187,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         setFerramenta("selecionar");
         setElementoSelecionadoId(novaAbertura.id);
         toast.success(
-          `${ferramenta === "porta" ? "Porta" : "Janela"} inserida! Você pode arrastá-la ou usar os botões para reposicionar.`
+          `${ferramenta === "porta" ? "Porta" : "Janela"} inserida! Ela já está visível no 2D e no 3D.`
         );
       } else {
         toast.error("Clique em cima de uma parede para inserir o vão.");
@@ -975,29 +1195,41 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       return;
     }
 
-    // 3. FERRAMENTA SELECIONAR
+    // 4. FERRAMENTA SELECIONAR
     if (ferramenta === "selecionar") {
-      // Prioridade 1: Selecionar Abertura (porta/janela)
+      // Prioridade 1: Móvel
+      const movelAlvo = encontrarMovelMaisProximo(worldPos);
+      if (movelAlvo) {
+        setElementoSelecionadoId(movelAlvo.id);
+        return;
+      }
+
+      // Prioridade 2: Abertura (porta/janela)
       const abAlvo = encontrarAberturaMaisProxima(worldPos);
       if (abAlvo) {
         setElementoSelecionadoId(abAlvo.id);
         return;
       }
 
-      // Prioridade 2: Selecionar Parede
+      // Prioridade 3: Parede
       const paredeAlvo = encontrarParedeMaisProxima(worldPos);
       if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.35) {
         setElementoSelecionadoId(paredeAlvo.parede.id);
         return;
       }
 
-      // Desselecionar
       setElementoSelecionadoId(null);
       return;
     }
 
-    // 4. FERRAMENTA APAGAR (Prioridade estrita para não apagar a parede por engano)
+    // 5. FERRAMENTA APAGAR
     if (ferramenta === "apagar") {
+      const movelAlvo = encontrarMovelMaisProximo(worldPos);
+      if (movelAlvo) {
+        handleApagarMovel(movelAlvo.id);
+        return;
+      }
+
       const abAlvo = encontrarAberturaMaisProxima(worldPos);
       if (abAlvo) {
         handleApagarAbertura(abAlvo.id);
@@ -1012,21 +1244,20 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       return;
     }
 
-    // 5. FERRAMENTA MEDIR (Régua)
+    // 6. FERRAMENTA MEDIR
     if (ferramenta === "medir") {
       if (!pontoMedirInicio) {
         setPontoMedirInicio(worldPos);
         toast.info("Clique no segundo ponto para medir a distância");
       } else {
         const dist = calcularComprimentoParede(pontoMedirInicio, worldPos);
-        setMedicaoFixa({ p1: pontoMedirInicio, p2: worldPos, distancia: dist });
         setPontoMedirInicio(null);
         toast.success(`Distância medida: ${dist.toFixed(2)} metros`);
       }
       return;
     }
 
-    // 6. FERRAMENTA TEXTO / AMBIENTE
+    // 7. FERRAMENTA TEXTO / AMBIENTE
     if (ferramenta === "texto") {
       const ambAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
       if (ambAlvo) {
@@ -1044,7 +1275,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     setZoom((prev) => Math.min(Math.max(prev * delta, 15), 180));
   };
 
-  // Coordenadas da tela da abertura selecionada para HUD flutuante
+  // Coordenadas da tela da abertura selecionada para HUD
   let aberturaScreenPos: Ponto2D | null = null;
   if (aberturaSelecionada) {
     const parede = dados.paredes.find((p) => p.id === aberturaSelecionada.paredeId);
@@ -1055,6 +1286,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       const posY = parede.p1.y + (parede.p2.y - parede.p1.y) * t;
       aberturaScreenPos = worldToScreen(posX, posY);
     }
+  }
+
+  // Coordenadas da tela do móvel selecionado para HUD
+  let movelScreenPos: Ponto2D | null = null;
+  if (movelSelecionado) {
+    movelScreenPos = worldToScreen(movelSelecionado.x, movelSelecionado.y);
   }
 
   // Criação instantânea de cômodo paramétrico
@@ -1094,7 +1331,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       pontos: [pTL, pTR, pBR, pBL],
       area: Number((larg * comp).toFixed(2)),
       perimetro: Number(((larg + comp) * 2).toFixed(2)),
-      pisoAcabamento: "Porcelanato Retificado 84x84",
+      pisoAcabamento: "Porcelanato Retificado 84x84 (Polido Claro)",
       tetoAcabamento: "Forro de Gesso",
       paredeAcabamento: "Pintura Acrílica Fosca Lavável",
     };
@@ -1110,7 +1347,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     setModalComodoAberto(false);
   };
 
-  // Exportar DXF
   const handleExportarDxf = () => {
     if (dados.paredes.length === 0) {
       toast.error("Desenhe pelo menos uma parede antes de exportar.");
@@ -1133,11 +1369,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       className="relative w-full h-full min-h-[500px] bg-white rounded-lg border border-slate-200 overflow-hidden flex select-none"
     >
       {/* ----------------------------------------------------------- */}
-      {/* BARRA LATERAL DE FERRAMENTAS CAD (ESTILO AUTOCAD / CADCRAFT) */}
+      {/* BARRA LATERAL CAD COMPLETA */}
       {/* ----------------------------------------------------------- */}
       {!somenteLeitura && (
-        <div className="w-52 bg-slate-50 border-r border-slate-200 p-2.5 flex flex-col gap-1.5 z-10 shrink-0 overflow-y-auto">
-          {/* Ações de Desfazer e Refazer */}
+        <div className="w-52 bg-slate-50 border-r border-slate-200 p-2 flex flex-col gap-1.5 z-10 shrink-0 overflow-y-auto">
+          {/* Desfazer / Refazer */}
           <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
               CADCraft 2D
@@ -1166,7 +1402,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             </div>
           </div>
 
-          {/* Ferramenta Selecionar */}
+          {/* Selecionar / Mover */}
           <Button
             size="sm"
             variant={ferramenta === "selecionar" ? "default" : "ghost"}
@@ -1179,7 +1415,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             <MousePointer className="w-3.5 h-3.5" /> Selecionar / Mover
           </Button>
 
-          {/* Gerador de Cômodo Rápido */}
+          {/* Novo Cômodo */}
           <Button
             size="sm"
             variant="outline"
@@ -1190,7 +1426,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             <BoxSelect className="w-3.5 h-3.5 text-emerald-600" /> + Novo Cômodo
           </Button>
 
-          {/* Ferramenta Parede com desenho contínuo */}
+          {/* Parede Contínua */}
           <div className="space-y-1">
             <Button
               size="sm"
@@ -1205,7 +1441,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             </Button>
             {ferramenta === "parede" && (
               <div className="bg-blue-50/80 p-1.5 rounded border border-blue-200 space-y-1 animate-in fade-in duration-150">
-                <span className="text-[10px] font-semibold text-blue-800 block">Espessura Ativa:</span>
+                <span className="text-[10px] font-semibold text-blue-800 block">Espessura:</span>
                 <div className="grid grid-cols-3 gap-1">
                   {[0.1, 0.15, 0.2].map((esp) => (
                     <Button
@@ -1224,7 +1460,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             )}
           </div>
 
-          {/* Ferramenta Porta */}
+          {/* Porta */}
           <div className="space-y-1">
             <Button
               size="sm"
@@ -1258,7 +1494,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             )}
           </div>
 
-          {/* Ferramenta Janela */}
+          {/* Janela */}
           <div className="space-y-1">
             <Button
               size="sm"
@@ -1292,7 +1528,18 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             )}
           </div>
 
-          {/* Ferramenta Medir (Régua CAD) */}
+          {/* + Mobília (Biblioteca de Móveis) */}
+          <Button
+            size="sm"
+            variant={ferramenta === "movel" ? "default" : "outline"}
+            className="justify-start gap-2 h-8 text-xs text-amber-800 bg-amber-50 hover:bg-amber-100 border-amber-300"
+            onClick={() => setModalMobiliaAberto(true)}
+            title="Escolher e inserir móveis 2D e 3D nos ambientes"
+          >
+            <Armchair className="w-3.5 h-3.5 text-amber-600" /> + Mobília / Móveis
+          </Button>
+
+          {/* Medir Distância */}
           <Button
             size="sm"
             variant={ferramenta === "medir" ? "default" : "ghost"}
@@ -1305,20 +1552,20 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             <Ruler className="w-3.5 h-3.5 text-purple-600" /> Medir Distância
           </Button>
 
-          {/* Ferramenta Texto / Nomear Ambiente */}
+          {/* Nomear Cômodos & Pisos */}
           <Button
             size="sm"
             variant={ferramenta === "texto" ? "default" : "ghost"}
             className="justify-start gap-2 h-8 text-xs text-indigo-700 hover:text-indigo-800"
             onClick={() => {
               setFerramenta("texto");
-              toast.info("Clique dentro de qualquer ambiente para renomear ou trocar acabamento.");
+              toast.info("Clique dentro de qualquer ambiente para editar nome e piso.");
             }}
           >
-            <Type className="w-3.5 h-3.5 text-indigo-600" /> Nomear Cômodos
+            <Type className="w-3.5 h-3.5 text-indigo-600" /> Nomear & Pisos
           </Button>
 
-          {/* Ferramenta Apagar */}
+          {/* Apagar */}
           <Button
             size="sm"
             variant={ferramenta === "apagar" ? "destructive" : "ghost"}
@@ -1326,7 +1573,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             onClick={() => {
               setFerramenta("apagar");
               setPontoInicial(null);
-              toast.info("Clique na porta, janela ou parede que deseja apagar.");
+              toast.info("Clique na porta, janela, móvel ou parede para apagar.");
             }}
           >
             <Trash2 className="w-3.5 h-3.5" /> Borracha / Apagar
@@ -1334,7 +1581,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
           <div className="h-px bg-slate-200 my-0.5" />
 
-          {/* Modo Ortho 90° (F8) */}
+          {/* Modo Ortho 90° */}
           <Button
             size="sm"
             variant={modoOrtho ? "secondary" : "outline"}
@@ -1342,7 +1589,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               modoOrtho ? "bg-blue-100 text-blue-800 border-blue-300 font-semibold" : "text-slate-500"
             }`}
             onClick={() => setModoOrtho((prev) => !prev)}
-            title="Trava em ângulos retos de 90° (Tecla F8 ou 'O')"
+            title="Trava em 90° (Tecla F8 ou 'O')"
           >
             <Crosshair className="w-3.5 h-3.5" />
             Ortho 90°: {modoOrtho ? "ON" : "OFF"}
@@ -1371,7 +1618,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                         });
                         toast.success(`${novasParedes.length} paredes importadas do DXF!`);
                       } else {
-                        toast.error("Nenhuma linha/polilinha compatível encontrada.");
+                        toast.error("Nenhuma linha compatível encontrada no DXF.");
                       }
                     } catch (err: any) {
                       toast.error(`Erro: ${err.message}`);
@@ -1392,17 +1639,62 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               variant="outline"
               className="h-7 text-[10px] text-slate-700 bg-white hover:bg-slate-100 px-1 gap-1"
               onClick={handleExportarDxf}
-              title="Exportar DXF para abrir no AutoCAD"
+              title="Exportar DXF para AutoCAD"
             >
               <Download className="w-3 h-3 text-blue-600" />
               <span>Exportar</span>
             </Button>
           </div>
 
-          {/* ------------------------------------------------------------- */}
-          {/* PAINEL DE PROPRIEDADES DA ABERTURA SELECIONADA */}
-          {/* ------------------------------------------------------------- */}
-          {aberturaSelecionada && (
+          {/* ----------------------------------------------------------- */}
+          {/* PAINEL LATERAL: MÓVEL SELECIONADO */}
+          {/* ----------------------------------------------------------- */}
+          {movelSelecionado && (
+            <div className="mt-2 p-2.5 bg-amber-50/80 border border-amber-300 rounded-md shadow-xs text-xs space-y-2 animate-in fade-in duration-150">
+              <div className="font-semibold text-slate-900 flex items-center justify-between border-b border-amber-200 pb-1.5">
+                <span className="flex items-center gap-1">
+                  <Armchair className="w-3.5 h-3.5 text-amber-600" /> {movelSelecionado.nome}
+                </span>
+                <Button
+                  size="icon-xs"
+                  variant="destructive"
+                  className="h-5 w-5"
+                  onClick={() => handleApagarMovel(movelSelecionado.id)}
+                  title="Apagar móvel (Delete)"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+
+              <div className="text-[11px] text-slate-600">
+                Dimensões: <strong>{movelSelecionado.largura}m x {movelSelecionado.comprimento}m</strong>
+              </div>
+
+              {/* Botão de Rotacionar */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full h-7 text-xs bg-white text-slate-700 gap-1.5 font-medium"
+                onClick={() => handleGirarMovel(movelSelecionado.id)}
+              >
+                <RotateCw className="w-3.5 h-3.5 text-amber-600" /> Girar 90° (Atual: {movelSelecionado.rotacao || 0}°)
+              </Button>
+
+              <Button
+                size="sm"
+                variant="destructive"
+                className="w-full h-7 text-xs font-semibold gap-1.5"
+                onClick={() => handleApagarMovel(movelSelecionado.id)}
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Excluir Este Móvel
+              </Button>
+            </div>
+          )}
+
+          {/* ----------------------------------------------------------- */}
+          {/* PAINEL LATERAL: ABERTURA SELECIONADA */}
+          {/* ----------------------------------------------------------- */}
+          {aberturaSelecionada && !movelSelecionado && (
             <div className="mt-2 p-2.5 bg-amber-50/70 border border-amber-200 rounded-md shadow-xs text-xs space-y-2 animate-in fade-in duration-150">
               <div className="font-semibold text-slate-900 flex items-center justify-between border-b border-amber-200 pb-1.5">
                 <span className="flex items-center gap-1 capitalize">
@@ -1418,13 +1710,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                   variant="destructive"
                   className="h-5 w-5"
                   onClick={() => handleApagarAbertura(aberturaSelecionada.id)}
-                  title="Apagar esta porta/janela (Delete)"
+                  title="Apagar este vão (Delete)"
                 >
                   <Trash2 className="w-3 h-3" />
                 </Button>
               </div>
 
-              {/* Ajuste de Posição / Deslocamento */}
+              {/* Mover ao Longo da Parede */}
               <div>
                 <span className="text-slate-600 block text-[10px] font-medium mb-1">
                   Mover ao Longo da Parede:
@@ -1444,7 +1736,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                     variant="outline"
                     className="h-6 flex-1 text-[10px] bg-white gap-1 font-normal"
                     onClick={() => handleCentralizarAbertura(aberturaSelecionada.id)}
-                    title="Centralizar no meio da parede"
+                    title="Centralizar no vão"
                   >
                     <AlignCenter className="w-3 h-3 text-amber-600" /> Centralizar
                   </Button>
@@ -1460,7 +1752,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                 </div>
               </div>
 
-              {/* Inverter Sentido de Abertura (apenas para portas) */}
               {aberturaSelecionada.tipo === "porta" && (
                 <Button
                   size="sm"
@@ -1472,7 +1763,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                 </Button>
               )}
 
-              {/* Botão de Exclusão Direta e Explícita */}
               <Button
                 size="sm"
                 variant="destructive"
@@ -1484,10 +1774,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             </div>
           )}
 
-          {/* ------------------------------------------------------------- */}
-          {/* PAINEL DE PROPRIEDADES DA PAREDE SELECIONADA */}
-          {/* ------------------------------------------------------------- */}
-          {paredeSelecionada && !aberturaSelecionada && (
+          {/* ----------------------------------------------------------- */}
+          {/* PAINEL LATERAL: PAREDE SELECIONADA & PINTURA */}
+          {/* ----------------------------------------------------------- */}
+          {paredeSelecionada && !aberturaSelecionada && !movelSelecionado && (
             <div className="mt-2 p-2.5 bg-blue-50/70 border border-blue-200 rounded-md shadow-xs text-xs space-y-2 animate-in fade-in duration-150">
               <div className="font-semibold text-slate-900 flex items-center justify-between border-b border-blue-200 pb-1.5">
                 <span className="flex items-center gap-1">
@@ -1498,7 +1788,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                   variant="destructive"
                   className="h-5 w-5"
                   onClick={() => handleApagarParede(paredeSelecionada.id)}
-                  title="Apagar parede selecionada (Delete)"
+                  title="Apagar parede (Delete)"
                 >
                   <Trash2 className="w-3 h-3" />
                 </Button>
@@ -1511,9 +1801,39 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                 </span>
               </div>
 
+              {/* Pintura da Parede (Cores 3D) */}
+              <div>
+                <span className="text-slate-600 block text-[10px] font-semibold mb-1 flex items-center gap-1">
+                  <Palette className="w-3 h-3 text-blue-600" /> Cor da Pintura (3D):
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {CORES_PINTURA.map((c) => (
+                    <button
+                      key={c.hex}
+                      type="button"
+                      className={`w-5 h-5 rounded-full border shadow-2xs transition-transform hover:scale-110 ${
+                        paredeSelecionada.cor === c.hex ? "ring-2 ring-blue-600 scale-110" : ""
+                      }`}
+                      style={{ backgroundColor: c.hex, borderColor: c.border }}
+                      title={c.nome}
+                      onClick={() => {
+                        registrarHistorico();
+                        onChangeDados({
+                          ...dados,
+                          paredes: dados.paredes.map((p) =>
+                            p.id === paredeSelecionada.id ? { ...p, cor: c.hex } : p
+                          ),
+                        });
+                        toast.success(`Cor "${c.nome}" aplicada à parede!`);
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+
               {/* Alterar Espessura */}
               <div>
-                <span className="text-slate-500 block text-[10px] mb-1">Alterar Espessura:</span>
+                <span className="text-slate-500 block text-[10px] mb-1">Espessura:</span>
                 <div className="grid grid-cols-3 gap-1">
                   {[0.1, 0.15, 0.2].map((esp) => (
                     <Button
@@ -1558,7 +1878,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       )}
 
       {/* ----------------------------------------------------------- */}
-      {/* ÁREA DO CANVAS 2D DE ALTA PRECISÃO */}
+      {/* CANVAS 2D DE ALTA PRECISÃO */}
       {/* ----------------------------------------------------------- */}
       <div className="relative flex-1 h-full overflow-hidden">
         <canvas
@@ -1568,6 +1888,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               ? "cursor-not-allowed"
               : ferramenta === "medir"
               ? "cursor-help"
+              : ferramenta === "movel"
+              ? "cursor-copy"
               : "cursor-crosshair"
           }`}
           onClick={handleCanvasClick}
@@ -1578,7 +1900,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         />
 
         {/* ----------------------------------------------------------- */}
-        {/* WIDGET FLUTUANTE (HUD) DIRETO SOBRE A ABERTURA SELECIONADA */}
+        {/* HUD FLUTUANTE SOBRE ABERTURA SELECIONADA */}
         {/* ----------------------------------------------------------- */}
         {aberturaSelecionada && aberturaScreenPos && (
           <div
@@ -1594,7 +1916,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               <span>{aberturaSelecionada.largura.toFixed(2)}m</span>
             </div>
 
-            {/* Mover para esquerda */}
             <Button
               size="icon-xs"
               variant="ghost"
@@ -1605,7 +1926,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               <ChevronLeft className="w-3.5 h-3.5" />
             </Button>
 
-            {/* Centralizar */}
             <Button
               size="icon-xs"
               variant="ghost"
@@ -1616,7 +1936,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               <AlignCenter className="w-3 h-3 text-amber-400" />
             </Button>
 
-            {/* Mover para direita */}
             <Button
               size="icon-xs"
               variant="ghost"
@@ -1627,36 +1946,85 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               <ChevronRight className="w-3.5 h-3.5" />
             </Button>
 
-            {/* Inverter folha da porta */}
             {aberturaSelecionada.tipo === "porta" && (
               <Button
                 size="icon-xs"
                 variant="ghost"
                 className="h-6 w-6 text-slate-200 hover:text-white hover:bg-slate-800"
                 onClick={() => handleInverterPorta(aberturaSelecionada.id)}
-                title="Inverter lado de abertura da porta"
+                title="Inverter lado de abertura da folha"
               >
                 <FlipHorizontal className="w-3.5 h-3.5 text-amber-400" />
               </Button>
             )}
 
-            {/* BOTÃO EXCLUSIVO DE APAGAR O VÃO (DESTAQUE VERMELHO) */}
             <Button
               size="icon-xs"
               variant="destructive"
               className="h-6 px-2 text-xs font-bold gap-1 bg-red-600 hover:bg-red-700 text-white ml-1 shadow-sm"
               onClick={() => handleApagarAbertura(aberturaSelecionada.id)}
-              title="Apagar exclusivamente esta porta/janela"
+              title="Apagar exclusivamente este vão"
             >
               <Trash2 className="w-3.5 h-3.5" /> Apagar Vão
             </Button>
           </div>
         )}
 
-        {/* Instruções de Desenho Contínuo de Parede */}
+        {/* ----------------------------------------------------------- */}
+        {/* HUD FLUTUANTE SOBRE MÓVEL SELECIONADO */}
+        {/* ----------------------------------------------------------- */}
+        {movelSelecionado && movelScreenPos && (
+          <div
+            className="absolute z-30 pointer-events-auto flex items-center gap-1.5 bg-slate-900/95 backdrop-blur-md text-white px-2 py-1.5 rounded-lg shadow-xl border border-slate-700 -translate-x-1/2 -translate-y-[130%] animate-in zoom-in-95 duration-100"
+            style={{ left: `${movelScreenPos.x}px`, top: `${movelScreenPos.y}px` }}
+          >
+            <span className="text-xs font-bold text-amber-400 pr-1.5 border-r border-slate-700">
+              {movelSelecionado.nome}
+            </span>
+
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              className="h-6 px-2 text-xs text-slate-200 hover:text-white hover:bg-slate-800 gap-1 font-medium"
+              onClick={() => handleGirarMovel(movelSelecionado.id)}
+              title="Girar 90 graus"
+            >
+              <RotateCw className="w-3 h-3 text-amber-400" /> Girar 90°
+            </Button>
+
+            <Button
+              size="icon-xs"
+              variant="destructive"
+              className="h-6 px-2 text-xs font-bold gap-1 bg-red-600 hover:bg-red-700 text-white ml-1 shadow-sm"
+              onClick={() => handleApagarMovel(movelSelecionado.id)}
+              title="Apagar este móvel"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Apagar
+            </Button>
+          </div>
+        )}
+
+        {/* Instruções de Inserção de Móvel Ativo */}
+        {ferramenta === "movel" && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-amber-600 text-white text-xs px-3.5 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+            <span>
+              Clique no ambiente para posicionar: <strong>{CATALOGO_MOVEIS[tipoMovelAtivo].nome}</strong>
+            </span>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              className="h-5 px-1.5 text-[10px] text-white hover:bg-amber-700 bg-amber-800"
+              onClick={() => setFerramenta("selecionar")}
+            >
+              Cancelar
+            </Button>
+          </div>
+        )}
+
+        {/* Instruções de Parede Contínua */}
         {ferramenta === "parede" && pontoInicial && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 bg-blue-600 text-white text-xs px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2">
-            <span>Clique para continuar a parede (ESC para encerrar cadeia)</span>
+            <span>Clique para continuar a parede (ESC para encerrar)</span>
             <Button
               size="icon-xs"
               variant="ghost"
@@ -1671,12 +2039,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           </div>
         )}
 
-        {/* Orientação quando a planta está em branco */}
+        {/* Planta em branco */}
         {dados.paredes.length === 0 && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-white/95 backdrop-blur-sm border border-slate-200 shadow-md px-4 py-2 rounded-lg text-xs text-slate-600 flex items-center gap-2 pointer-events-none">
             <Square className="w-4 h-4 text-primary shrink-0" />
             <span>
-              <strong>Planta em branco:</strong> Clique em <strong>+ Novo Cômodo</strong> para gerar uma sala rápida ou selecione <strong>Parede</strong> para desenhar.
+              <strong>Planta em branco:</strong> Clique em <strong>+ Novo Cômodo</strong> para gerar uma sala rápida ou desenhe com <strong>Parede</strong>.
             </span>
           </div>
         )}
@@ -1712,7 +2080,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           </Button>
         </div>
 
-        {/* Status de Coordenadas e Ortho */}
+        {/* Coordenadas e Ortho */}
         <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 pointer-events-none">
           {pontoCursor && (
             <div className="text-[11px] text-slate-500 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded border border-slate-200">
@@ -1730,6 +2098,63 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           </div>
         </div>
       </div>
+
+      {/* ----------------------------------------------------------- */}
+      {/* MODAL: BIBLIOTECA DE MÓVEIS 2D/3D */}
+      {/* ----------------------------------------------------------- */}
+      <Dialog open={modalMobiliaAberto} onOpenChange={setModalMobiliaAberto}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
+              <Armchair className="w-5 h-5 text-amber-600" /> Biblioteca de Mobiliário 2D & 3D
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            <p className="text-xs text-slate-500">
+              Selecione o móvel desejado e clique no ambiente da planta para inseri-lo:
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              {(Object.keys(CATALOGO_MOVEIS) as TipoMovel[]).map((tipoKey) => {
+                const item = CATALOGO_MOVEIS[tipoKey];
+                return (
+                  <button
+                    key={tipoKey}
+                    type="button"
+                    className="flex items-center gap-2.5 p-2 rounded-lg border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-300 transition-colors text-left"
+                    onClick={() => {
+                      setTipoMovelAtivo(tipoKey);
+                      setFerramenta("movel");
+                      setModalMobiliaAberto(false);
+                      toast.info(`Clique na planta para posicionar: ${item.nome}`);
+                    }}
+                  >
+                    <span className="text-xl shrink-0">{item.icone}</span>
+                    <div className="overflow-hidden">
+                      <div className="text-xs font-bold text-slate-800 truncate">{item.nome}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        {item.largura}m x {item.comprimento}m
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalMobiliaAberto(false)}
+            >
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ----------------------------------------------------------- */}
       {/* MODAL PARA CRIAÇÃO RÁPIDA DE CÔMODOS */}
@@ -1833,13 +2258,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       </Dialog>
 
       {/* ----------------------------------------------------------- */}
-      {/* MODAL DE EDIÇÃO DE AMBIENTE / CÔMODO */}
+      {/* MODAL DE EDIÇÃO DE AMBIENTE & PISO */}
       {/* ----------------------------------------------------------- */}
       <Dialog open={modalEditarAmbienteAberto} onOpenChange={setModalEditarAmbienteAberto}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
-              <Type className="w-5 h-5 text-indigo-600" /> Editar Ambiente
+              <Type className="w-5 h-5 text-indigo-600" /> Editar Ambiente & Acabamento de Piso
             </DialogTitle>
           </DialogHeader>
 
@@ -1859,17 +2284,30 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               </div>
 
               <div>
-                <Label className="text-xs font-semibold text-slate-700 mb-1 block">
-                  Acabamento do Piso
+                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                  Escolha o Acabamento do Piso (2D & 3D):
                 </Label>
-                <Input
-                  value={ambienteEmEdicao.pisoAcabamento || ""}
-                  onChange={(e) =>
-                    setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoAcabamento: e.target.value })
-                  }
-                  placeholder="Ex: Porcelanato Retificado 84x84"
-                  className="h-9 text-sm"
-                />
+                <div className="space-y-1.5">
+                  {PRESETS_PISOS.map((p) => (
+                    <button
+                      key={p.nome}
+                      type="button"
+                      className={`w-full text-left p-2 rounded-md border text-xs flex items-center justify-between transition-colors ${
+                        ambienteEmEdicao.pisoAcabamento === p.nome
+                          ? "bg-indigo-50 border-indigo-400 font-semibold text-indigo-900"
+                          : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
+                      }`}
+                      onClick={() =>
+                        setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoAcabamento: p.nome })
+                      }
+                    >
+                      <span>{p.tag}</span>
+                      {ambienteEmEdicao.pisoAcabamento === p.nome && (
+                        <Check className="w-4 h-4 text-indigo-600" />
+                      )}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
@@ -1903,7 +2341,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                       amb.id === ambienteEmEdicao.id ? ambienteEmEdicao : amb
                     ),
                   });
-                  toast.success("Ambiente atualizado!");
+                  toast.success("Ambiente e piso atualizados no 2D e 3D!");
                 }
                 setModalEditarAmbienteAberto(false);
               }}
@@ -1916,10 +2354,6 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     </div>
   );
 }
-
-// -------------------------------------------------------------
-// FUNÇÕES UTILITÁRIAS GEOMÉTRICAS
-// -------------------------------------------------------------
 
 function calcularAreaPoligono(pontos: Ponto2D[]): number {
   let area = 0;

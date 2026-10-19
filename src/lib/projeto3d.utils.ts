@@ -38,7 +38,9 @@ export const PROJETO_EM_BRANCO: DadosProjetoBIM = {
     esquadrias: true,
     piso: true,
     estrutura: true,
+    moveis: true,
   },
+  moveis: [],
 };
 
 // O projeto padrão inicial para qualquer obra sem modelagem é SEMPRE em branco

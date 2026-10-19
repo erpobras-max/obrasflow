@@ -52,6 +52,30 @@ export interface CamadasVisibilidade {
   esquadrias: boolean;
   piso: boolean;
   estrutura: boolean;
+  moveis?: boolean;
+}
+
+export type TipoMovel =
+  | "cama_casal"
+  | "cama_solteiro"
+  | "sofa"
+  | "mesa_jantar"
+  | "bancada_pia"
+  | "geladeira"
+  | "fogao"
+  | "vaso_sanitario"
+  | "bancada_banheiro";
+
+export interface Movel {
+  id: string;
+  tipo: TipoMovel;
+  nome: string;
+  x: number; // posição centro X em metros
+  y: number; // posição centro Y em metros (planta 2D)
+  largura: number; // metros
+  comprimento: number; // metros
+  altura: number; // metros
+  rotacao: number; // graus: 0, 90, 180, 270
 }
 
 export interface ConfigProjeto {
@@ -67,6 +91,7 @@ export interface DadosProjetoBIM {
   ambientes: Ambiente[];
   cobertura: CoberturaConfig;
   layers: CamadasVisibilidade;
+  moveis?: Movel[];
 }
 
 export interface ItemQuantitativo {

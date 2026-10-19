@@ -193,6 +193,15 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
      - **HUD Flutuante no Canvas**: widget posicionado diretamente sobre o vão selecionado com botões `[Apagar Vão]`, `[Centralizar]`, `[<- -10cm]`, `[-> +10cm]` e `[Inverter Folha]`.
      - **Exclusão Segura e Isolada**: apagar apenas a porta ou janela sem afetar a parede, tanto pelo HUD, pelo painel lateral, quanto pela ferramenta Borracha e pela tecla `Delete`/`Backspace`.
      - Inversão do sentido de abertura da porta (`invertida`) com desenho do arco de 90° e folha.
+   - **Biblioteca de Mobiliário 2D & 3D (`+ Mobília`)**:
+     - Inserção de camas (casal e solteiro), sofá 3L, mesa de jantar 6L, bancada com pia de inox, geladeira frost-free, fogão 4 bocas, vaso sanitário e bancada de banheiro.
+     - Representação em blocos arquitetônicos 2D com detalhes técnicos.
+     - HUD flutuante no canvas para **rotacionar em 90°** e **apagar móvel**.
+     - Arraste livre com o mouse no piso para reposicionar.
+   - **Paleta de Cores de Pintura para Paredes**:
+     - Seleção de tintas (Branco Neve, Cinza Moderno, Bege Areia, Terracota, Verde Sálvia, Azul Petróleo, Chumbo Grafite) aplicada instantaneamente no 2D e 3D.
+   - **Seleção de Pisos por Ambiente**:
+     - Presets de acabamento (Porcelanato Polido Claro, Madeira Laminada, Cimento Queimado, Cerâmica Rústica e Grama Verde) com renderização realista de texturas e reflexos.
    - **Paredes Contínuas (Polyline)**: desenho de paredes em cadeia ininterrupta ponto-a-ponto, com fechamento automático de cômodo e geração da laje 3D ao tocar no início do polígono.
    - **Snap Inteligente (OSNAP)**: detecção de extremidades (Endpoints) com marcador verde e pontos médios (Midpoints) com marcador ciano tipo AutoCAD.
    - **Atalhos de Teclado Profissionais**: `Delete`/`Backspace` (apagar elemento selecionado), `Esc` (cancelar/encerrar cadeia), `Ctrl+Z` (desfazer), `Ctrl+Y` (refazer) e `F8`/`O` (modo ortogonal).
@@ -202,9 +211,13 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
    - **Importador DXF**: leitura nativa de linhas e polilinhas do AutoCAD em ASCII.
    - **Exportador DXF**: geração de arquivo `.dxf` (AutoCAD R12) com camadas separadas (`PAREDES`, `ESQUADRIAS`) para download no PC.
 2. **Visualizador 3D Three.js**:
-   - Extrusão volumétrica automática das paredes e vãos desenhados no 2D.
+   - **Recorte Real de Vãos de Parede**: as paredes são divididas em blocos e deixam o vão da janela e da porta totalmente aberto, com peitoril e verga, permitindo ver através do vidro e ver a luz atravessar a abertura.
+   - **Esquadrias de Alta Fidelidade**: janelas com moldura de alumínio preto, montante central, vidro físico translúcido e peitoril de granito saliente; portas com folha de madeira, marco e maçaneta cromada.
+   - **Humanização com Mobília 3D Procedural**: renderização tridimensional de camas, sofás, mesas, armários com pia, geladeira e fogão.
+   - **Pisos Realistas**: porcelanato polido acetinado, madeira laminada, cimento industrial, cerâmica terracota e grama externa.
+   - **Pintura das Paredes**: renderização tridimensional da cor selecionada para cada parede.
    - Controles de órbita 3D, zoom pela roda do mouse e pan com o botão direito.
-   - Alternância de camadas (Telhado ligado/desligado, paredes, piso, esquadrias).
+   - Alternância de camadas (Telhado ligado/desligado, paredes, piso, esquadrias, móveis).
    - **Modo Corte Horizontal (1.20m)** para visualização em planta humanizada 3D.
    - Botão **"Capturar para Capa"**: renderiza snapshot da maquete e salva como imagem de capa do memorial técnico.
 3. **Engenharia de Custos, Quantitativos & BDI Privado**:
@@ -228,9 +241,9 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
 
 ## 19. Última entrega publicada
 
-- **Commit**: `feat(projeto3d): estudio 2D CADCraft completo com reposicionamento e exclusao de portas/janelas, HUD flutuante, OSNAP e polyline`
+- **Commit**: `feat(projeto3d): correcao de vaos de janelas 3D, biblioteca de moveis 2D/3D, pintura de paredes e acabamentos de piso`
 - **Branch**: `main` (enviado com sucesso para `origin/main`).
-- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 15.86s.
+- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 17.60s.
 - **Deploy**: Publicação automática em andamento via Cloudflare Worker `obrasflow`.
 
 ## 20. Pendências prioritárias após esta atualização
