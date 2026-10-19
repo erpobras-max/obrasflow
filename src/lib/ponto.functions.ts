@@ -111,6 +111,76 @@ export const solicitarAjustePontoCpf = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export const obterObrasPonto = createServerFn({ method: "POST" }).handler(async () => {
+  const { getPontoFuncionario } = await import("./ponto-session.server");
+  const access = await getPontoFuncionario();
+  // Se logado via CPF ou se chamado via SSR
+  let supabaseClient = access?.supabaseAdmin;
+  if (!supabaseClient) {
+    const { createSupabaseAdminClient } = await import("@/integrations/supabase/client.server.custom");
+    supabaseClient = createSupabaseAdminClient();
+  }
+  const { data, error } = await supabaseClient
+    .from("obras")
+    .select("id, numero, nome")
+    .order("nome");
+  if (error) return [];
+  return data ?? [];
+});
+
+export const obterEquipePonto = createServerFn({ method: "POST" }).handler(async () => {
+  const { getPontoFuncionario } = await import("./ponto-session.server");
+  const access = await getPontoFuncionario();
+  let supabaseClient = access?.supabaseAdmin;
+  if (!supabaseClient) {
+    const { createSupabaseAdminClient } = await import("@/integrations/supabase/client.server.custom");
+    supabaseClient = createSupabaseAdminClient();
+  }
+  const { data, error } = await supabaseClient
+    .from("funcionarios")
+    .select("id, nome, cargo, matricula, obra_id")
+    .eq("status", "ativo")
+    .order("nome");
+  if (error) return [];
+  return data ?? [];
+});
+
+const equipeMarcacaoSchema = z.object({
+  funcionarioId: z.string().uuid(),
+  tipo: z.enum(["entrada", "saida_almoco", "retorno_almoco", "saida"]),
+  obraId: z.string().uuid(),
+  latitude: z.number().finite().min(-90).max(90).nullable(),
+  longitude: z.number().finite().min(-180).max(180).nullable(),
+  precisao: z.number().finite().nonnegative().nullable(),
+  dispositivo: z.object({
+    navegador: z.string().max(500),
+    plataforma: z.string().max(100),
+    idioma: z.string().max(30),
+    registrado_por_mestre: z.boolean().optional(),
+  }),
+});
+
+export const registrarPontoEquipeCpf = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => equipeMarcacaoSchema.parse(input))
+  .handler(async ({ data }) => {
+    const { funcionario, supabaseAdmin } = await requireFuncionario();
+    const cargo = (funcionario.cargo || "").toLowerCase();
+    if (!cargo.includes("mestre") && !cargo.includes("encarregado")) {
+      throw new Error("Apenas o Mestre de Obras ou Encarregado pode bater ponto da equipe.");
+    }
+    const { error } = await supabaseAdmin.rpc("registrar_ponto_equipe", {
+      p_funcionario_id: data.funcionarioId,
+      p_tipo: data.tipo,
+      p_obra_id: data.obraId,
+      p_latitude: data.latitude,
+      p_longitude: data.longitude,
+      p_precisao: data.precisao,
+      p_dispositivo: data.dispositivo,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
 export const sairDoPontoCpf = createServerFn({ method: "POST" }).handler(async () => {
   const { getPontoSession } = await import("./ponto-session.server");
   await (await getPontoSession()).clear();

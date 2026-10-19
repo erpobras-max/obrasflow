@@ -38,6 +38,9 @@ import {
   registrarPontoCpf,
   sairDoPontoCpf,
   solicitarAjustePontoCpf,
+  obterObrasPonto,
+  obterEquipePonto,
+  registrarPontoEquipeCpf,
 } from "@/lib/ponto.functions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -173,10 +176,16 @@ function PontoPage() {
       roles.some((r) => ["admin", "diretor", "rh"].includes(r)),
   );
 
-  const { data: listaObras = [] } = useQuery<{ id: string; numero: number; nome: string }[]>({
+  const { data: listaObras = [] } = useQuery<{ id: string; numero: number | string; nome: string }[]>({
     queryKey: ["ponto-obras-ativas"],
     enabled: isMestreDeObras,
     queryFn: async () => {
+      try {
+        const serverObras = await obterObrasPonto();
+        if (serverObras && serverObras.length > 0) return serverObras;
+      } catch {
+        // Fallback para query direta caso esteja autenticado
+      }
       const { data, error } = await (supabase as any)
         .from("obras")
         .select("id, numero, nome")
@@ -195,6 +204,12 @@ function PontoPage() {
     queryKey: ["ponto-equipe-mestre-todos"],
     enabled: isMestreDeObras,
     queryFn: async () => {
+      try {
+        const serverEquipe = await obterEquipePonto();
+        if (serverEquipe && serverEquipe.length > 0) return serverEquipe;
+      } catch {
+        // Fallback
+      }
       const { data, error } = await (supabase as any)
         .from("funcionarios")
         .select("id, nome, cargo, matricula, obra_id")
@@ -359,6 +374,25 @@ function PontoPage() {
         throw new Error("Selecione a Obra em que a equipe está trabalhando antes de bater o ponto.");
       }
       const local = await gps();
+      if (!user) {
+        await registrarPontoEquipeCpf({
+          data: {
+            funcionarioId,
+            tipo,
+            obraId: obraSelecionadaId,
+            latitude: local?.latitude ?? null,
+            longitude: local?.longitude ?? null,
+            precisao: local?.precisao ?? null,
+            dispositivo: {
+              navegador: navigator.userAgent,
+              plataforma: navigator.platform,
+              idioma: navigator.language,
+              registrado_por_mestre: true,
+            },
+          },
+        });
+        return;
+      }
       const { error } = await (supabase as any).rpc("registrar_ponto_equipe", {
         p_funcionario_id: funcionarioId,
         p_tipo: tipo,
