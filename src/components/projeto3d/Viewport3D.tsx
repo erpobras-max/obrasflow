@@ -749,28 +749,32 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         )}
 
         {/* Barra Flutuante de Ferramentas da Câmera & Camadas */}
-        <div className="absolute top-3 right-3 z-10 flex flex-wrap gap-2 items-center bg-slate-900/80 backdrop-blur-md p-1.5 rounded-lg border border-slate-700 shadow-xl">
+        <div className="absolute top-3 right-3 z-10 flex flex-wrap gap-2 items-center bg-slate-950/90 backdrop-blur-md p-1.5 rounded-lg border border-slate-700 shadow-2xl">
           {/* Botão de Corte Horizontal */}
           <Button
             size="sm"
-            variant={modoCorte ? "default" : "outline"}
+            variant="ghost"
             className={
               modoCorte
-                ? "bg-amber-600 hover:bg-amber-700 text-white"
-                : "text-slate-200 hover:text-white border-slate-700"
+                ? "bg-amber-600 hover:bg-amber-700 text-white font-semibold border border-amber-500 shadow-xs"
+                : "bg-slate-800 hover:bg-slate-700 text-white font-medium border border-slate-600 shadow-xs"
             }
             onClick={alternarCorte}
             title="Corte Horizontal (Planta 3D Humanizada)"
           >
-            <Scissors className="w-4 h-4 mr-1.5" />
+            <Scissors className="w-4 h-4 mr-1.5 text-amber-300" />
             {modoCorte ? "Corte Ativo (1.2m)" : "Corte 3D"}
           </Button>
 
           {/* Toggle Rápido do Telhado */}
           <Button
             size="sm"
-            variant="outline"
-            className="text-slate-200 hover:text-white border-slate-700"
+            variant="ghost"
+            className={
+              camadas.telhado
+                ? "bg-slate-800 hover:bg-slate-700 text-white font-medium border border-slate-600 shadow-xs"
+                : "bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700"
+            }
             onClick={() => setCamadas((prev) => ({ ...prev, telhado: !prev.telhado }))}
             title="Ligar ou desligar telhado para ver o interior"
           >
@@ -785,8 +789,12 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
           {/* Toggle de Móveis */}
           <Button
             size="sm"
-            variant="outline"
-            className="text-slate-200 hover:text-white border-slate-700"
+            variant="ghost"
+            className={
+              camadas.moveis !== false
+                ? "bg-slate-800 hover:bg-slate-700 text-white font-medium border border-slate-600 shadow-xs"
+                : "bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700"
+            }
             onClick={() => setCamadas((prev) => ({ ...prev, moveis: !prev.moveis }))}
             title="Ligar ou desligar visualização de mobília"
           >
@@ -801,23 +809,24 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
           {/* Resetar Câmera */}
           <Button
             size="sm"
-            variant="outline"
-            className="text-slate-200 hover:text-white border-slate-700"
+            variant="ghost"
+            className="bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 shadow-xs px-2.5"
             onClick={resetarCamera}
             title="Resetar posição da câmera"
           >
-            <RotateCcw className="w-4 h-4" />
+            <RotateCcw className="w-4 h-4 text-slate-200" />
           </Button>
 
           {/* Botão de Captura para a Capa */}
           {!somenteLeitura && (
             <Button
               size="sm"
-              className="bg-primary hover:bg-primary/90 text-white shadow-md font-medium"
+              variant="default"
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-md font-semibold border border-blue-500"
               onClick={capturarFoto}
               title="Tirar foto deste ângulo para a capa do Dossiê"
             >
-              <Camera className="w-4 h-4 mr-1.5" />
+              <Camera className="w-4 h-4 mr-1.5 text-white" />
               Capturar para Capa
             </Button>
           )}
