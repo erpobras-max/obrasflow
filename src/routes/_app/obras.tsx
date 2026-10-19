@@ -296,7 +296,7 @@ function ObrasPage() {
                       variant="outline"
                       className="h-8 gap-1 border-primary/40 text-primary hover:bg-primary/10"
                       title="Abrir Projeto CAD, Modelagem 3D e Dossiê da Obra"
-                      onClick={() => navigate({ to: `/obras/${o.id}/projeto` as any })}
+                      onClick={() => navigate({ to: `/projeto3d/${o.id}` as any })}
                     >
                       <Boxes className="size-3.5" /> Projeto 3D
                     </Button>
