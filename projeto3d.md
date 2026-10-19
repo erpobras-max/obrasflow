@@ -295,3 +295,20 @@ CREATE POLICY "obra_projetos_cad_portal_cliente_select" ON public.obra_projetos_
 * [x] **Conexão com o Financeiro**:
   - Ao aprovar ou faturar a medição gerada a partir do 3D, a trigger do Supabase gera automaticamente os títulos em **Contas a Receber** e provisiona os pagamentos.
 
+### 🚀 Fase 6: Visão 4D de Evolução, Novos Móveis & Galeria Visual do Canteiro — [CONCLUÍDO]
+* [x] **Visão 4D no 3D (Status de Medição em Tempo Real)**:
+  - Botão flutuante **"Visão 4D"** que colore as paredes de acordo com o avanço físico real das medições.
+  - 🟢 **Verde Esmeralda**: Paredes já medidas e faturadas.
+  - 🟡 **Âmbar**: Paredes em execução no período atual.
+  - ⚪ **Cinza Translúcido**: Etapas futuras a executar.
+  - **Legenda Flutuante 4D**: Exibe o percentual consolidado executado da obra e atalho para a última medição.
+* [x] **Novos Móveis Paramétricos na Biblioteca 2D e 3D**:
+  - `guarda_roupa`: Guarda-roupa 3 portas em madeira nobre com puxadores em inox.
+  - `tv_rack`: Painel amadeirado de parede com TV de tela plana em granito preto e nicho inferior.
+  - `box_chuveiro`: Vidro temperado translúcido com acabamento de perfis em inox e ducha superior.
+* [x] **Galeria do Diário de Obras Integrada no 3D**:
+  - Botão **"Fotos Canteiro"** exibido automaticamente no 3D com contador de mídias registradas.
+  - Modal com galeria de fotos reais tiradas em campo pelo celular no Diário de Obra, com data, hora e clima.
+  - Habilitado tanto no Estúdio interno de Engenharia quanto no **Portal do Cliente**.
+
+
