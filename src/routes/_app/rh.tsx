@@ -324,6 +324,27 @@ const TIPO_DOC_LABEL: Record<string, string> = {
   outros: "Outros",
 };
 
+export const CARGOS_SUGERIDOS = [
+  "Mestre de Obras",
+  "Encarregado de Obras",
+  "Pedreiro",
+  "Ajudante de Obra",
+  "Servente de Obras",
+  "Carpinteiro",
+  "Armador / Ferragista",
+  "Eletricista",
+  "Encanador / Instalador Hidráulico",
+  "Pintor",
+  "Gesseiro",
+  "Azulejista / Pastilheiro",
+  "Operador de Máquinas",
+  "Almoxarife",
+  "Técnico em Segurança do Trabalho",
+  "Engenheiro Civil",
+  "Arquiteto",
+  "Auxiliar Administrativo",
+] as const;
+
 const TIPO_EVENTO_LABEL: Record<string, string> = {
   hora_extra_50: "Hora Extra 50%",
   hora_extra_100: "Hora Extra 100%",
@@ -2401,7 +2422,39 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
                 <FormField control={form.control as any} name="cargo" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cargo *</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <div className="space-y-1.5">
+                      <Select
+                        value={CARGOS_SUGERIDOS.includes(field.value as any) ? field.value : "personalizado"}
+                        onValueChange={(val) => {
+                          if (val !== "personalizado") {
+                            field.onChange(val);
+                          }
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="Selecione o cargo ou digite abaixo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-60">
+                          <SelectItem value="personalizado" className="font-semibold text-primary">
+                            ✍️ Digitar outro cargo...
+                          </SelectItem>
+                          {CARGOS_SUGERIDOS.map((cg) => (
+                            <SelectItem key={cg} value={cg}>
+                              {cg}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormControl>
+                        <Input
+                          placeholder="Nome do cargo (ex: Mestre de Obras, Pedreiro...)"
+                          {...field}
+                          className="h-8 text-xs font-medium"
+                        />
+                      </FormControl>
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )} />

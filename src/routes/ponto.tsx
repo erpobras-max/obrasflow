@@ -19,6 +19,11 @@ import {
   RefreshCw,
   Send,
   SkipForward,
+  Users,
+  Building2,
+  HardHat,
+  ShieldCheck,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { eachDayOfInterval, endOfMonth, format, isWeekend, parseISO, startOfMonth } from "date-fns";
@@ -46,6 +51,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -146,6 +158,70 @@ function PontoPage() {
       navigate({ to: "/dashboard", replace: true });
   }, [loading, loadingFunc, user, funcionario, perfil?.ativo, roles, navigate]);
   const hoje = format(new Date(), "yyyy-MM-dd");
+  const [obraSelecionadaId, setObraSelecionadaId] = useState<string>("");
+
+  useEffect(() => {
+    if (funcionario?.obra_id && !obraSelecionadaId) {
+      setObraSelecionadaId(funcionario.obra_id);
+    }
+  }, [funcionario?.obra_id, obraSelecionadaId]);
+
+  const isMestreDeObras = Boolean(
+    funcionario?.cargo?.toLowerCase().includes("mestre") ||
+      funcionario?.cargo?.toLowerCase().includes("encarregado") ||
+      roles.some((r) => ["admin", "diretor", "rh"].includes(r)),
+  );
+
+  const { data: listaObras = [] } = useQuery<{ id: string; numero: number; nome: string }[]>({
+    queryKey: ["ponto-obras-ativas"],
+    enabled: isMestreDeObras,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("obras")
+        .select("id, numero, nome")
+        .order("nome");
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+
+  const { data: membrosEquipe = [], isLoading: loadingEquipe } = useQuery<
+    { id: string; nome: string; cargo: string; matricula: string | null; obra_id: string | null }[]
+  >({
+    queryKey: ["ponto-equipe-mestre", obraSelecionadaId],
+    enabled: isMestreDeObras,
+    queryFn: async () => {
+      let query = (supabase as any)
+        .from("funcionarios")
+        .select("id, nome, cargo, matricula, obra_id")
+        .eq("status", "ativo")
+        .order("nome");
+
+      if (obraSelecionadaId && obraSelecionadaId !== "todas") {
+        query = query.or(`obra_id.eq.${obraSelecionadaId},obra_id.is.null`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: registrosEquipeHoje = [], refetch: refetchRegistrosEquipe } = useQuery<
+    (RegistroPonto & { funcionario_id: string })[]
+  >({
+    queryKey: ["ponto-equipe-hoje", hoje],
+    enabled: isMestreDeObras,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("registros_ponto")
+        .select("*")
+        .eq("data", hoje);
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+
   const inicio = `${mes}-01`,
     fim = format(endOfMonth(parseISO(inicio)), "yyyy-MM-dd");
   const { data: registros = [], isLoading: loadingRegistros } = useQuery<RegistroPonto[]>({
@@ -250,11 +326,43 @@ function PontoPage() {
           plataforma: navigator.platform,
           idioma: navigator.language,
         },
+        p_obra_id: obraSelecionadaId && obraSelecionadaId !== "todas" ? obraSelecionadaId : funcionario?.obra_id || null,
       });
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("Marcação registrada com o horário oficial do servidor.");
+      void qc.invalidateQueries({ queryKey: ["ponto-registros"] });
+      void qc.invalidateQueries({ queryKey: ["ponto-equipe-hoje"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const registrarMembroEquipe = useMutation({
+    mutationFn: async ({ funcionarioId, tipo }: { funcionarioId: string; tipo: Marcacao }) => {
+      if (!obraSelecionadaId || obraSelecionadaId === "todas") {
+        throw new Error("Selecione a Obra em que a equipe está trabalhando antes de bater o ponto.");
+      }
+      const local = await gps();
+      const { error } = await (supabase as any).rpc("registrar_ponto_equipe", {
+        p_funcionario_id: funcionarioId,
+        p_tipo: tipo,
+        p_obra_id: obraSelecionadaId,
+        p_latitude: local?.latitude ?? null,
+        p_longitude: local?.longitude ?? null,
+        p_precisao: local?.precisao ?? null,
+        p_dispositivo: {
+          navegador: navigator.userAgent,
+          plataforma: navigator.platform,
+          idioma: navigator.language,
+          registrado_por_mestre: true,
+        },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Ponto do membro da equipe registrado com sucesso!");
+      void qc.invalidateQueries({ queryKey: ["ponto-equipe-hoje"] });
       void qc.invalidateQueries({ queryKey: ["ponto-registros"] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -369,10 +477,60 @@ function PontoPage() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 md:py-8">
-        <Tabs defaultValue="hoje" className="space-y-5">
-          <TabsList className="grid h-auto w-full grid-cols-3 bg-white p-1 shadow-sm md:w-[460px] print:hidden">
+        {/* Seletor de Obra em Destaque para Mestre de Obras ou se houver obras ativas */}
+        {isMestreDeObras && (
+          <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm md:flex md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-lg bg-amber-600 text-white shadow-sm">
+                <HardHat className="size-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-amber-950 md:text-base">
+                    Mestre de Obras / Encarregado
+                  </h2>
+                  <Badge variant="outline" className="border-amber-400 bg-amber-100 text-amber-900 font-semibold">
+                    Registro de Equipe
+                  </Badge>
+                </div>
+                <p className="text-xs text-amber-800">
+                  Informe a obra em que você e a equipe estão presentes hoje para auditoria de GPS e ponto.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center gap-2 md:mt-0">
+              <Building2 className="size-4 text-amber-900 shrink-0" />
+              <Select value={obraSelecionadaId} onValueChange={setObraSelecionadaId}>
+                <SelectTrigger className="w-full min-w-[240px] bg-white border-amber-300">
+                  <SelectValue placeholder="Selecione a Obra atual..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as Obras / Base</SelectItem>
+                  {listaObras.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      #{o.numero} — {o.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        <Tabs defaultValue={isMestreDeObras ? "equipe" : "hoje"} className="space-y-5">
+          <TabsList
+            className={`grid h-auto w-full ${
+              isMestreDeObras ? "grid-cols-4 md:w-[600px]" : "grid-cols-3 md:w-[460px]"
+            } bg-white p-1 shadow-sm print:hidden`}
+          >
+            {isMestreDeObras && (
+              <TabsTrigger value="equipe" className="min-h-10 gap-1.5 font-semibold text-amber-900 data-[state=active]:bg-amber-100 data-[state=active]:text-amber-950">
+                <Users className="size-4" />
+                Equipe da Obra
+              </TabsTrigger>
+            )}
             <TabsTrigger value="hoje" className="min-h-10">
-              Hoje
+              Meu Ponto (Hoje)
             </TabsTrigger>
             <TabsTrigger value="espelho" className="min-h-10">
               Espelho mensal
@@ -381,6 +539,236 @@ function PontoPage() {
               Ajustes
             </TabsTrigger>
           </TabsList>
+
+          {isMestreDeObras && (
+            <TabsContent value="equipe" className="space-y-5">
+              <div className="flex flex-col gap-3 rounded-lg border bg-white p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
+                <div>
+                  <h3 className="text-base font-bold flex items-center gap-2">
+                    <Users className="size-5 text-amber-600" />
+                    Bater Ponto da Equipe (Pedreiros, Ajudantes e Mestres)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    O mestre registra o ponto dos colaboradores presentes nesta obra com carimbo oficial e GPS.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      void refetchRegistrosEquipe();
+                    }}
+                    className="gap-2"
+                  >
+                    <RefreshCw className="size-4" /> Atualizar Lista
+                  </Button>
+                </div>
+              </div>
+
+              {(!obraSelecionadaId || obraSelecionadaId === "todas") && (
+                <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900">
+                  <AlertCircle className="size-5 shrink-0 text-amber-700" />
+                  <div className="text-sm">
+                    <strong>Atenção:</strong> Por favor, selecione a <b>Obra específica</b> no topo da página antes de registrar o ponto dos membros da equipe.
+                  </div>
+                </div>
+              )}
+
+              <Card className="overflow-hidden">
+                <CardHeader className="py-4 px-6 border-b bg-slate-50/50">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Membros da Equipe no Canteiro</CardTitle>
+                      <CardDescription className="text-xs">
+                        {membrosEquipe.length} colaboradores ativos encontrados
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline" className="flex items-center gap-1.5 bg-white text-xs">
+                      <ShieldCheck className="size-3.5 text-emerald-600" />
+                      GPS de Auditoria Ativo
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[240px]">Colaborador</TableHead>
+                          <TableHead>Cargo</TableHead>
+                          <TableHead className="text-center">1º Entrada</TableHead>
+                          <TableHead className="text-center">Almoço</TableHead>
+                          <TableHead className="text-center">Retorno</TableHead>
+                          <TableHead className="text-center">Saída</TableHead>
+                          <TableHead className="text-center">Ações Rápidas</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {loadingEquipe ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="py-10 text-center">
+                              <Loader2 className="mx-auto size-5 animate-spin" />
+                            </TableCell>
+                          </TableRow>
+                        ) : membrosEquipe.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={7} className="py-10 text-center text-slate-500">
+                              Nenhum funcionário encontrado para esta obra.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          membrosEquipe.map((m) => {
+                            const reg = registrosEquipeHoje.find((r) => r.funcionario_id === m.id);
+                            const semObra = !obraSelecionadaId || obraSelecionadaId === "todas";
+
+                            const podeEntrada = !reg?.hora_entrada;
+                            const podeAlmoco = !!reg?.hora_entrada && !reg?.hora_saida_almoco && !reg?.hora_saida;
+                            const podeRetorno = !!reg?.hora_saida_almoco && !reg?.hora_retorno_almoco;
+                            const podeSaida = !!reg?.hora_entrada && !reg?.hora_saida && (!reg?.hora_saida_almoco || !!reg?.hora_retorno_almoco);
+
+                            return (
+                              <TableRow key={m.id}>
+                                <TableCell>
+                                  <div className="font-semibold text-sm">{m.nome}</div>
+                                  <div className="text-xs text-slate-400">
+                                    Matrícula: {m.matricula || "—"}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline" className="text-xs bg-slate-50">
+                                    {m.cargo || "Geral"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {reg?.hora_entrada ? (
+                                    <span className="font-mono text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                      {hora(reg.hora_entrada)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {reg?.hora_saida_almoco ? (
+                                    <span className="font-mono text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                      {hora(reg.hora_saida_almoco)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {reg?.hora_retorno_almoco ? (
+                                    <span className="font-mono text-xs font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                                      {hora(reg.hora_retorno_almoco)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {reg?.hora_saida ? (
+                                    <span className="font-mono text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border">
+                                      {hora(reg.hora_saida)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    {podeEntrada && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs gap-1 border-emerald-400 hover:bg-emerald-50 text-emerald-800"
+                                        disabled={semObra || registrarMembroEquipe.isPending}
+                                        onClick={() =>
+                                          registrarMembroEquipe.mutate({
+                                            funcionarioId: m.id,
+                                            tipo: "entrada",
+                                          })
+                                        }
+                                        title="Bater Entrada"
+                                      >
+                                        <Play className="size-3 text-emerald-600" />
+                                        Entrada
+                                      </Button>
+                                    )}
+                                    {podeAlmoco && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs gap-1 border-amber-400 hover:bg-amber-50 text-amber-800"
+                                        disabled={semObra || registrarMembroEquipe.isPending}
+                                        onClick={() =>
+                                          registrarMembroEquipe.mutate({
+                                            funcionarioId: m.id,
+                                            tipo: "saida_almoco",
+                                          })
+                                        }
+                                        title="Bater Saída para Almoço"
+                                      >
+                                        <Coffee className="size-3 text-amber-600" />
+                                        Almoço
+                                      </Button>
+                                    )}
+                                    {podeRetorno && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs gap-1 border-sky-400 hover:bg-sky-50 text-sky-800"
+                                        disabled={semObra || registrarMembroEquipe.isPending}
+                                        onClick={() =>
+                                          registrarMembroEquipe.mutate({
+                                            funcionarioId: m.id,
+                                            tipo: "retorno_almoco",
+                                          })
+                                        }
+                                        title="Bater Retorno do Almoço"
+                                      >
+                                        <SkipForward className="size-3 text-sky-600" />
+                                        Retorno
+                                      </Button>
+                                    )}
+                                    {podeSaida && (
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs gap-1 border-slate-400 hover:bg-slate-100 text-slate-800"
+                                        disabled={semObra || registrarMembroEquipe.isPending}
+                                        onClick={() =>
+                                          registrarMembroEquipe.mutate({
+                                            funcionarioId: m.id,
+                                            tipo: "saida",
+                                          })
+                                        }
+                                        title="Bater Saída da Obra"
+                                      >
+                                        <LogOut className="size-3 text-slate-600" />
+                                        Saída
+                                      </Button>
+                                    )}
+                                    {!podeEntrada && !podeAlmoco && !podeRetorno && !podeSaida && (
+                                      <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300">
+                                        <Check className="size-3 mr-1" /> Completo
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
           <TabsContent value="hoje" className="space-y-5">
             <div className="grid gap-5 lg:grid-cols-[320px_1fr]">
               <Card>
