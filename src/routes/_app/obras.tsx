@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Calculator, Plus, Pencil, Trash2, HardHat, Ruler, ListTree, Boxes } from "lucide-react";
+import { Calculator, Plus, Pencil, Trash2, HardHat, Ruler, ListTree, Boxes, Calendar, BookOpen } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -43,6 +43,10 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_app/obras")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    busca: typeof search.busca === "string" ? search.busca : undefined,
+    clienteId: typeof search.clienteId === "string" ? search.clienteId : undefined,
+  }),
   component: ObrasPage,
 });
 
@@ -53,6 +57,7 @@ interface ObraRow {
   descricao: string | null;
   cliente_id: string;
   contrato_id: string | null;
+  proposta_id?: string | null;
   responsavel_id: string | null;
   status: StatusObra;
   orcamento: number;
@@ -99,12 +104,22 @@ function ObrasPage() {
     perfil?.perfil === "admin" || perfil?.perfil === "diretor" || perfil?.perfil === "engenharia";
   const podeExcluir = perfil?.perfil === "admin" || perfil?.perfil === "diretor";
 
+  const searchParams = Route.useSearch();
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ObraRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | StatusObra>("all");
-  const [busca, setBusca] = useState("");
+  const [clienteFilter, setClienteFilter] = useState(searchParams.clienteId ?? "all");
+  const [busca, setBusca] = useState(searchParams.busca ?? "");
   const [escopoTarget, setEscopoTarget] = useState<ObraRow | null>(null);
+
+  useEffect(() => {
+    if (searchParams.busca !== undefined) setBusca(searchParams.busca);
+  }, [searchParams.busca]);
+
+  useEffect(() => {
+    if (searchParams.clienteId !== undefined) setClienteFilter(searchParams.clienteId);
+  }, [searchParams.clienteId]);
 
   const { data: escopo = [], isLoading: escopoLoading } = useQuery({
     queryKey: ["escopo-obra", escopoTarget?.id], enabled: !!escopoTarget,
@@ -173,6 +188,7 @@ function ObrasPage() {
     if (!obras) return [];
     let r = obras;
     if (statusFilter !== "all") r = r.filter((o) => o.status === statusFilter);
+    if (clienteFilter !== "all") r = r.filter((o) => o.cliente_id === clienteFilter);
     const q = busca.trim().toLowerCase();
     if (q) r = r.filter((o) =>
       o.nome.toLowerCase().includes(q) ||
@@ -180,7 +196,7 @@ function ObrasPage() {
       (clientesMap[o.cliente_id] ?? "").toLowerCase().includes(q),
     );
     return r;
-  }, [obras, statusFilter, busca, clientesMap]);
+  }, [obras, statusFilter, clienteFilter, busca, clientesMap]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -271,7 +287,21 @@ function ObrasPage() {
             ) : filtradas.map((o) => (
               <TableRow key={o.id}>
                 <TableCell className="font-mono text-xs">{o.numero}</TableCell>
-                <TableCell className="font-medium">{o.nome}</TableCell>
+                <TableCell>
+                  <div className="font-medium">{o.nome}</div>
+                  <div className="flex flex-wrap gap-1 mt-0.5">
+                    {o.proposta_id && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-blue-400 text-blue-600 bg-blue-50/50">
+                        Proposta
+                      </Badge>
+                    )}
+                    {o.contrato_id && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-emerald-400 text-emerald-600 bg-emerald-50/50">
+                        Contrato
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>{clientesMap[o.cliente_id] ?? "—"}</TableCell>
                 <TableCell>
                   <Badge className={cn(STATUS_OBRA_BADGE[o.status])}>
@@ -290,6 +320,24 @@ function ObrasPage() {
                 <TableCell className="text-right font-mono">{fmtBRL(o.orcamento)}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1"
+                      title="Ver Cronograma da Obra"
+                      onClick={() => navigate({ to: "/cronograma", search: { obraId: o.id } as any })}
+                    >
+                      <Calendar className="size-3.5" /> Cronograma
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1"
+                      title="Ver Diário da Obra"
+                      onClick={() => navigate({ to: "/diario", search: { obraId: o.id } as any })}
+                    >
+                      <BookOpen className="size-3.5" /> Diário
+                    </Button>
                     <Button size="sm" variant="outline" className="h-8 gap-1" title="Ver etapas, itens, subitens e avanço" onClick={() => setEscopoTarget(o)}><ListTree className="size-3.5" /> Escopo</Button>
                     <Button
                       size="sm"
@@ -491,7 +539,7 @@ function ObraFormDialog({
         <Form {...form}>
           <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
             <Tabs defaultValue="dados">
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="dados">Dados</TabsTrigger>
                 <TabsTrigger value="cronograma">Cronograma</TabsTrigger>
                 <TabsTrigger value="itr">ITRs</TabsTrigger>

@@ -35,6 +35,9 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_app/diario")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    obraId: typeof search.obraId === "string" ? search.obraId : undefined,
+  }),
   component: DiarioPage,
 });
 
@@ -65,6 +68,7 @@ const EMPTY: DiarioFormValues = {
 };
 
 function DiarioPage() {
+  const searchParams = Route.useSearch();
   const { perfil } = useAuth();
   const qc = useQueryClient();
   const podeEditar =
@@ -74,8 +78,12 @@ function DiarioPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<DiarioRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [obraFilter, setObraFilter] = useState<string>("all");
+  const [obraFilter, setObraFilter] = useState<string>(searchParams.obraId ?? "all");
   const [photosTarget, setPhotosTarget] = useState<DiarioRow | null>(null);
+
+  useEffect(() => {
+    if (searchParams.obraId) setObraFilter(searchParams.obraId);
+  }, [searchParams.obraId]);
 
   const { data: obras } = useQuery({
     queryKey: ["obras-opt"],

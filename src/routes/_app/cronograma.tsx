@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,7 +23,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export const Route = createFileRoute("/_app/cronograma")({ component: CronogramaPage });
+export const Route = createFileRoute("/_app/cronograma")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    obraId: typeof search.obraId === "string" ? search.obraId : undefined,
+  }),
+  component: CronogramaPage,
+});
 
 function EtapaEditor({
   etapa,
@@ -262,10 +267,17 @@ function EtapaEditor({
 }
 
 function CronogramaPage() {
+  const searchParams = Route.useSearch();
   const { roles } = useAuth();
   const qc = useQueryClient();
   const podeEditar = roles.some((role) => ["admin", "diretor", "engenharia"].includes(role));
-  const [obraId, setObraId] = useState("");
+  const [obraId, setObraId] = useState(searchParams.obraId ?? "");
+
+  useEffect(() => {
+    if (searchParams.obraId) {
+      setObraId(searchParams.obraId);
+    }
+  }, [searchParams.obraId]);
   const [excluirAberto, setExcluirAberto] = useState(false);
   const [relatorioAberto, setRelatorioAberto] = useState(false);
   const [novaEtapaNome, setNovaEtapaNome] = useState("");

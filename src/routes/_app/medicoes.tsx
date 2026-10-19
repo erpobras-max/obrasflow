@@ -41,7 +41,12 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-export const Route = createFileRoute("/_app/medicoes")({ component: MedicoesPage });
+export const Route = createFileRoute("/_app/medicoes")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    obraId: typeof search.obraId === "string" ? search.obraId : undefined,
+  }),
+  component: MedicoesPage,
+});
 
 interface MedicaoRow {
   id: string; numero: string; obra_id: string; contrato_id: string | null;
@@ -86,6 +91,7 @@ const EMPTY: MedicaoFormValues = {
 };
 
 function MedicoesPage() {
+  const searchParams = Route.useSearch();
   const { perfil } = useAuth();
   const qc = useQueryClient();
   const podeEditar =
@@ -97,6 +103,11 @@ function MedicoesPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [relatorioTarget, setRelatorioTarget] = useState<MedicaoRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | StatusMedicao>("all");
+  const [obraFilter, setObraFilter] = useState<string>(searchParams.obraId ?? "all");
+
+  useEffect(() => {
+    if (searchParams.obraId) setObraFilter(searchParams.obraId);
+  }, [searchParams.obraId]);
 
   const { data: medicoes, isLoading } = useQuery({
     queryKey: ["medicoes"],
@@ -133,8 +144,11 @@ function MedicoesPage() {
 
   const filtradas = useMemo(() => {
     if (!medicoes) return [];
-    return statusFilter === "all" ? medicoes : medicoes.filter((m) => m.status === statusFilter);
-  }, [medicoes, statusFilter]);
+    let list = medicoes;
+    if (statusFilter !== "all") list = list.filter((m) => m.status === statusFilter);
+    if (obraFilter !== "all") list = list.filter((m) => m.obra_id === obraFilter);
+    return list;
+  }, [medicoes, statusFilter, obraFilter]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -151,15 +165,27 @@ function MedicoesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3 justify-between">
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os status</SelectItem>
-            {statusMedicaoEnum.options.map((s) => (
-              <SelectItem key={s} value={s}>{STATUS_MEDICAO_LABEL[s]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os status</SelectItem>
+              {statusMedicaoEnum.options.map((s) => (
+                <SelectItem key={s} value={s}>{STATUS_MEDICAO_LABEL[s]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={obraFilter} onValueChange={setObraFilter}>
+            <SelectTrigger className="w-56"><SelectValue placeholder="Todas as obras" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as obras</SelectItem>
+              {(obras ?? []).map((o) => (
+                <SelectItem key={o.id} value={o.id}>{o.numero} — {o.nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         {podeEditar && (
           <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2">
             <Plus className="size-4" /> Nova medição

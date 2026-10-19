@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, Eye, Loader2, FileSpreadsheet, Upload } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Eye, Loader2, FileSpreadsheet, Upload, FileText, FileSignature, HardHat } from "lucide-react";
 import * as XLSX from "xlsx";
 
 import { supabase, SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client.custom";
@@ -909,6 +909,7 @@ function ClienteFormDialog({
 
 // ---------- View Dialog ----------
 function ClienteViewDialog({ target, onClose }: { target: ClienteRow | null; onClose: () => void }) {
+  const navigate = useNavigate();
   const { data } = useQuery({
     queryKey: ["cliente", target?.id],
     queryFn: async () => {
@@ -929,22 +930,65 @@ function ClienteViewDialog({ target, onClose }: { target: ClienteRow | null; onC
           </DialogDescription>
         </DialogHeader>
         {data && (
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <Info label="Email" value={data.email} />
-            <Info label="Telefone" value={formatTelefone(data.telefone ?? "")} />
-            <Info label="Celular" value={formatTelefone(data.celular ?? "")} />
-            <Info label="Website" value={data.website} />
-            <Info label="RG / IE" value={data.rg_ie} />
-            <Info label="Insc. Municipal" value={data.inscricao_municipal} />
-            <Info label="CEP" value={formatCep(data.cep ?? "")} />
-            <Info label="Cidade / UF" value={data.cidade ? `${data.cidade}${data.uf ? "/" + data.uf : ""}` : null} />
-            <Info
-              label="Endereço"
-              value={[data.logradouro, data.numero, data.complemento, data.bairro]
-                .filter(Boolean).join(", ")}
-              className="col-span-2"
-            />
-            <Info label="Observações" value={data.observacoes} className="col-span-2" />
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <Info label="Email" value={data.email} />
+              <Info label="Telefone" value={formatTelefone(data.telefone ?? "")} />
+              <Info label="Celular" value={formatTelefone(data.celular ?? "")} />
+              <Info label="Website" value={data.website} />
+              <Info label="RG / IE" value={data.rg_ie} />
+              <Info label="Insc. Municipal" value={data.inscricao_municipal} />
+              <Info label="CEP" value={formatCep(data.cep ?? "")} />
+              <Info label="Cidade / UF" value={data.cidade ? `${data.cidade}${data.uf ? "/" + data.uf : ""}` : null} />
+              <Info
+                label="Endereço"
+                value={[data.logradouro, data.numero, data.complemento, data.bairro]
+                  .filter(Boolean).join(", ")}
+                className="col-span-2"
+              />
+              <Info label="Observações" value={data.observacoes} className="col-span-2" />
+            </div>
+
+            <div className="border-t pt-4">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                Ações Comerciais e Obras
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => {
+                    onClose();
+                    navigate({ to: "/comercial/propostas", search: { clienteId: target?.id } });
+                  }}
+                >
+                  <FileText className="size-3.5" /> Propostas
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => {
+                    onClose();
+                    navigate({ to: "/comercial/contratos", search: { clienteId: target?.id } });
+                  }}
+                >
+                  <FileSignature className="size-3.5" /> Contratos
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => {
+                    onClose();
+                    navigate({ to: "/obras", search: { clienteId: target?.id } });
+                  }}
+                >
+                  <HardHat className="size-3.5" /> Obras
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </DialogContent>

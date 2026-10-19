@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, FileText, Printer, Settings2, CheckCircle2, XCircle, Database, ArrowDown, ArrowUp, Calculator } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Printer, Settings2, CheckCircle2, XCircle, Database, ArrowDown, ArrowUp, Calculator, HardHat, FileSignature } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -43,6 +43,10 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_app/comercial/propostas")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    busca: typeof search.busca === "string" ? search.busca : undefined,
+    clienteId: typeof search.clienteId === "string" ? search.clienteId : undefined,
+  }),
   component: PropostasPage,
 });
 
@@ -132,6 +136,8 @@ const normalizarItem = (item: Partial<PropostaItemValues>): PropostaItemValues =
 });
 
 function PropostasPage() {
+  const searchParams = Route.useSearch();
+  const navigate = useNavigate();
   const { perfil } = useAuth();
   const qc = useQueryClient();
   const podeEditar =
@@ -147,6 +153,13 @@ function PropostasPage() {
   const [printTarget, setPrintTarget] = useState<PropostaRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | StatusProposta>("all");
   const [catalogoOpen, setCatalogoOpen] = useState(false);
+  const [clienteFilter, setClienteFilter] = useState<string>(searchParams.clienteId ?? "all");
+
+  useEffect(() => {
+    if (searchParams.clienteId) {
+      setClienteFilter(searchParams.clienteId);
+    }
+  }, [searchParams.clienteId]);
 
   const { data: propostas, isLoading } = useQuery({
     queryKey: ["propostas"],
@@ -178,9 +191,23 @@ function PropostasPage() {
 
   const filtradas = useMemo(() => {
     if (!propostas) return [];
-    if (statusFilter === "all") return propostas;
-    return propostas.filter((p) => p.status === statusFilter);
-  }, [propostas, statusFilter]);
+    let list = propostas;
+    if (statusFilter !== "all") {
+      list = list.filter((p) => p.status === statusFilter);
+    }
+    if (clienteFilter !== "all") {
+      list = list.filter((p) => p.cliente_id === clienteFilter);
+    }
+    if (searchParams.busca) {
+      const q = searchParams.busca.toLowerCase();
+      list = list.filter((p) =>
+        p.numero.toLowerCase().includes(q) ||
+        p.titulo.toLowerCase().includes(q) ||
+        (clientesMap[p.cliente_id] ?? "").toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [propostas, statusFilter, clienteFilter, searchParams.busca, clientesMap]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -274,6 +301,33 @@ function PropostasPage() {
                   <TableCell className="text-right font-mono">{fmtBRL(p.valor_total)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {p.status === "aceita" && (
+                        <>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Ver Obra gerada"
+                            onClick={() => navigate({ to: "/obras", search: { busca: p.titulo } })}
+                          >
+                            <HardHat className="size-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            title="Gerar / Ver Contrato"
+                            onClick={() =>
+                              navigate({
+                                to: "/comercial/contratos",
+                                search: { propostaId: p.id, clienteId: p.cliente_id },
+                              })
+                            }
+                          >
+                            <FileSignature className="size-4" />
+                          </Button>
+                        </>
+                      )}
                       {(p.status === "rascunho" || p.status === "enviada") && <>
                         <Button size="icon" variant="ghost" className="size-8 text-green-700 hover:text-green-800" title="Aceitar proposta e criar obra" onClick={() => decidirProposta.mutate({ id: p.id, status: "aceita" })}>
                           <CheckCircle2 className="size-4" />
@@ -316,6 +370,7 @@ function PropostasPage() {
           open={formOpen}
           onOpenChange={(o) => { setFormOpen(o); if (!o) setEditTarget(null); }}
           target={editTarget}
+          initialClienteId={searchParams.clienteId}
           clientes={clientes ?? []}
           onSuccess={() => qc.invalidateQueries({ queryKey: ["propostas"] })}
         />
@@ -345,11 +400,12 @@ function PropostasPage() {
 }
 
 function PropostaFormDialog({
-  open, onOpenChange, target, clientes, onSuccess,
+  open, onOpenChange, target, initialClienteId, clientes, onSuccess,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   target: PropostaRow | null;
+  initialClienteId?: string;
   clientes: ClienteOpt[];
   onSuccess: () => void;
 }) {
@@ -488,12 +544,15 @@ function PropostaFormDialog({
         });
       })();
     } else {
-      form.reset(EMPTY);
+      form.reset({
+        ...EMPTY,
+        cliente_id: initialClienteId || "",
+      });
     }
     setEtapaDisponivel("");
     setSubetapasSelecionadas([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, target?.id]);
+  }, [open, target?.id, initialClienteId]);
 
   const mutation = useMutation({
     mutationFn: async (values: PropostaFormValues) => {

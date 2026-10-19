@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { ArrowDown, ArrowUp, Plus, Pencil, Trash2, FileSignature, Printer } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Pencil, Trash2, FileSignature, Printer, HardHat } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -68,6 +68,10 @@ import {
 } from "@/components/ui/alert-dialog";
 
 export const Route = createFileRoute("/_app/comercial/contratos")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    propostaId: typeof search.propostaId === "string" ? search.propostaId : undefined,
+    clienteId: typeof search.clienteId === "string" ? search.clienteId : undefined,
+  }),
   component: ContratosPage,
 });
 
@@ -94,6 +98,7 @@ interface PropostaOpt {
   numero: string;
   titulo: string;
   valor_total: number;
+  cliente_id?: string;
 }
 
 const fmtBRL = (v: number | null | undefined) =>
@@ -112,6 +117,8 @@ const EMPTY: ContratoFormValues = {
 };
 
 function ContratosPage() {
+  const searchParams = Route.useSearch();
+  const navigate = useNavigate();
   const { perfil } = useAuth();
   const qc = useQueryClient();
   const podeEditar =
@@ -126,6 +133,14 @@ function ContratosPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<ContratoRow | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | StatusContrato>("all");
+  const [initialPropostaId, setInitialPropostaId] = useState<string | undefined>(searchParams.propostaId);
+
+  useEffect(() => {
+    if (searchParams.propostaId) {
+      setInitialPropostaId(searchParams.propostaId);
+      setFormOpen(true);
+    }
+  }, [searchParams.propostaId]);
 
   const { data: contratos, isLoading } = useQuery({
     queryKey: ["contratos"],
@@ -157,7 +172,7 @@ function ContratosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("propostas")
-        .select("id,numero,titulo,valor_total")
+        .select("id,numero,titulo,valor_total,cliente_id")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as PropostaOpt[];
@@ -174,9 +189,15 @@ function ContratosPage() {
 
   const filtrados = useMemo(() => {
     if (!contratos) return [];
-    if (statusFilter === "all") return contratos;
-    return contratos.filter((c) => c.status === statusFilter);
-  }, [contratos, statusFilter]);
+    let list = contratos;
+    if (statusFilter !== "all") {
+      list = list.filter((c) => c.status === statusFilter);
+    }
+    if (searchParams.clienteId) {
+      list = list.filter((c) => c.cliente_id === searchParams.clienteId);
+    }
+    return list;
+  }, [contratos, statusFilter, searchParams.clienteId]);
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -280,6 +301,15 @@ function ContratosPage() {
                         <Button
                           size="icon"
                           variant="ghost"
+                          className="size-8 text-blue-600 hover:text-blue-700"
+                          title="Ver Obras deste cliente"
+                          onClick={() => navigate({ to: "/obras", search: { clienteId: c.cliente_id } })}
+                        >
+                          <HardHat className="size-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           className="size-8"
                           title="Gerar contrato"
                           onClick={() => setPrintTarget(c)}
@@ -328,9 +358,13 @@ function ContratosPage() {
           open={formOpen}
           onOpenChange={(o) => {
             setFormOpen(o);
-            if (!o) setEditTarget(null);
+            if (!o) {
+              setEditTarget(null);
+              setInitialPropostaId(undefined);
+            }
           }}
           target={editTarget}
+          initialPropostaId={initialPropostaId}
           clientes={clientes ?? []}
           propostas={propostas ?? []}
           onSuccess={() => qc.invalidateQueries({ queryKey: ["contratos"] })}
@@ -365,6 +399,7 @@ function ContratoFormDialog({
   open,
   onOpenChange,
   target,
+  initialPropostaId,
   clientes,
   propostas,
   onSuccess,
@@ -372,6 +407,7 @@ function ContratoFormDialog({
   open: boolean;
   onOpenChange: (o: boolean) => void;
   target: ContratoRow | null;
+  initialPropostaId?: string;
   clientes: ClienteOpt[];
   propostas: PropostaOpt[];
   onSuccess: () => void;
@@ -400,11 +436,18 @@ function ContratoFormDialog({
       });
       setClausulas(copiarClausulas(target.clausulas));
     } else {
-      form.reset(EMPTY);
+      const p = initialPropostaId ? propostas.find((x) => x.id === initialPropostaId) : null;
+      form.reset({
+        ...EMPTY,
+        proposta_id: p ? p.id : null,
+        cliente_id: p?.cliente_id ?? "",
+        titulo: p ? p.titulo : "",
+        valor_total: p ? Number(p.valor_total) : 0,
+      });
       setClausulas(copiarClausulas());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, target?.id]);
+  }, [open, target?.id, initialPropostaId, propostas]);
 
   // Auto-preenche título/valor/cliente quando seleciona proposta (apenas em criação)
   const propostaIdWatch = form.watch("proposta_id");
@@ -412,10 +455,11 @@ function ContratoFormDialog({
     if (isEdit || !propostaIdWatch) return;
     const p = propostas.find((x) => x.id === propostaIdWatch);
     if (!p) return;
+    if (p.cliente_id) form.setValue("cliente_id", p.cliente_id);
     if (!form.getValues("titulo")) form.setValue("titulo", p.titulo);
     if (!form.getValues("valor_total")) form.setValue("valor_total", Number(p.valor_total));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propostaIdWatch]);
+  }, [propostaIdWatch, propostas]);
 
   const mutation = useMutation({
     mutationFn: async (values: ContratoFormValues) => {
