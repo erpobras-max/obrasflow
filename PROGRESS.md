@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 13/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 19/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -11,11 +11,11 @@ As rotas principais estão implementadas com TanStack Router. As páginas proteg
 | Acesso            | `/auth`, `/forgot-password`, `/reset-password`                                                                                                     | Completo                                  |
 | Painel            | `/`, `/dashboard`, `/empresa`, `/perfil`, `/usuarios`                                                                                              | Completo                                  |
 | Comercial         | `/comercial`, `/comercial/clientes`, `/comercial/propostas`, `/comercial/contratos`, `/comercial/licitacoes`                                       | Completo                                  |
-| Obras             | `/obras`, `/cronograma`, `/diario`, `/medicoes`, `/documentos`, `/relatorios`                                                                      | Completo                                  |
+| Obras             | `/obras`, `/cronograma`, `/diario`, `/medicoes`, `/documentos`, `/relatorios`, `/projeto3d/$id`                                                    | Completo                                  |
 | Operacional       | `/compras`, `/cotacoes`, `/prestadores`, `/estoque`, `/equipamentos`, `/orcamentos`, `/fiscal`, `/importacoes`, `/vendas/pedidos`, `/rh`, `/ponto` | Completo                                  |
 | Financeiro        | `/financeiro`, `/imobiliaria/financeiro`                                                                                                           | Completo, com separação civil/imobiliária |
 | Imobiliária       | `/imobiliaria`, `/imobiliaria/dashboard`, `/imobiliaria/clientes`, `/imobiliaria/imoveis`, `/imobiliaria/locacoes`, `/imobiliaria/fiadores`        | Completo                                  |
-| Portal do cliente | `/portal`, `/portal/contratos`, `/portal/documentos`, `/portal/financeiro`, `/portal/fotos`                                                        | Completo                                  |
+| Portal do cliente | `/portal`, `/portal/contratos`, `/portal/documentos`, `/portal/financeiro`, `/portal/fotos`, `/portal/projeto`                                    | Completo                                  |
 | Acesso público    | `/assinar/$token`, `/cotacao/$token`, `/imovel-publico/$token`                                                                                     | Completo                                  |
 
 Os arquivos de agrupamento (`/comercial`, `/imobiliaria` e `/portal`) funcionam como layouts/índices. Não há placeholder vazio conhecido entre as rotas listadas.
@@ -27,13 +27,13 @@ As páginas consultam o Supabase diretamente por meio do cliente em `src/integra
 - Clientes usam `clientes`, `user_roles` e dados relacionados a propostas, contratos e obras; criam, atualizam e removem clientes conforme a permissão.
 - Propostas usam `propostas`, `propostas_itens`, catálogo de produtos/serviços e `clientes`; criam, atualizam e alteram o status da proposta.
 - Contratos usam `contratos`, `clientes`, `obras`, `propostas` e tabelas de assinatura/link; leem, atualizam status e registram assinaturas.
-- Obras usam `obras`, `clientes`, `propostas`, `obra_cronograma` e dados de responsável técnico; criam e atualizam obras.
+- Obras usam `obras`, `clientes`, `propostas`, `obra_cronograma`, `obra_projetos_cad` e dados de responsável técnico; criam e atualizam obras e seus projetos 3D.
 - Cronograma usa `obras` e `obra_cronograma`; inclui, edita, reordena e exclui etapas. A exclusão do cronograma inteiro continua separada da exclusão individual.
 - Medições usam `medicoes`, itens de medição, `obras`, `propostas_itens` e dados financeiros relacionados; registram avanço e valores.
 - Financeiro civil usa contas, receitas, despesas, categorias, pedidos e dados de obras. O financeiro imobiliário usa as tabelas próprias de locações, parcelas, taxas e índices.
 - Prestadores de serviços usa `fornecedores`, `obras`, `servicos_terceirizados`, `medicoes_terceirizados` e `contas_pagar`. Cria múltiplos serviços por vez, edita e exclui registros em rascunho e gera conta a pagar somente ao aprovar a medição.
 - Imobiliária usa `imoveis`, `imovel_fotos`, `locacoes`, `imob_vistorias`, `imob_vistorias_itens`, `imob_indices_reajuste`, clientes e fiadores.
-- Portal usa o cliente autenticado e filtra contratos, documentos, fotos, cronogramas e lançamentos vinculados ao cliente.
+- Portal usa o cliente autenticado e filtra contratos, documentos, fotos, cronogramas, lançamentos e maquete 3D vinculados ao cliente.
 
 As consultas de estoque e tabelas financeiras devem continuar sendo conferidas contra o schema publicado sempre que uma migration for aplicada, pois existem migrations históricas com nomes de tabelas que foram corrigidos posteriormente.
 
@@ -61,6 +61,7 @@ As entregas mais recentes são:
 - `20261013000003_valor_estimado_solicitacao_item.sql`: adiciona o valor unitário estimado aos itens da solicitação de compra.
 - `20261013000004_cotacoes_compra.sql`: cria o módulo completo de cotações, convites por fornecedor, respostas públicas por token, anexos, comparação, seleção vencedora, pedidos, recebimentos, integração com contas a pagar, notificações e RLS.
 - `20261014000001_almoxarifado_base_recuperacao.sql`: recria de forma aditiva as tabelas-base `depositos`, `produto_estoque` e `movimentacoes_estoque` quando ausentes, configura leitura/RLS e semeia o depósito geral; foi aplicada no projeto de produção para corrigir o erro de cadastro.
+- `20261019120000_create_obra_projetos_cad.sql`: cria a tabela `obra_projetos_cad` para armazenar o projeto CAD/BIM paramétrico, imagem de capa 3D, quantitativos e configurações de BDI por obra, com índices e políticas de RLS completas para equipe interna e clientes no portal.
 
 As melhorias de nome, inclusão, exclusão individual e ordenação das etapas não exigem nova migration; usam `obra_cronograma.ordem` e as colunas já existentes.
 
@@ -181,17 +182,54 @@ As respostas são registradas por funções SQL `SECURITY DEFINER`, com validaç
 
 O módulo também cria notificações para a equipe quando uma proposta é recebida. Os links podem ser copiados e enviados por e-mail, WhatsApp ou outro canal disponível; a integração automática com provedor de mensagens ainda é uma pendência.
 
-## 16. Última entrega publicada
+## 18. Módulo de Projeto 3D, CAD Paramétrico & Dossiê Técnico
 
-- PR #75 — `feat: melhorar solicitações de compra` — mesclada em `main`.
-- Commit de merge: `e1089390306fb6d3a5c319765c32697be2c2807e`.
-- GitHub Actions: execução #50 concluída com sucesso.
-- Alterações incluídas: ações de edição/exclusão, modal responsivo, fornecedor preferencial e valor estimado dos itens.
+Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambiente de engenharia paramétrica e apresentação visual para obras particulares e clientes exigentes.
 
-## 17. Pendências prioritárias após esta atualização
+### Funcionalidades implementadas:
+1. **Modelagem 2D CAD Paramétrica (`/projeto3d/$id`)**:
+   - Desenho de paredes em tempo real com snap ao grid e travamento ortogonal (**Modo Ortho 90°** tipo F8 do AutoCAD).
+   - Ferramenta **`+ Novo Cômodo`**: gerador paramétrico em 1 clique (largura x comprimento com geração das 4 paredes e laje de piso 3D).
+   - Inserção de portas e janelas com posicionamento dinâmico ao longo das paredes.
+   - Seletores rápidos de espessura de parede ativa (`10cm`, `15cm`, `20cm`) e larguras de portas (`0.60m` a `1.00m`) e janelas (`0.60m` a `2.00m`).
+   - Painel de edição de propriedades de paredes e aberturas já existentes na planta.
+   - **Importador DXF**: leitura nativa de linhas e polilinhas do AutoCAD em ASCII.
+   - **Exportador DXF**: geração de arquivo `.dxf` (AutoCAD R12) com camadas separadas (`PAREDES`, `ESQUADRIAS`) para download no PC.
+2. **Visualizador 3D Three.js**:
+   - Extrusão volumétrica automática das paredes e vãos desenhados no 2D.
+   - Controles de órbita 3D, zoom pela roda do mouse e pan com o botão direito.
+   - Alternância de camadas (Telhado ligado/desligado, paredes, piso, esquadrias).
+   - **Modo Corte Horizontal (1.20m)** para visualização em planta humanizada 3D.
+   - Botão **"Capturar para Capa"**: renderiza snapshot da maquete e salva como imagem de capa do memorial técnico.
+3. **Engenharia de Custos, Quantitativos & BDI Privado**:
+   - Memória de cálculo automática de alvenaria líquida ($m^2$), chapisco/emboço ($m^2$), pintura ($m^2$), pisos ($m^2$), rodapés ($m$) e concreto de vigas ($m^3$) com desconto automático de vãos.
+   - Referência a composições oficiais do SINAPI (itens 104658, 87529, 87251, 88648, 88489, 92717, 94449).
+   - Painel de BDI privado editável: Lucro líquido, Impostos, Administração Central, Custo Indireto e Contingência.
+4. **Dossiê Técnico & Memorial Descritivo (Padrão A4 Impresso)**:
+   - Capa executiva com o render 3D capturado da obra e metadados oficiais.
+   - Quadro geral de áreas, fichas de acabamentos por ambiente e memória de cálculo.
+   - Planilha orçamentária executiva formatada com BDI detalhado.
+5. **Portal do Cliente (`/portal/projeto`)**:
+   - Visualização da maquete 3D interativa no smartphone ou computador do cliente (somente leitura).
+   - Controle de visualização do telhado para inspecionar os cômodos internos.
+   - Estado vazio informativo caso a obra ainda não tenha maquete cadastrada.
+6. **Projeto em Branco por Padrão & Proteções de Dados**:
+   - Obras sem projeto iniciam 100% limpas (`paredes: []`), sem projetar modelos fictícios de demonstração.
+   - `refetchOnWindowFocus: false`: impede recarregamento involuntário da tela ao alternar entre abas do navegador.
+   - **Auto-Save / Backup Local (`localStorage`)**: rascunho salvo continuamente no navegador com restauração automática em caso de fechamento acidental.
+   - **Aviso `beforeunload`**: alerta nativo se o usuário tentar sair da tela com alterações não salvas.
+   - **Badge de Pendência**: indicador visual `● Alterações não salvas`.
 
-- Publicar o frontend do módulo de cotações no Worker `obrasflow` e validar o fluxo completo em produção.
-- Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado quando o acesso do CLI ao projeto estiver liberado; o módulo usa casts locais até essa regeneração.
-- Adicionar envio automático dos links por e-mail/WhatsApp com provedor configurado.
-- Melhorar o recebimento para aceitar quantidades parciais por item em uma tela dedicada; a primeira versão registra todo o saldo restante do pedido.
-- Executar uma validação funcional no ambiente publicado para materiais, solicitações e permissões de edição/exclusão.
+## 19. Última entrega publicada
+
+- **Commit**: `41e13ea` — `feat(projeto3d): protecao contra perda de dados ao trocar de abas e seletores de espessura de parede e largura de portas/janelas`.
+- **Branch**: `main` (enviado com sucesso para `origin/main`).
+- **Validação de Build**: `npx bun run build` concluído com código 0 e tempo de 16.06s.
+- **Deploy**: Publicação automática em andamento via Cloudflare Worker `obrasflow`.
+
+## 20. Pendências prioritárias após esta atualização
+
+- Executar testes de aceitação visual com os usuários engenheiros desenhando plantas reais de casas no estúdio 2D.
+- Adicionar opção de salvar templates de cômodos frequentes (ex: banheiro padrão 1.5x2.5m).
+- Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
+

@@ -232,36 +232,55 @@ CREATE POLICY "obra_projetos_cad_portal_cliente_select" ON public.obra_projetos_
 
 ## 5. Roadmap de Implementação em Fases
 
-### 🚀 Fase 1: Motor Visual 2D & 3D (MVP de Modelagem)
-* [ ] Migration da tabela `obra_projetos_cad` no Supabase.
-* [ ] Rota `/_app/obras/$id/projeto` com layout imersivo ("Estúdio ObrasFlow").
-* [ ] Canvas 2D interativo com ferramentas:
+## 5. Roadmap de Implementação em Fases
+
+### 🚀 Fase 1: Motor Visual 2D & 3D (MVP de Modelagem) — [CONCLUÍDO]
+* [x] Migration da tabela `obra_projetos_cad` no Supabase (`20261019120000_create_obra_projetos_cad.sql`).
+* [x] Rota `/projeto3d/$id` com layout imersivo ("Estúdio ObrasFlow").
+* [x] Botão direto de acesso "Projeto 3D" na listagem de Obras (`/obras`).
+* [x] Canvas 2D interativo com ferramentas:
   - Desenhar Paredes com espessura e snap ortogonal / grid.
   - Inserir Portas e Janelas arrastáveis sobre as paredes.
   - Reconhecimento automático de cômodos (cálculo de área em $m^2$).
-* [ ] Viewport 3D com Three.js:
+* [x] Viewport 3D com Three.js:
   - Extrusão volumétrica automática das paredes e vãos.
   - Controles de câmera (Órbita, Pan, Zoom).
   - Menu de Camadas (ligar/desligar Telhado, Paredes, Esquadrias).
-  - Botão de Corte Horizontal ($1,50\text{ m}$) para Planta Humanizada 3D.
-  - Botão **"📸 Capturar Imagem 3D para o Dossiê"**.
-* [ ] Salvamento e carregamento automático no banco vinculado à Obra.
+  - Botão de Corte Horizontal ($1,20\text{ m}$) para Planta Humanizada 3D.
+  - Botão **"📸 Capturar para Capa"** com render em tempo real.
+* [x] Salvamento e carregamento no Supabase vinculado à Obra.
+* [x] **Projeto em Branco por Padrão**: Obras sem modelagem abrem 100% limpas (`paredes: []`), sem projetar nenhum modelo aleatório.
 
-### 📊 Fase 2: Motor de Engenharia de Custos, Quantitativos & BDI
-* [ ] Algoritmo de cálculo de quantitativos com desconto de vãos:
-  - Alvenaria ($m^2$), chapisco/emboço ($m^2$), pintura ($m^2$), contrapiso ($m^2$), rodapé ($m$).
-* [ ] Vinculação com itens do SINAPI e/ou catálogo de insumos da própria construtora.
-* [ ] Painel de BDI Privado (Lucro desejado, Encargos, Impostos e Custo Indireto).
-* [ ] Memória de cálculo auditável na tela (fórmulas abertas).
+### 📊 Fase 2: Motor de Engenharia de Custos, Quantitativos & BDI — [CONCLUÍDO]
+* [x] Algoritmo de cálculo de quantitativos com desconto de vãos:
+  - Alvenaria líquida ($m^2$), chapisco/emboço ($m^2$), pintura ($m^2$), contrapiso/porcelanato ($m^2$), rodapé ($m$) e concreto de vigas ($m^3$).
+* [x] Vinculação oficial com códigos e itens de referência do SINAPI.
+* [x] Painel de BDI Privado (Lucro desejado, Encargos, Impostos federais/municipais, Custo Indireto e Contingência).
+* [x] Memória de cálculo auditável na tela (fórmulas abertas e transparentes).
 
-### 📄 Fase 3: Dossiê Técnico Executivo & Portal do Cliente
-* [ ] Gerador do Dossiê Técnico & Memorial Descritivo em PDF:
-  - Capa de luxo com a foto 3D capturada pelo usuário.
-  - Dados oficiais da obra (cliente, endereço, responsável técnico).
-  - Fichas de acabamentos de cada ambiente.
-  - Planilha de custos e BDI formatada.
-* [ ] Importador de arquivos `.dxf` do AutoCAD.
-* [ ] Módulo no Portal do Cliente (`/portal/projeto`):
-  - Visualizador 3D somente leitura para o cliente final.
-  - Controle de visibilidade do telhado.
-  - Download do Dossiê em PDF.
+### 📄 Fase 3: Dossiê Técnico Executivo & Portal do Cliente — [CONCLUÍDO]
+* [x] Gerador do Dossiê Técnico & Memorial Descritivo em padrão de impressão A4:
+  - Capa de luxo com a foto 3D capturada pelo engenheiro.
+  - Metadados completos da obra (cliente, logradouro, cidade, responsável).
+  - Quadro de acabamentos por ambiente e resumo executivo de materiais.
+  - Planilha de BDI detalhada para apresentação ao cliente.
+* [x] Módulo no Portal do Cliente (`/portal/projeto`):
+  - Visualizador 3D somente leitura com rotação, zoom e toggle de telhado.
+  - Aba com visualização e download do Dossiê Técnico em PDF.
+  - Estado vazio informativo caso a obra ainda não tenha maquete publicada.
+
+### 🛠️ Fase 4: Recursos CAD Avançados & Blindagem de Dados — [CONCLUÍDO]
+* [x] **Importador DXF**: Leitura nativa de linhas e polilinhas do AutoCAD em ASCII.
+* [x] **Exportador DXF Nativo**: Geração de arquivos `.dxf` (AutoCAD R12) com camadas separadas (`PAREDES`, `ESQUADRIAS`) para download direto.
+* [x] **Gerador Paramétrico de Cômodo (`+ Novo Cômodo`)**: Criação de cômodos retangulares em 1 clique (largura x comprimento com geração das 4 paredes e piso 3D).
+* [x] **Modo Ortogonal (Ortho Lock 90°)**: Trava o cursor em ângulos retos para desenho de alta precisão.
+* [x] **Seletores de Dimensões Ativas**:
+  - Paredes: 10cm, 15cm, 20cm ou customizada.
+  - Portas: 0.60m, 0.70m, 0.80m, 0.90m, 1.00m.
+  - Janelas: 0.60m, 1.00m, 1.20m, 1.50m, 2.00m.
+* [x] **Painel de Edição Paramétrica**: Permite alterar medidas de paredes e aberturas já desenhadas na planta em tempo real.
+* [x] **Proteção contra Perda de Dados**:
+  - `refetchOnWindowFocus: false`: impede recarregamento involuntário da tela ao alternar entre abas do navegador.
+  - **Auto-Save / Backup Local (`localStorage`)**: rascunho salvo continuamente no navegador com restauração automática em caso de fechamento acidental.
+  - **Aviso `beforeunload`**: alerta nativo se o usuário tentar sair da tela com alterações não salvas.
+  - **Badge de Pendência**: indicador visual `● Alterações não salvas`.
