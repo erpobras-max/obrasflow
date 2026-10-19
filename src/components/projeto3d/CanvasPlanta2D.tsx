@@ -3,6 +3,15 @@ import type { DadosProjetoBIM, Parede, Abertura, Ponto2D } from "@/types/projeto
 import { snapAoGrid, calcularComprimentoParede } from "@/lib/projeto3d.utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import {
   MousePointer,
   Square,
@@ -15,8 +24,13 @@ import {
   Plus,
   HelpCircle,
   FolderUp,
+  Download,
+  BoxSelect,
+  Grid,
+  Crosshair,
+  SlidersHorizontal,
 } from "lucide-react";
-import { extrairParedesDoDxf } from "@/lib/dxf-parser";
+import { extrairParedesDoDxf, exportarParaDxf } from "@/lib/dxf-parser";
 import { toast } from "sonner";
 
 type FerramentaAtiva = "selecionar" | "parede" | "porta" | "janela" | "apagar";
@@ -31,6 +45,15 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [ferramenta, setFerramenta] = useState<FerramentaAtiva>("selecionar");
   const [elementoSelecionadoId, setElementoSelecionadoId] = useState<string | null>(null);
+
+  // Modo Ortogonal (Ortho Lock como no AutoCAD)
+  const [modoOrtho, setModoOrtho] = useState(true);
+
+  // Modal para criação rápida de cômodo paramétrico
+  const [modalComodoAberto, setModalComodoAberto] = useState(false);
+  const [comodoNome, setComodoNome] = useState("Quarto");
+  const [comodoLargura, setComodoLargura] = useState("4.00");
+  const [comodoComprimento, setComodoComprimento] = useState("3.50");
 
   // Ponto de início de uma parede durante a criação
   const [pontoInicial, setPontoInicial] = useState<Ponto2D | null>(null);
@@ -230,6 +253,101 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     }
   }, [dados, offset, zoom, ferramenta, pontoInicial, pontoCursor, elementoSelecionadoId]);
 
+  // Aplicar modo ortogonal (Ortho Lock - força 0°, 90°, 180°, 270°)
+  const aplicarOrthoSeNecessario = (pos: Ponto2D, posOrigem: Ponto2D | null, desativar = false): Ponto2D => {
+    if (!modoOrtho || !posOrigem || desativar) return pos;
+    const dx = Math.abs(pos.x - posOrigem.x);
+    const dy = Math.abs(pos.y - posOrigem.y);
+    if (dx >= dy) {
+      return { x: pos.x, y: posOrigem.y };
+    } else {
+      return { x: posOrigem.x, y: pos.y };
+    }
+  };
+
+  // Criação instantânea de cômodo paramétrico em 1 clique
+  const handleCriarComodoRapido = () => {
+    const larg = parseFloat(comodoLargura) || 4.0;
+    const comp = parseFloat(comodoComprimento) || 3.0;
+
+    let startX = 0;
+    let startY = 0;
+    if (dados.paredes.length > 0) {
+      let maxX = -Infinity;
+      dados.paredes.forEach((p) => {
+        maxX = Math.max(maxX, p.p1.x, p.p2.x);
+      });
+      startX = maxX + 1.0; // Adiciona 1m de espaçamento da última parede
+    }
+
+    const espessura = dados.config.espessuraParedePadrao;
+    const altura = dados.config.peDireito;
+    const timestamp = Date.now();
+
+    const pTL: Ponto2D = { x: startX, y: startY };
+    const pTR: Ponto2D = { x: startX + larg, y: startY };
+    const pBR: Ponto2D = { x: startX + larg, y: startY + comp };
+    const pBL: Ponto2D = { x: startX, y: startY + comp };
+
+    const novasParedes: Parede[] = [
+      { id: `parede_${timestamp}_1`, p1: pTL, p2: pTR, espessura, altura, tipo: "alvenaria_vedacao" },
+      { id: `parede_${timestamp}_2`, p1: pTR, p2: pBR, espessura, altura, tipo: "alvenaria_vedacao" },
+      { id: `parede_${timestamp}_3`, p1: pBR, p2: pBL, espessura, altura, tipo: "alvenaria_vedacao" },
+      { id: `parede_${timestamp}_4`, p1: pBL, p2: pTL, espessura, altura, tipo: "alvenaria_vedacao" },
+    ];
+
+    const novoAmbiente = {
+      id: `amb_${timestamp}`,
+      nome: comodoNome || "Cômodo",
+      pontos: [pTL, pTR, pBR, pBL],
+      area: Number((larg * comp).toFixed(2)),
+      perimetro: Number(((larg + comp) * 2).toFixed(2)),
+      pisoAcabamento: "Porcelanato Retificado 84x84",
+      tetoAcabamento: "Forro de Gesso com Pintura Branca",
+      paredeAcabamento: "Pintura Acrílica Fosca Lavável",
+    };
+
+    onChangeDados({
+      ...dados,
+      paredes: [...dados.paredes, ...novasParedes],
+      ambientes: [...dados.ambientes, novoAmbiente],
+    });
+
+    toast.success(`Cômodo "${comodoNome}" (${larg}x${comp}m = ${(larg * comp).toFixed(1)}m²) gerado no 2D e 3D!`);
+    setModalComodoAberto(false);
+  };
+
+  // Exportar a planta modelada diretamente para AutoCAD (.DXF)
+  const handleExportarDxf = () => {
+    if (dados.paredes.length === 0) {
+      toast.error("Desenhe pelo menos uma parede antes de exportar para DXF.");
+      return;
+    }
+    const dxfString = exportarParaDxf({ paredes: dados.paredes });
+    const blob = new Blob([dxfString], { type: "application/dxf" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `planta_baixa_${Date.now()}.dxf`;
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success("Planta exportada para DXF (AutoCAD) com sucesso!");
+  };
+
+  const handleLimparPlanta = () => {
+    if (dados.paredes.length === 0) return;
+    if (window.confirm("Deseja realmente limpar toda a planta baixa desta obra?")) {
+      onChangeDados({
+        ...dados,
+        paredes: [],
+        aberturas: [],
+        ambientes: [],
+      });
+      setElementoSelecionadoId(null);
+      toast.info("Planta limpa com sucesso.");
+    }
+  };
+
   // Eventos de clique no canvas
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (somenteLeitura) return;
@@ -238,14 +356,15 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
-    const worldPos = screenToWorld(screenX, screenY);
+    let worldPos = screenToWorld(screenX, screenY);
 
     if (ferramenta === "parede") {
       if (!pontoInicial) {
         // Primeiro clique: ponto inicial da parede
         setPontoInicial(worldPos);
       } else {
-        // Segundo clique: finalizar a parede
+        // Segundo clique: aplicar Ortho se ativo e finalizar a parede
+        worldPos = aplicarOrthoSeNecessario(worldPos, pontoInicial, e.altKey);
         const comp = calcularComprimentoParede(pontoInicial, worldPos);
         if (comp > 0.2) {
           const novaParede: Parede = {
@@ -316,7 +435,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       }));
       dragStartPos.current = { x: screenX, y: screenY };
     } else {
-      const worldPos = screenToWorld(screenX, screenY);
+      let worldPos = screenToWorld(screenX, screenY);
+      if (ferramenta === "parede" && pontoInicial) {
+        worldPos = aplicarOrthoSeNecessario(worldPos, pontoInicial, e.altKey);
+      }
       setPontoCursor(worldPos);
     }
   };
@@ -375,7 +497,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       {!somenteLeitura && (
         <div className="w-48 bg-slate-50 border-r border-slate-200 p-3 flex flex-col gap-1.5 z-10 shrink-0">
           <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 px-1">
-            Ferramentas 2D
+            Ferramentas CAD
           </div>
 
           <Button
@@ -390,6 +512,17 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             <MousePointer className="w-4 h-4" /> Selecionar
           </Button>
 
+          {/* Botão de Criação de Cômodo Paramétrico Rápido */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="justify-start gap-2 h-9 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border-emerald-200"
+            onClick={() => setModalComodoAberto(true)}
+            title="Criar um cômodo retangular com 4 paredes e piso automaticamente"
+          >
+            <BoxSelect className="w-4 h-4 text-emerald-600" /> + Novo Cômodo
+          </Button>
+
           <Button
             size="sm"
             variant={ferramenta === "parede" ? "default" : "ghost"}
@@ -399,7 +532,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               setPontoInicial(null);
             }}
           >
-            <Square className="w-4 h-4 text-blue-600" /> Parede (0.15m)
+            <Square className="w-4 h-4 text-blue-600" /> Parede Livre
           </Button>
 
           <Button
@@ -440,7 +573,29 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
           <div className="h-px bg-slate-200 my-1" />
 
-          {/* Botão Importar DXF (AutoCAD) */}
+          {/* Toggle de Modo Ortogonal (Ortho Lock como no AutoCAD) */}
+          <Button
+            size="sm"
+            variant={modoOrtho ? "secondary" : "outline"}
+            className={`justify-start gap-2 h-8 text-xs font-mono ${
+              modoOrtho
+                ? "bg-blue-100 text-blue-800 border-blue-300 font-semibold"
+                : "text-slate-500"
+            }`}
+            onClick={() => setModoOrtho((prev) => !prev)}
+            title="Trava o desenho em ângulos retos de 90° (como a tecla F8 no AutoCAD)"
+          >
+            <Crosshair className="w-3.5 h-3.5" />
+            Ortho 90°: {modoOrtho ? "ON" : "OFF"}
+          </Button>
+
+          <div className="h-px bg-slate-200 my-1" />
+
+          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider px-1">
+            AutoCAD (DXF)
+          </div>
+
+          {/* Botão Importar DXF */}
           <label className="cursor-pointer">
             <input
               type="file"
@@ -475,17 +630,31 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                 e.target.value = "";
               }}
             />
-            <div className="flex items-center gap-2 h-9 px-3 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-md transition-colors shadow-2xs">
-              <FolderUp className="w-4 h-4 text-emerald-600" />
+            <div className="flex items-center gap-2 h-8 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-md transition-colors shadow-2xs">
+              <FolderUp className="w-3.5 h-3.5 text-emerald-600" />
               <span>Importar DXF</span>
             </div>
           </label>
 
-          {/* Painel do Elemento Selecionado */}
+          {/* Botão Exportar DXF */}
+          <Button
+            size="sm"
+            variant="outline"
+            className="justify-start gap-2 h-8 text-xs text-slate-700 bg-white hover:bg-slate-100"
+            onClick={handleExportarDxf}
+            title="Exporta a planta atual em formato DXF ASCII para abrir no AutoCAD"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            <span>Exportar DXF</span>
+          </Button>
+
+          {/* Painel do Elemento Selecionado (Paramétrico) */}
           {elementoSelecionado && (
-            <div className="mt-4 p-2.5 bg-white border border-slate-200 rounded-md shadow-xs text-xs space-y-1.5">
-              <div className="font-semibold text-slate-700 flex items-center justify-between">
-                <span>Parede Selecionada</span>
+            <div className="mt-2 p-2.5 bg-white border border-slate-200 rounded-md shadow-xs text-xs space-y-2">
+              <div className="font-semibold text-slate-800 flex items-center justify-between border-b pb-1.5">
+                <span className="flex items-center gap-1">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-amber-500" /> Parede
+                </span>
                 <Button
                   size="icon-xs"
                   variant="ghost"
@@ -498,25 +667,80 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                     });
                     setElementoSelecionadoId(null);
                   }}
+                  title="Apagar parede selecionada"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
-              <div className="text-slate-500">
-                Comprimento:{" "}
-                <span className="font-medium text-slate-800">
+
+              <div>
+                <span className="text-slate-400 block text-[10px]">Comprimento:</span>
+                <span className="font-bold text-slate-800 text-sm font-mono">
                   {calcularComprimentoParede(elementoSelecionado.p1, elementoSelecionado.p2).toFixed(2)} m
                 </span>
               </div>
-              <div className="text-slate-500">
-                Espessura:{" "}
-                <span className="font-medium text-slate-800">{elementoSelecionado.espessura.toFixed(2)} m</span>
+
+              {/* Ajuste Rápido de Espessura da Parede */}
+              <div>
+                <span className="text-slate-400 block text-[10px] mb-1">Espessura:</span>
+                <div className="grid grid-cols-3 gap-1">
+                  {[0.10, 0.15, 0.20].map((esp) => (
+                    <Button
+                      key={esp}
+                      size="icon-xs"
+                      variant={elementoSelecionado.espessura === esp ? "default" : "outline"}
+                      className="text-[10px] h-6 w-full font-mono"
+                      onClick={() => {
+                        onChangeDados({
+                          ...dados,
+                          paredes: dados.paredes.map((p) =>
+                            p.id === elementoSelecionado.id ? { ...p, espessura: esp } : p
+                          ),
+                        });
+                      }}
+                    >
+                      {Math.round(esp * 100)}cm
+                    </Button>
+                  ))}
+                </div>
               </div>
-              <div className="text-slate-500">
-                Pé-Direito:{" "}
-                <span className="font-medium text-slate-800">{elementoSelecionado.altura.toFixed(2)} m</span>
+
+              {/* Ajuste de Pé-Direito */}
+              <div>
+                <span className="text-slate-400 block text-[10px] mb-1">Pé-Direito:</span>
+                <div className="grid grid-cols-2 gap-1">
+                  {[2.80, 3.00].map((alt) => (
+                    <Button
+                      key={alt}
+                      size="icon-xs"
+                      variant={elementoSelecionado.altura === alt ? "default" : "outline"}
+                      className="text-[10px] h-6 w-full font-mono"
+                      onClick={() => {
+                        onChangeDados({
+                          ...dados,
+                          paredes: dados.paredes.map((p) =>
+                            p.id === elementoSelecionado.id ? { ...p, altura: alt } : p
+                          ),
+                        });
+                      }}
+                    >
+                      {alt.toFixed(2)}m
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
+          )}
+
+          {dados.paredes.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="mt-2 text-slate-400 hover:text-red-600 text-xs justify-start gap-1.5 h-7"
+              onClick={handleLimparPlanta}
+            >
+              <Trash2 className="w-3 h-3" /> Limpar Planta
+            </Button>
           )}
 
           <div className="mt-auto text-[11px] text-slate-400 bg-slate-100 p-2 rounded">
@@ -578,13 +802,125 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           </Button>
         </div>
 
-        {/* Status de Coordenadas */}
-        {pontoCursor && (
-          <div className="absolute bottom-3 left-3 z-10 text-[11px] text-slate-500 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded border border-slate-200 pointer-events-none">
-            X: {pontoCursor.x.toFixed(2)} m • Y: {pontoCursor.y.toFixed(2)} m
+        {/* Status de Coordenadas e Modo Ortho */}
+        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 pointer-events-none">
+          {pontoCursor && (
+            <div className="text-[11px] text-slate-500 bg-white/90 backdrop-blur-xs px-2.5 py-1 rounded border border-slate-200">
+              X: {pontoCursor.x.toFixed(2)} m • Y: {pontoCursor.y.toFixed(2)} m
+            </div>
+          )}
+          <div
+            className={`text-[10px] font-mono px-2 py-1 rounded border font-semibold ${
+              modoOrtho
+                ? "bg-blue-50 text-blue-700 border-blue-200"
+                : "bg-slate-50 text-slate-400 border-slate-200"
+            }`}
+          >
+            ORTHO: {modoOrtho ? "LIGADO (90°)" : "DESLIGADO"}
           </div>
-        )}
+        </div>
       </div>
+
+      {/* Modal Paramétrico para Criação Rápida de Cômodos */}
+      <Dialog open={modalComodoAberto} onOpenChange={setModalComodoAberto}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
+              <BoxSelect className="w-5 h-5 text-emerald-600" /> Adicionar Cômodo Paramétrico
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div>
+              <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                Nome do Ambiente
+              </Label>
+              <Input
+                value={comodoNome}
+                onChange={(e) => setComodoNome(e.target.value)}
+                placeholder="Ex: Quarto 1, Suíte, Sala de Estar"
+                className="h-9 text-sm"
+              />
+              <div className="flex flex-wrap gap-1 mt-2">
+                {["Quarto", "Suíte", "Sala", "Cozinha", "Banheiro", "Varanda", "Garagem"].map((sugestao) => (
+                  <Button
+                    key={sugestao}
+                    type="button"
+                    variant="outline"
+                    size="icon-xs"
+                    className="text-[11px] h-6 px-2 w-auto font-normal"
+                    onClick={() => setComodoNome(sugestao)}
+                  >
+                    {sugestao}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                  Largura (metros)
+                </Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="50"
+                  value={comodoLargura}
+                  onChange={(e) => setComodoLargura(e.target.value)}
+                  className="h-9 text-sm font-mono"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                  Comprimento (metros)
+                </Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="50"
+                  value={comodoComprimento}
+                  onChange={(e) => setComodoComprimento(e.target.value)}
+                  className="h-9 text-sm font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Prévia das medidas e área */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs">
+              <span className="text-slate-500">Área Estimada do Piso:</span>
+              <span className="font-bold text-slate-900 font-mono text-sm">
+                {(
+                  (parseFloat(comodoLargura) || 0) * (parseFloat(comodoComprimento) || 0)
+                ).toFixed(2)}{" "}
+                m²
+              </span>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setModalComodoAberto(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium gap-1.5"
+              onClick={handleCriarComodoRapido}
+            >
+              <Plus className="w-4 h-4" /> Gerar Cômodo 2D & 3D
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

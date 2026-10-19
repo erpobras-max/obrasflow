@@ -141,3 +141,65 @@ export function extrairParedesDoDxf(
 
   return paredes;
 }
+
+/**
+ * Exporta as paredes e esquadrias do ObrasFlow para um arquivo DXF ASCII (AutoCAD R12)
+ * Compatível com AutoCAD, DraftSight, LibreCAD, SketchUp e Revit
+ */
+export function exportarParaDxf(dados: {
+  paredes: Parede[];
+  nomeObra?: string;
+}): string {
+  const lines: string[] = [];
+
+  // Cabeçalho DXF
+  lines.push("0", "SECTION");
+  lines.push("2", "HEADER");
+  lines.push("9", "$ACADVER");
+  lines.push("1", "AC1009"); // AutoCAD R12
+  lines.push("0", "ENDSEC");
+
+  // Tabelas de Camadas (Layers)
+  lines.push("0", "SECTION");
+  lines.push("2", "TABLES");
+  lines.push("0", "TABLE");
+  lines.push("2", "LAYER");
+  lines.push("70", "2");
+
+  // Layer PAREDES
+  lines.push("0", "LAYER");
+  lines.push("2", "PAREDES");
+  lines.push("70", "0");
+  lines.push("62", "7"); // Branco / Preto
+  lines.push("6", "CONTINUOUS");
+
+  // Layer ESQUADRIAS
+  lines.push("0", "LAYER");
+  lines.push("2", "ESQUADRIAS");
+  lines.push("70", "0");
+  lines.push("62", "5"); // Azul
+  lines.push("6", "CONTINUOUS");
+
+  lines.push("0", "ENDTAB");
+  lines.push("0", "ENDSEC");
+
+  // Seção de Entidades (Linhas das paredes em metros)
+  lines.push("0", "SECTION");
+  lines.push("2", "ENTITIES");
+
+  dados.paredes.forEach((p) => {
+    lines.push("0", "LINE");
+    lines.push("8", "PAREDES");
+    lines.push("10", p.p1.x.toFixed(4));
+    lines.push("20", p.p1.y.toFixed(4));
+    lines.push("30", "0.0");
+    lines.push("11", p.p2.x.toFixed(4));
+    lines.push("21", p.p2.y.toFixed(4));
+    lines.push("31", "0.0");
+  });
+
+  lines.push("0", "ENDSEC");
+  lines.push("0", "EOF");
+
+  return lines.join("\n");
+}
