@@ -16,7 +16,36 @@ export const BDI_PADRAO_INICIAL: ConfiguracaoBDI = {
   contingencia: 3.0, // 3%
 };
 
-export const PROJETO_PADRAO_INICIAL: DadosProjetoBIM = {
+export const PROJETO_EM_BRANCO: DadosProjetoBIM = {
+  config: {
+    peDireito: 2.80,
+    espessuraParedePadrao: 0.15,
+    unidade: "m",
+  },
+  paredes: [],
+  aberturas: [],
+  ambientes: [],
+  cobertura: {
+    tipo: "colonial_duas_aguas",
+    inclinacao: 30,
+    beiral: 0.60,
+    corTelha: "#b94a32",
+  },
+  layers: {
+    telhado: true,
+    forro: true,
+    paredes: true,
+    esquadrias: true,
+    piso: true,
+    estrutura: true,
+  },
+};
+
+// O projeto padrão inicial para qualquer obra sem modelagem é SEMPRE em branco
+export const PROJETO_PADRAO_INICIAL: DadosProjetoBIM = PROJETO_EM_BRANCO;
+
+// Modelo demonstrativo caso o usuário deseje carregar um template manualmente
+export const PROJETO_DEMO_EXEMPLO: DadosProjetoBIM = {
   config: {
     peDireito: 2.80,
     espessuraParedePadrao: 0.15,

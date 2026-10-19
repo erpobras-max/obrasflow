@@ -18,6 +18,7 @@ import {
   FileText,
   CheckCircle2,
   HardHat,
+  Info,
 } from "lucide-react";
 
 interface DossieTecnicoViewProps {
@@ -70,6 +71,16 @@ export function DossieTecnicoView({
           <Printer className="w-4 h-4" /> Imprimir / Salvar PDF
         </Button>
       </div>
+
+      {/* Alerta de Obra sem paredes modeladas */}
+      {dados.paredes.length === 0 && (
+        <div className="max-w-4xl mx-auto mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs flex items-center gap-3 print:hidden">
+          <Info className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <strong>Obra em modelagem inicial:</strong> Esta obra ainda não possui paredes traçadas. As tabelas de áreas e quantitativos abaixo refletem o estado zerado. Desenhe a planta no estúdio 2D para popular o memorial técnico automaticamente.
+          </div>
+        </div>
+      )}
 
       {/* Container das Páginas Estilo Folha A4 */}
       <div className="max-w-4xl mx-auto space-y-8 print:space-y-0 print:max-w-none">

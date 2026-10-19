@@ -51,6 +51,16 @@ export function PainelQuantitativosBDI({
 
   return (
     <div className="h-full bg-slate-50/50 p-4 lg:p-6 overflow-y-auto space-y-6">
+      {/* Aviso informativo caso o projeto esteja em branco */}
+      {dados.paredes.length === 0 && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-xs shadow-xs">
+          <Info className="w-5 h-5 text-amber-600 shrink-0" />
+          <div>
+            <strong>Obra sem paredes modeladas:</strong> Os quantitativos e orçamentos abaixo estão zerados porque ainda não há paredes desenhadas nesta obra. Alterne para a aba <strong>Planta Baixa (2D)</strong> para traçar os cômodos ou importe um arquivo DXF para calcular os materiais automaticamente.
+          </div>
+        </div>
+      )}
+
       {/* 1. Cards de Resumo Financeiro com BDI */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-slate-200 shadow-xs bg-white">

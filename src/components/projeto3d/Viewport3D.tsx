@@ -254,6 +254,11 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         roughness: 0.7,
       });
 
+      // Se não há paredes, limpa a cena e não constrói nada
+      if (dados.paredes.length === 0) {
+        return;
+      }
+
       // 1. Construir Paredes e Vãos
       dados.paredes.forEach((parede) => {
         const dx = parede.p2.x - parede.p1.x;
@@ -345,8 +350,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
             groupPiso.add(floorMesh);
           }
         });
-      } else {
-        // Piso padrão delimitado pelos limites das paredes
+      } else if (dados.paredes.length >= 3) {
+        // Piso padrão delimitado pelos limites das paredes se houver fechamento
         const box = calcularLimites(dados.paredes);
         const w = Math.max(box.maxX - box.minX, 1);
         const d = Math.max(box.maxZ - box.minZ, 1);
@@ -358,8 +363,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         groupPiso.add(floorMesh);
       }
 
-      // 4. Cobertura / Telhado 3D
-      if (!modoCorte && dados.layers.telhado) {
+      // 4. Cobertura / Telhado 3D (apenas se houver pelo menos 3 paredes)
+      if (!modoCorte && dados.layers.telhado && dados.paredes.length >= 3) {
         const box = calcularLimites(dados.paredes);
         const beiral = dados.cobertura.beiral || 0.6;
         const w = box.maxX - box.minX + beiral * 2;
@@ -379,7 +384,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     }, [dados, modoCorte]);
 
     function calcularLimites(paredes: Parede[]) {
-      if (paredes.length === 0) return { minX: 0, maxX: 6, minZ: 0, maxZ: 4 };
+      if (paredes.length === 0) return { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
       let minX = Infinity;
       let maxX = -Infinity;
       let minZ = Infinity;
@@ -457,6 +462,23 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
             <Badge className="bg-emerald-600 hover:bg-emerald-600 text-white shadow-lg px-4 py-1.5 text-sm gap-2">
               <Camera className="w-4 h-4" /> Foto 3D capturada para a capa com sucesso!
             </Badge>
+          </div>
+        )}
+
+        {/* Estado Vazio Elegante quando a Obra não tem paredes modeladas */}
+        {dados.paredes.length === 0 && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center pointer-events-none">
+            <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 p-6 rounded-xl shadow-2xl max-w-sm pointer-events-auto">
+              <div className="w-12 h-12 rounded-full bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3 border border-slate-700">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-white mb-1">Nenhum elemento 3D nesta obra</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {somenteLeitura
+                  ? "A maquete tridimensional desta obra ainda não foi publicada pela equipe de engenharia."
+                  : "Esta obra ainda não possui paredes modeladas. Alterne para a aba Planta 2D para desenhar ou importar um arquivo DXF."}
+              </p>
+            </div>
           </div>
         )}
 
