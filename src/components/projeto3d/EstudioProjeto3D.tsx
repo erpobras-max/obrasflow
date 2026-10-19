@@ -46,10 +46,15 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
   const [dadosProjeto, setDadosProjeto] = useState<DadosProjetoBIM | null>(null);
   const [fotoCapa, setFotoCapa] = useState<string | null>(null);
   const [configBdi, setConfigBdi] = useState<ConfiguracaoBDI>(BDI_PADRAO_INICIAL);
+  const [temAlteracoes, setTemAlteracoes] = useState(false);
+
+  const STORAGE_KEY = `obrasflow_draft_cad_${obraId}`;
 
   // 1. Buscar Dados da Obra
   const { data: obra, isLoading: loadingObra } = useQuery({
     queryKey: ["obra_detalhe", obraId],
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("obras")
@@ -61,10 +66,27 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     },
   });
 
-  // 2. Buscar Projeto CAD / BIM da Obra
+  // 2. Buscar Projeto CAD / BIM da Obra (SEM refetch automático ao mudar de aba!)
   const { data: projetoCad, isLoading: loadingProjeto } = useQuery({
     queryKey: ["obra_projeto_cad", obraId],
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    staleTime: Infinity,
     queryFn: async () => {
+      // Verificar se há um rascunho salvo no localStorage para segurança
+      let draftData: DadosProjetoBIM | null = null;
+      try {
+        const local = localStorage.getItem(STORAGE_KEY);
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed && parsed.dados) {
+            draftData = parsed.dados;
+          }
+        }
+      } catch (e) {
+        console.warn("Erro ao ler rascunho local", e);
+      }
+
       const { data, error } = await supabase
         .from("obra_projetos_cad")
         .select("*")
@@ -72,6 +94,13 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
         .maybeSingle();
 
       if (error && error.code !== "PGRST116") throw error;
+
+      if (draftData) {
+        setDadosProjeto(draftData);
+        setTemAlteracoes(true);
+        toast.info("Rascunho recente de alterações não salvas restaurado com segurança.");
+        return data as ObraProjetoCadRow;
+      }
 
       if (data) {
         setDadosProjeto(data.dados_projeto as DadosProjetoBIM);
@@ -87,6 +116,37 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
       }
     },
   });
+
+  // Salvar rascunho localmente a cada alteração feita pelo engenheiro
+  const handleUpdateDadosProjeto = (novosDados: DadosProjetoBIM) => {
+    setDadosProjeto(novosDados);
+    setTemAlteracoes(true);
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          dados: novosDados,
+          configBdi,
+          fotoCapa,
+          timestamp: Date.now(),
+        })
+      );
+    } catch (e) {
+      console.warn("Erro ao salvar rascunho", e);
+    }
+  };
+
+  // Alerta nativo de proteção caso tente fechar ou navegar fora da aba sem salvar
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (temAlteracoes) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [temAlteracoes]);
 
   // 3. Mutação para Salvar Projeto no Banco
   const salvarMutation = useMutation({
@@ -124,7 +184,11 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["obra_projeto_cad", obraId] });
-      toast.success("Projeto, quantitativos e BDI salvos com sucesso!");
+      setTemAlteracoes(false);
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) {}
+      toast.success("Projeto, quantitativos e BDI salvos na nuvem com sucesso!");
     },
     onError: (err: any) => {
       toast.error(`Erro ao salvar projeto: ${err.message}`);
@@ -197,6 +261,13 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
 
         {/* Ações: Foto da Capa & Salvar */}
         <div className="flex items-center gap-2">
+          {temAlteracoes && (
+            <Badge variant="outline" className="border-amber-400 bg-amber-50 text-amber-800 text-xs gap-1.5 font-medium shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              Alterações não salvas
+            </Badge>
+          )}
+
           {fotoCapa && (
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-500 mr-2">
               <img
@@ -212,7 +283,9 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
             size="sm"
             onClick={() => salvarMutation.mutate()}
             disabled={salvarMutation.isPending}
-            className="gap-1.5 font-medium shadow-xs"
+            className={`gap-1.5 font-medium shadow-xs ${
+              temAlteracoes ? "bg-amber-600 hover:bg-amber-700 text-white" : ""
+            }`}
           >
             <Save className="w-4 h-4" />
             {salvarMutation.isPending ? "Salvando..." : "Salvar Projeto"}
@@ -256,7 +329,7 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
         {abaAtiva === "2d" && (
           <CanvasPlanta2D
             dados={dadosProjeto}
-            onChangeDados={(novos) => setDadosProjeto(novos)}
+            onChangeDados={handleUpdateDadosProjeto}
           />
         )}
 
@@ -272,7 +345,10 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
           <PainelQuantitativosBDI
             dados={dadosProjeto}
             configBdi={configBdi}
-            onChangeBdi={(nova) => setConfigBdi(nova)}
+            onChangeBdi={(nova) => {
+              setConfigBdi(nova);
+              setTemAlteracoes(true);
+            }}
           />
         )}
 

@@ -46,6 +46,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const [ferramenta, setFerramenta] = useState<FerramentaAtiva>("selecionar");
   const [elementoSelecionadoId, setElementoSelecionadoId] = useState<string | null>(null);
 
+  // Configurações ativas para novas inserções (customizáveis pelo engenheiro)
+  const [espessuraAtiva, setEspessuraAtiva] = useState(0.15); // metros (15cm padrão)
+  const [peDireitoAtivo, setPeDireitoAtivo] = useState(2.80); // metros
+  const [larguraPortaAtiva, setLarguraPortaAtiva] = useState(0.80); // metros (80cm padrão)
+  const [larguraJanelaAtiva, setLarguraJanelaAtiva] = useState(1.20); // metros (1.20m padrão)
+
   // Modo Ortogonal (Ortho Lock como no AutoCAD)
   const [modoOrtho, setModoOrtho] = useState(true);
 
@@ -371,8 +377,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             id: `parede_${Date.now()}`,
             p1: pontoInicial,
             p2: worldPos,
-            espessura: dados.config.espessuraParedePadrao,
-            altura: dados.config.peDireito,
+            espessura: espessuraAtiva,
+            altura: peDireitoAtivo,
             tipo: "alvenaria_vedacao",
           };
           onChangeDados({
@@ -383,41 +389,61 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         setPontoInicial(null);
       }
     } else if (ferramenta === "porta" || ferramenta === "janela") {
-      // Inserir porta ou janela na parede mais próxima do clique
+      // Inserir porta ou janela na parede mais próxima do clique com as dimensões ativas
       const paredeAlvo = encontrarParedeMaisProxima(worldPos);
       if (paredeAlvo) {
+        const larg = ferramenta === "porta" ? larguraPortaAtiva : larguraJanelaAtiva;
+        const alt = ferramenta === "porta" ? 2.10 : 1.20;
+        const peit = ferramenta === "porta" ? 0.0 : (larg <= 0.8 ? 1.6 : 1.0);
         const novaAbertura: Abertura = {
           id: `ab_${Date.now()}`,
           paredeId: paredeAlvo.parede.id,
           tipo: ferramenta,
-          nome: ferramenta === "porta" ? "P - Nova Porta" : "J - Nova Janela",
-          largura: ferramenta === "porta" ? 0.8 : 1.2,
-          altura: ferramenta === "porta" ? 2.1 : 1.2,
-          peitoril: ferramenta === "porta" ? 0.0 : 1.0,
-          distanciaP1: Math.max(paredeAlvo.distanciaAoInicio, 0.4),
+          nome: ferramenta === "porta" ? `P - Porta (${larg.toFixed(2)}m)` : `J - Janela (${larg.toFixed(2)}m)`,
+          largura: larg,
+          altura: alt,
+          peitoril: peit,
+          distanciaP1: Math.max(paredeAlvo.distanciaAoInicio, 0.2),
         };
         onChangeDados({
           ...dados,
           aberturas: [...dados.aberturas, novaAbertura],
         });
         setFerramenta("selecionar");
+        setElementoSelecionadoId(novaAbertura.id);
       }
     } else if (ferramenta === "selecionar") {
-      // Selecionar elemento sob o clique
-      const paredeAlvo = encontrarParedeMaisProxima(worldPos);
-      if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.3) {
-        setElementoSelecionadoId(paredeAlvo.parede.id);
+      // 1. Tentar selecionar uma abertura (porta/janela)
+      const abAlvo = encontrarAberturaMaisProxima(worldPos);
+      if (abAlvo) {
+        setElementoSelecionadoId(abAlvo.id);
       } else {
-        setElementoSelecionadoId(null);
+        // 2. Tentar selecionar uma parede
+        const paredeAlvo = encontrarParedeMaisProxima(worldPos);
+        if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.3) {
+          setElementoSelecionadoId(paredeAlvo.parede.id);
+        } else {
+          setElementoSelecionadoId(null);
+        }
       }
     } else if (ferramenta === "apagar") {
-      const paredeAlvo = encontrarParedeMaisProxima(worldPos);
-      if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.3) {
+      const abAlvo = encontrarAberturaMaisProxima(worldPos);
+      if (abAlvo) {
         onChangeDados({
           ...dados,
-          paredes: dados.paredes.filter((p) => p.id !== paredeAlvo.parede.id),
-          aberturas: dados.aberturas.filter((a) => a.paredeId !== paredeAlvo.parede.id),
+          aberturas: dados.aberturas.filter((a) => a.id !== abAlvo.id),
         });
+        setElementoSelecionadoId(null);
+      } else {
+        const paredeAlvo = encontrarParedeMaisProxima(worldPos);
+        if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.3) {
+          onChangeDados({
+            ...dados,
+            paredes: dados.paredes.filter((p) => p.id !== paredeAlvo.parede.id),
+            aberturas: dados.aberturas.filter((a) => a.paredeId !== paredeAlvo.parede.id),
+          });
+          setElementoSelecionadoId(null);
+        }
       }
     }
   };
@@ -463,6 +489,30 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     setZoom((prev) => Math.min(Math.max(prev * delta, 15), 180));
   };
 
+  function encontrarAberturaMaisProxima(pos: Ponto2D) {
+    let maisProxima: Abertura | null = null;
+    let menorDist = 0.45; // 45cm de tolerância de clique
+
+    dados.aberturas.forEach((ab) => {
+      const parede = dados.paredes.find((p) => p.id === ab.paredeId);
+      if (!parede) return;
+      const dx = parede.p2.x - parede.p1.x;
+      const dy = parede.p2.y - parede.p1.y;
+      const comp = Math.sqrt(dx * dx + dy * dy);
+      if (comp === 0) return;
+      const t = Math.min(Math.max(ab.distanciaP1 / comp, 0), 1);
+      const posX = parede.p1.x + dx * t;
+      const posY = parede.p1.y + dy * t;
+      const dist = Math.sqrt((pos.x - posX) ** 2 + (pos.y - posY) ** 2);
+      if (dist < menorDist) {
+        menorDist = dist;
+        maisProxima = ab;
+      }
+    });
+
+    return maisProxima;
+  }
+
   function encontrarParedeMaisProxima(pos: Ponto2D) {
     let maisProxima: Parede | null = null;
     let menorDist = Infinity;
@@ -489,7 +539,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     return maisProxima ? { parede: maisProxima, distanciaPontoReta: menorDist, distanciaAoInicio: distAoInicio } : null;
   }
 
-  const elementoSelecionado = dados.paredes.find((p) => p.id === elementoSelecionadoId);
+  const paredeSelecionada = dados.paredes.find((p) => p.id === elementoSelecionadoId);
+  const aberturaSelecionada = dados.aberturas.find((a) => a.id === elementoSelecionadoId);
 
   return (
     <div className="relative w-full h-full min-h-[500px] bg-white rounded-lg border border-slate-200 overflow-hidden flex">
@@ -523,41 +574,107 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             <BoxSelect className="w-4 h-4 text-emerald-600" /> + Novo Cômodo
           </Button>
 
-          <Button
-            size="sm"
-            variant={ferramenta === "parede" ? "default" : "ghost"}
-            className="justify-start gap-2 h-9 text-slate-800"
-            onClick={() => {
-              setFerramenta("parede");
-              setPontoInicial(null);
-            }}
-          >
-            <Square className="w-4 h-4 text-blue-600" /> Parede Livre
-          </Button>
+          {/* Botão Parede com seletor de espessura ativa */}
+          <div className="space-y-1">
+            <Button
+              size="sm"
+              variant={ferramenta === "parede" ? "default" : "ghost"}
+              className="justify-start gap-2 h-9 w-full text-slate-800"
+              onClick={() => {
+                setFerramenta("parede");
+                setPontoInicial(null);
+              }}
+            >
+              <Square className="w-4 h-4 text-blue-600" /> Parede ({(espessuraAtiva * 100).toFixed(0)}cm)
+            </Button>
+            {ferramenta === "parede" && (
+              <div className="bg-blue-50/70 p-1.5 rounded border border-blue-200/60 space-y-1 animate-in fade-in duration-150">
+                <span className="text-[10px] font-semibold text-blue-800 block">Espessura da Parede:</span>
+                <div className="grid grid-cols-3 gap-1">
+                  {[0.10, 0.15, 0.20].map((esp) => (
+                    <Button
+                      key={esp}
+                      type="button"
+                      size="icon-xs"
+                      variant={espessuraAtiva === esp ? "default" : "outline"}
+                      className="text-[10px] h-6 w-full font-mono"
+                      onClick={() => setEspessuraAtiva(esp)}
+                    >
+                      {Math.round(esp * 100)}cm
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-          <Button
-            size="sm"
-            variant={ferramenta === "porta" ? "default" : "ghost"}
-            className="justify-start gap-2 h-9 text-slate-800"
-            onClick={() => {
-              setFerramenta("porta");
-              setPontoInicial(null);
-            }}
-          >
-            <DoorOpen className="w-4 h-4 text-amber-700" /> Porta (0.80m)
-          </Button>
+          {/* Botão Porta com seletor de largura ativa */}
+          <div className="space-y-1">
+            <Button
+              size="sm"
+              variant={ferramenta === "porta" ? "default" : "ghost"}
+              className="justify-start gap-2 h-9 w-full text-slate-800"
+              onClick={() => {
+                setFerramenta("porta");
+                setPontoInicial(null);
+              }}
+            >
+              <DoorOpen className="w-4 h-4 text-amber-700" /> Porta ({larguraPortaAtiva.toFixed(2)}m)
+            </Button>
+            {ferramenta === "porta" && (
+              <div className="bg-amber-50/70 p-1.5 rounded border border-amber-200/60 space-y-1 animate-in fade-in duration-150">
+                <span className="text-[10px] font-semibold text-amber-800 block">Largura do Vão:</span>
+                <div className="grid grid-cols-3 gap-1">
+                  {[0.60, 0.70, 0.80, 0.90, 1.00].map((larg) => (
+                    <Button
+                      key={larg}
+                      type="button"
+                      size="icon-xs"
+                      variant={larguraPortaAtiva === larg ? "default" : "outline"}
+                      className="text-[10px] h-6 w-full font-mono"
+                      onClick={() => setLarguraPortaAtiva(larg)}
+                    >
+                      {larg.toFixed(2)}m
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-          <Button
-            size="sm"
-            variant={ferramenta === "janela" ? "default" : "ghost"}
-            className="justify-start gap-2 h-9 text-slate-800"
-            onClick={() => {
-              setFerramenta("janela");
-              setPontoInicial(null);
-            }}
-          >
-            <AppWindow className="w-4 h-4 text-sky-600" /> Janela (1.20m)
-          </Button>
+          {/* Botão Janela com seletor de largura ativa */}
+          <div className="space-y-1">
+            <Button
+              size="sm"
+              variant={ferramenta === "janela" ? "default" : "ghost"}
+              className="justify-start gap-2 h-9 w-full text-slate-800"
+              onClick={() => {
+                setFerramenta("janela");
+                setPontoInicial(null);
+              }}
+            >
+              <AppWindow className="w-4 h-4 text-sky-600" /> Janela ({larguraJanelaAtiva.toFixed(2)}m)
+            </Button>
+            {ferramenta === "janela" && (
+              <div className="bg-sky-50/70 p-1.5 rounded border border-sky-200/60 space-y-1 animate-in fade-in duration-150">
+                <span className="text-[10px] font-semibold text-sky-800 block">Largura da Janela:</span>
+                <div className="grid grid-cols-2 gap-1">
+                  {[0.60, 1.00, 1.20, 1.50, 2.00].map((larg) => (
+                    <Button
+                      key={larg}
+                      type="button"
+                      size="icon-xs"
+                      variant={larguraJanelaAtiva === larg ? "default" : "outline"}
+                      className="text-[10px] h-6 w-full font-mono"
+                      onClick={() => setLarguraJanelaAtiva(larg)}
+                    >
+                      {larg.toFixed(2)}m
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
           <Button
             size="sm"
@@ -648,8 +765,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             <span>Exportar DXF</span>
           </Button>
 
-          {/* Painel do Elemento Selecionado (Paramétrico) */}
-          {elementoSelecionado && (
+          {/* Painel de Parede Selecionada */}
+          {paredeSelecionada && (
             <div className="mt-2 p-2.5 bg-white border border-slate-200 rounded-md shadow-xs text-xs space-y-2">
               <div className="font-semibold text-slate-800 flex items-center justify-between border-b pb-1.5">
                 <span className="flex items-center gap-1">
@@ -662,8 +779,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                   onClick={() => {
                     onChangeDados({
                       ...dados,
-                      paredes: dados.paredes.filter((p) => p.id !== elementoSelecionado.id),
-                      aberturas: dados.aberturas.filter((a) => a.paredeId !== elementoSelecionado.id),
+                      paredes: dados.paredes.filter((p) => p.id !== paredeSelecionada.id),
+                      aberturas: dados.aberturas.filter((a) => a.paredeId !== paredeSelecionada.id),
                     });
                     setElementoSelecionadoId(null);
                   }}
@@ -676,25 +793,25 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               <div>
                 <span className="text-slate-400 block text-[10px]">Comprimento:</span>
                 <span className="font-bold text-slate-800 text-sm font-mono">
-                  {calcularComprimentoParede(elementoSelecionado.p1, elementoSelecionado.p2).toFixed(2)} m
+                  {calcularComprimentoParede(paredeSelecionada.p1, paredeSelecionada.p2).toFixed(2)} m
                 </span>
               </div>
 
               {/* Ajuste Rápido de Espessura da Parede */}
               <div>
-                <span className="text-slate-400 block text-[10px] mb-1">Espessura:</span>
+                <span className="text-slate-400 block text-[10px] mb-1">Alterar Espessura:</span>
                 <div className="grid grid-cols-3 gap-1">
                   {[0.10, 0.15, 0.20].map((esp) => (
                     <Button
                       key={esp}
                       size="icon-xs"
-                      variant={elementoSelecionado.espessura === esp ? "default" : "outline"}
+                      variant={paredeSelecionada.espessura === esp ? "default" : "outline"}
                       className="text-[10px] h-6 w-full font-mono"
                       onClick={() => {
                         onChangeDados({
                           ...dados,
                           paredes: dados.paredes.map((p) =>
-                            p.id === elementoSelecionado.id ? { ...p, espessura: esp } : p
+                            p.id === paredeSelecionada.id ? { ...p, espessura: esp } : p
                           ),
                         });
                       }}
@@ -713,13 +830,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                     <Button
                       key={alt}
                       size="icon-xs"
-                      variant={elementoSelecionado.altura === alt ? "default" : "outline"}
+                      variant={paredeSelecionada.altura === alt ? "default" : "outline"}
                       className="text-[10px] h-6 w-full font-mono"
                       onClick={() => {
                         onChangeDados({
                           ...dados,
                           paredes: dados.paredes.map((p) =>
-                            p.id === elementoSelecionado.id ? { ...p, altura: alt } : p
+                            p.id === paredeSelecionada.id ? { ...p, altura: alt } : p
                           ),
                         });
                       }}
@@ -728,6 +845,73 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                     </Button>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Painel de Abertura (Porta / Janela) Selecionada */}
+          {aberturaSelecionada && (
+            <div className="mt-2 p-2.5 bg-white border border-slate-200 rounded-md shadow-xs text-xs space-y-2">
+              <div className="font-semibold text-slate-800 flex items-center justify-between border-b pb-1.5">
+                <span className="flex items-center gap-1 capitalize">
+                  {aberturaSelecionada.tipo === "porta" ? (
+                    <DoorOpen className="w-3.5 h-3.5 text-amber-600" />
+                  ) : (
+                    <AppWindow className="w-3.5 h-3.5 text-sky-600" />
+                  )}
+                  {aberturaSelecionada.tipo} Selecionada
+                </span>
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  className="text-red-500 hover:text-red-700 h-5 w-5"
+                  onClick={() => {
+                    onChangeDados({
+                      ...dados,
+                      aberturas: dados.aberturas.filter((a) => a.id !== aberturaSelecionada.id),
+                    });
+                    setElementoSelecionadoId(null);
+                  }}
+                  title="Apagar este vão"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+
+              <div>
+                <span className="text-slate-400 block text-[10px] mb-1">Alterar Largura:</span>
+                <div className="grid grid-cols-3 gap-1">
+                  {(aberturaSelecionada.tipo === "porta"
+                    ? [0.60, 0.70, 0.80, 0.90, 1.00]
+                    : [0.60, 1.00, 1.20, 1.50, 2.00]
+                  ).map((larg) => (
+                    <Button
+                      key={larg}
+                      size="icon-xs"
+                      variant={aberturaSelecionada.largura === larg ? "default" : "outline"}
+                      className="text-[10px] h-6 w-full font-mono"
+                      onClick={() => {
+                        onChangeDados({
+                          ...dados,
+                          aberturas: dados.aberturas.map((a) =>
+                            a.id === aberturaSelecionada.id ? { ...a, largura: larg } : a
+                          ),
+                        });
+                      }}
+                    >
+                      {larg.toFixed(2)}m
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-between text-[11px] text-slate-500 pt-1 border-t">
+                <span>
+                  Altura: <strong>{aberturaSelecionada.altura.toFixed(2)}m</strong>
+                </span>
+                <span>
+                  Peitoril: <strong>{aberturaSelecionada.peitoril.toFixed(2)}m</strong>
+                </span>
               </div>
             </div>
           )}
