@@ -232,8 +232,6 @@ CREATE POLICY "obra_projetos_cad_portal_cliente_select" ON public.obra_projetos_
 
 ## 5. Roadmap de Implementação em Fases
 
-## 5. Roadmap de Implementação em Fases
-
 ### 🚀 Fase 1: Motor Visual 2D & 3D (MVP de Modelagem) — [CONCLUÍDO]
 * [x] Migration da tabela `obra_projetos_cad` no Supabase (`20261019120000_create_obra_projetos_cad.sql`).
 * [x] Rota `/projeto3d/$id` com layout imersivo ("Estúdio ObrasFlow").
