@@ -10,6 +10,7 @@ import {
   DollarSign,
   FileSignature,
   LogOut,
+  Boxes,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -96,6 +97,7 @@ function PortalLayout() {
     { label: "Contratos", icon: FileSignature, to: "/portal/contratos" },
     ...(selectedObraId
       ? [
+          { label: "Maquete 3D", icon: Boxes, to: "/portal/projeto" },
           { label: "Fotos", icon: Image, to: "/portal/fotos" },
           { label: "Documentos", icon: Folder, to: "/portal/documentos" },
         ]

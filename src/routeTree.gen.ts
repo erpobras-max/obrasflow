@@ -45,6 +45,7 @@ import { Route as PortalContratosRouteImport } from './routes/portal/contratos'
 import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro'
 import { Route as PortalFotosRouteImport } from './routes/portal/fotos'
+import { Route as PortalProjetoRouteImport } from './routes/portal/projeto'
 import { Route as AppComercialClientesRouteImport } from './routes/_app/comercial.clientes'
 import { Route as AppComercialContratosRouteImport } from './routes/_app/comercial.contratos'
 import { Route as AppComercialLicitacoesRouteImport } from './routes/_app/comercial.licitacoes'
@@ -241,6 +242,11 @@ const PortalFotosRoute = PortalFotosRouteImport.update({
   path: '/fotos',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalProjetoRoute = PortalProjetoRouteImport.update({
+  id: '/projeto',
+  path: '/projeto',
+  getParentRoute: () => PortalRoute,
+} as any)
 const AppComercialClientesRoute = AppComercialClientesRouteImport.update({
   id: '/clientes',
   path: '/clientes',
@@ -359,6 +365,7 @@ export interface FileRoutesByFullPath {
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
+  '/portal/projeto': typeof PortalProjetoRoute
   '/portal/': typeof PortalIndexRoute
   '/comercial/clientes': typeof AppComercialClientesRoute
   '/comercial/contratos': typeof AppComercialContratosRoute
@@ -411,6 +418,7 @@ export interface FileRoutesByTo {
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
+  '/portal/projeto': typeof PortalProjetoRoute
   '/portal': typeof PortalIndexRoute
   '/comercial/clientes': typeof AppComercialClientesRoute
   '/comercial/contratos': typeof AppComercialContratosRoute
@@ -466,6 +474,7 @@ export interface FileRoutesById {
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
+  '/portal/projeto': typeof PortalProjetoRoute
   '/portal/': typeof PortalIndexRoute
   '/_app/comercial/clientes': typeof AppComercialClientesRoute
   '/_app/comercial/contratos': typeof AppComercialContratosRoute
@@ -521,6 +530,7 @@ export interface FileRouteTypes {
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
+    | '/portal/projeto'
     | '/portal/'
     | '/comercial/clientes'
     | '/comercial/contratos'
@@ -573,6 +583,7 @@ export interface FileRouteTypes {
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
+    | '/portal/projeto'
     | '/portal'
     | '/comercial/clientes'
     | '/comercial/contratos'
@@ -627,6 +638,7 @@ export interface FileRouteTypes {
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
+    | '/portal/projeto'
     | '/portal/'
     | '/_app/comercial/clientes'
     | '/_app/comercial/contratos'
@@ -913,6 +925,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalFotosRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/portal/projeto': {
+      id: '/portal/projeto'
+      path: '/projeto'
+      fullPath: '/portal/projeto'
+      preLoaderRoute: typeof PortalProjetoRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_app/comercial/clientes': {
       id: '/_app/comercial/clientes'
       path: '/clientes'
@@ -1154,6 +1173,7 @@ interface PortalRouteChildren {
   PortalDocumentosRoute: typeof PortalDocumentosRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
   PortalFotosRoute: typeof PortalFotosRoute
+  PortalProjetoRoute: typeof PortalProjetoRoute
   PortalIndexRoute: typeof PortalIndexRoute
 }
 
@@ -1162,6 +1182,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalDocumentosRoute: PortalDocumentosRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
   PortalFotosRoute: PortalFotosRoute,
+  PortalProjetoRoute: PortalProjetoRoute,
   PortalIndexRoute: PortalIndexRoute,
 }
 

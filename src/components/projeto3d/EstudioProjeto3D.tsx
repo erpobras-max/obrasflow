@@ -14,6 +14,7 @@ import {
 import { CanvasPlanta2D } from "./CanvasPlanta2D";
 import { Viewport3D, type Viewport3DHandle } from "./Viewport3D";
 import { PainelQuantitativosBDI } from "./PainelQuantitativosBDI";
+import { DossieTecnicoView } from "./DossieTecnicoView";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,6 +30,7 @@ import {
   Building,
   Calculator,
   Coins,
+  FileText,
 } from "lucide-react";
 
 interface EstudioProjeto3DProps {
@@ -40,7 +42,7 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
   const queryClient = useQueryClient();
   const viewport3DRef = useRef<Viewport3DHandle>(null);
 
-  const [abaAtiva, setAbaAtiva] = useState<"2d" | "3d" | "elementos" | "quantitativos">("2d");
+  const [abaAtiva, setAbaAtiva] = useState<"2d" | "3d" | "elementos" | "quantitativos" | "dossie">("2d");
   const [dadosProjeto, setDadosProjeto] = useState<DadosProjetoBIM | null>(null);
   const [fotoCapa, setFotoCapa] = useState<string | null>(null);
   const [configBdi, setConfigBdi] = useState<ConfiguracaoBDI>(BDI_PADRAO_INICIAL);
@@ -232,6 +234,9 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
               <TabsTrigger value="quantitativos" className="gap-1.5 text-xs px-3 py-1.5 font-semibold text-slate-900">
                 <Calculator className="w-3.5 h-3.5 text-emerald-600" /> Quantitativos & BDI
               </TabsTrigger>
+              <TabsTrigger value="dossie" className="gap-1.5 text-xs px-3 py-1.5 font-semibold text-primary">
+                <FileText className="w-3.5 h-3.5 text-primary" /> Dossiê Técnico (PDF)
+              </TabsTrigger>
               <TabsTrigger value="elementos" className="gap-1.5 text-xs px-3 py-1.5">
                 <FileSpreadsheet className="w-3.5 h-3.5" /> Ambientes
               </TabsTrigger>
@@ -268,6 +273,15 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
             dados={dadosProjeto}
             configBdi={configBdi}
             onChangeBdi={(nova) => setConfigBdi(nova)}
+          />
+        )}
+
+        {abaAtiva === "dossie" && (
+          <DossieTecnicoView
+            obra={obra}
+            dados={dadosProjeto}
+            configBdi={configBdi}
+            fotoCapa={fotoCapa}
           />
         )}
 

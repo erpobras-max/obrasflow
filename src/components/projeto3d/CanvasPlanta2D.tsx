@@ -14,7 +14,10 @@ import {
   Maximize,
   Plus,
   HelpCircle,
+  FolderUp,
 } from "lucide-react";
+import { extrairParedesDoDxf } from "@/lib/dxf-parser";
+import { toast } from "sonner";
 
 type FerramentaAtiva = "selecionar" | "parede" | "porta" | "janela" | "apagar";
 
@@ -434,6 +437,49 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           >
             <Trash2 className="w-4 h-4" /> Apagar
           </Button>
+
+          <div className="h-px bg-slate-200 my-1" />
+
+          {/* Botão Importar DXF (AutoCAD) */}
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept=".dxf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                  try {
+                    const text = event.target?.result as string;
+                    const novasParedes = extrairParedesDoDxf(
+                      text,
+                      dados.config.espessuraParedePadrao,
+                      dados.config.peDireito
+                    );
+                    if (novasParedes.length > 0) {
+                      onChangeDados({
+                        ...dados,
+                        paredes: [...dados.paredes, ...novasParedes],
+                      });
+                      toast.success(`${novasParedes.length} paredes importadas do DXF com sucesso!`);
+                    } else {
+                      toast.error("Nenhuma linha ou polilinha compatível encontrada no arquivo DXF.");
+                    }
+                  } catch (err: any) {
+                    toast.error(`Erro ao ler DXF: ${err.message}`);
+                  }
+                };
+                reader.readAsText(file);
+                e.target.value = "";
+              }}
+            />
+            <div className="flex items-center gap-2 h-9 px-3 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 rounded-md transition-colors shadow-2xs">
+              <FolderUp className="w-4 h-4 text-emerald-600" />
+              <span>Importar DXF</span>
+            </div>
+          </label>
 
           {/* Painel do Elemento Selecionado */}
           {elementoSelecionado && (

@@ -1,0 +1,143 @@
+import type { Parede, Ponto2D } from "@/types/projeto3d";
+
+interface DxfLine {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  layer: string;
+}
+
+/**
+ * Parser leve e nativo de arquivos DXF ASCII do AutoCAD
+ * Extrai entidades LINE e LWPOLYLINE e converte para paredes BIM
+ */
+export function extrairParedesDoDxf(
+  conteudoDxf: string,
+  espessuraPadrao = 0.15,
+  peDireito = 2.80
+): Parede[] {
+  const linhas = conteudoDxf.split(/\r?\n/);
+  const segmentos: DxfLine[] = [];
+
+  let i = 0;
+  while (i < linhas.length) {
+    const code = linhas[i]?.trim();
+    const val = linhas[i + 1]?.trim();
+
+    if (code === "0" && val === "LINE") {
+      i += 2;
+      let x1 = 0, y1 = 0, x2 = 0, y2 = 0, layer = "";
+
+      while (i < linhas.length && linhas[i]?.trim() !== "0") {
+        const c = linhas[i]?.trim();
+        const v = linhas[i + 1]?.trim();
+
+        if (c === "8") layer = v;
+        if (c === "10") x1 = parseFloat(v) || 0;
+        if (c === "20") y1 = parseFloat(v) || 0;
+        if (c === "11") x2 = parseFloat(v) || 0;
+        if (c === "21") y2 = parseFloat(v) || 0;
+        i += 2;
+      }
+
+      if (x1 !== x2 || y1 !== y2) {
+        segmentos.push({ x1, y1, x2, y2, layer });
+      }
+      continue;
+    }
+
+    if (code === "0" && val === "LWPOLYLINE") {
+      i += 2;
+      const vertices: Ponto2D[] = [];
+      let layer = "";
+      let isClosed = false;
+
+      while (i < linhas.length && linhas[i]?.trim() !== "0") {
+        const c = linhas[i]?.trim();
+        const v = linhas[i + 1]?.trim();
+
+        if (c === "8") layer = v;
+        if (c === "70") isClosed = (parseInt(v, 10) & 1) === 1;
+        if (c === "10") {
+          const vx = parseFloat(v) || 0;
+          let vy = 0;
+          if (linhas[i + 2]?.trim() === "20") {
+            vy = parseFloat(linhas[i + 3]?.trim()) || 0;
+            i += 2;
+          }
+          vertices.push({ x: vx, y: vy });
+        }
+        i += 2;
+      }
+
+      for (let j = 0; j < vertices.length - 1; j++) {
+        segmentos.push({
+          x1: vertices[j].x,
+          y1: vertices[j].y,
+          x2: vertices[j + 1].x,
+          y2: vertices[j + 1].y,
+          layer,
+        });
+      }
+      if (isClosed && vertices.length > 2) {
+        segmentos.push({
+          x1: vertices[vertices.length - 1].x,
+          y1: vertices[vertices.length - 1].y,
+          x2: vertices[0].x,
+          y2: vertices[0].y,
+          layer,
+        });
+      }
+      continue;
+    }
+
+    i += 2;
+  }
+
+  if (segmentos.length === 0) return [];
+
+  // 1. Detectar Escala (se estiver em mm, cm ou m)
+  let maxCoord = 0;
+  segmentos.forEach((s) => {
+    maxCoord = Math.max(maxCoord, Math.abs(s.x1), Math.abs(s.y1), Math.abs(s.x2), Math.abs(s.y2));
+  });
+
+  let fatorEscala = 1.0;
+  if (maxCoord > 2000) {
+    fatorEscala = 0.001; // Milímetros -> Metros
+  } else if (maxCoord > 200) {
+    fatorEscala = 0.01; // Centímetros -> Metros
+  }
+
+  // 2. Encontrar o ponto mínimo para transladar para a origem (0,0)
+  let minX = Infinity;
+  let minY = Infinity;
+  segmentos.forEach((s) => {
+    minX = Math.min(minX, s.x1 * fatorEscala, s.x2 * fatorEscala);
+    minY = Math.min(minY, s.y1 * fatorEscala, s.y2 * fatorEscala);
+  });
+
+  // 3. Gerar Paredes no formato do ObrasFlow
+  const paredes: Parede[] = segmentos.map((s, idx) => {
+    const p1: Ponto2D = {
+      x: Number((s.x1 * fatorEscala - minX).toFixed(2)),
+      y: Number((s.y1 * fatorEscala - minY).toFixed(2)),
+    };
+    const p2: Ponto2D = {
+      x: Number((s.x2 * fatorEscala - minX).toFixed(2)),
+      y: Number((s.y2 * fatorEscala - minY).toFixed(2)),
+    };
+
+    return {
+      id: `dxf_parede_${idx}_${Date.now()}`,
+      p1,
+      p2,
+      espessura: espessuraPadrao,
+      altura: peDireito,
+      tipo: "alvenaria_vedacao",
+    };
+  });
+
+  return paredes;
+}
