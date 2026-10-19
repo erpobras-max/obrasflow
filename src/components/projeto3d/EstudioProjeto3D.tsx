@@ -4,13 +4,19 @@ import { Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import type { DadosProjetoBIM, ObraProjetoCadRow } from "@/types/projeto3d";
-import { PROJETO_PADRAO_INICIAL } from "@/lib/projeto3d.utils";
+import type { DadosProjetoBIM, ObraProjetoCadRow, ConfiguracaoBDI } from "@/types/projeto3d";
+import {
+  PROJETO_PADRAO_INICIAL,
+  BDI_PADRAO_INICIAL,
+  calcularQuantitativosBIM,
+  formatarMoeda,
+} from "@/lib/projeto3d.utils";
 import { CanvasPlanta2D } from "./CanvasPlanta2D";
 import { Viewport3D, type Viewport3DHandle } from "./Viewport3D";
+import { PainelQuantitativosBDI } from "./PainelQuantitativosBDI";
 
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,10 +26,9 @@ import {
   Boxes,
   Compass,
   FileSpreadsheet,
-  Camera,
-  Layers,
-  Sparkles,
   Building,
+  Calculator,
+  Coins,
 } from "lucide-react";
 
 interface EstudioProjeto3DProps {
@@ -35,9 +40,10 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
   const queryClient = useQueryClient();
   const viewport3DRef = useRef<Viewport3DHandle>(null);
 
-  const [abaAtiva, setAbaAtiva] = useState<"2d" | "3d" | "elementos">("2d");
+  const [abaAtiva, setAbaAtiva] = useState<"2d" | "3d" | "elementos" | "quantitativos">("2d");
   const [dadosProjeto, setDadosProjeto] = useState<DadosProjetoBIM | null>(null);
   const [fotoCapa, setFotoCapa] = useState<string | null>(null);
+  const [configBdi, setConfigBdi] = useState<ConfiguracaoBDI>(BDI_PADRAO_INICIAL);
 
   // 1. Buscar Dados da Obra
   const { data: obra, isLoading: loadingObra } = useQuery({
@@ -68,10 +74,13 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
       if (data) {
         setDadosProjeto(data.dados_projeto as DadosProjetoBIM);
         setFotoCapa(data.foto_capa_3d);
+        if (data.config_bdi) {
+          setConfigBdi(data.config_bdi as ConfiguracaoBDI);
+        }
         return data as ObraProjetoCadRow;
       } else {
-        // Se ainda não existir, inicia com o modelo padrão
         setDadosProjeto(PROJETO_PADRAO_INICIAL);
+        setConfigBdi(BDI_PADRAO_INICIAL);
         return null;
       }
     },
@@ -82,24 +91,26 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     mutationFn: async () => {
       if (!dadosProjeto) return;
 
+      const quantitativos = calcularQuantitativosBIM(dadosProjeto, configBdi);
+
       const payload = {
         obra_id: obraId,
         titulo: `Projeto 3D - ${obra?.nome || "Obra"}`,
         dados_projeto: dadosProjeto,
         foto_capa_3d: fotoCapa,
+        config_bdi: configBdi,
+        quantitativos_calculados: quantitativos,
         updated_by: user?.id,
         updated_at: new Date().toISOString(),
       };
 
       if (projetoCad?.id) {
-        // Atualizar projeto existente
         const { error } = await supabase
           .from("obra_projetos_cad")
           .update(payload)
           .eq("id", projetoCad.id);
         if (error) throw error;
       } else {
-        // Inserir novo projeto
         const { error } = await supabase
           .from("obra_projetos_cad")
           .insert({
@@ -111,7 +122,7 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["obra_projeto_cad", obraId] });
-      toast.success("Projeto salvo com sucesso!");
+      toast.success("Projeto, quantitativos e BDI salvos com sucesso!");
     },
     onError: (err: any) => {
       toast.error(`Erro ao salvar projeto: ${err.message}`);
@@ -132,10 +143,10 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     );
   }
 
-  // Estatísticas rápidas da planta
+  // Estatísticas rápidas
   const totalParedes = dadosProjeto.paredes.length;
   const totalAberturas = dadosProjeto.aberturas.length;
-  const areaConstruida = dadosProjeto.ambientes.reduce((acc, a) => acc + a.area, 0);
+  const resumoFinanceiro = calcularQuantitativosBIM(dadosProjeto, configBdi);
 
   return (
     <div className="flex flex-col h-[calc(100vh-4.2rem)] bg-slate-100 overflow-hidden">
@@ -159,18 +170,25 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
           </div>
         </div>
 
-        {/* Resumo Rápido de Áreas */}
-        <div className="hidden md:flex items-center gap-4 text-xs text-slate-500">
+        {/* Resumo Rápido de Custos e Áreas */}
+        <div className="hidden lg:flex items-center gap-5 text-xs text-slate-500">
           <div>
             Paredes: <span className="font-semibold text-slate-800">{totalParedes}</span>
           </div>
           <div>
-            Portas/Janelas: <span className="font-semibold text-slate-800">{totalAberturas}</span>
+            Aberturas: <span className="font-semibold text-slate-800">{totalAberturas}</span>
+          </div>
+          <div className="h-4 w-px bg-slate-200" />
+          <div>
+            Custo Direto:{" "}
+            <span className="font-semibold font-mono text-slate-800">
+              {formatarMoeda(resumoFinanceiro.custoDiretoTotal)}
+            </span>
           </div>
           <div>
-            Área Útil:{" "}
-            <span className="font-semibold text-emerald-600">
-              {areaConstruida > 0 ? `${areaConstruida.toFixed(2)} m²` : "24.00 m² (est.)"}
+            Total c/ BDI:{" "}
+            <span className="font-bold font-mono text-primary">
+              {formatarMoeda(resumoFinanceiro.precoVendaTotal)}
             </span>
           </div>
         </div>
@@ -203,7 +221,7 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
       {/* Navegação de Abas do Estúdio */}
       <div className="bg-white border-b border-slate-200 px-4 py-2 shrink-0 flex items-center justify-between">
         <Tabs value={abaAtiva} onValueChange={(v) => setAbaAtiva(v as any)} className="w-full">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <TabsList className="bg-slate-100 p-0.5">
               <TabsTrigger value="2d" className="gap-1.5 text-xs px-3 py-1.5">
                 <Compass className="w-3.5 h-3.5" /> Planta Baixa (2D)
@@ -211,18 +229,19 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
               <TabsTrigger value="3d" className="gap-1.5 text-xs px-3 py-1.5">
                 <Boxes className="w-3.5 h-3.5" /> Maquete Interativa (3D)
               </TabsTrigger>
+              <TabsTrigger value="quantitativos" className="gap-1.5 text-xs px-3 py-1.5 font-semibold text-slate-900">
+                <Calculator className="w-3.5 h-3.5 text-emerald-600" /> Quantitativos & BDI
+              </TabsTrigger>
               <TabsTrigger value="elementos" className="gap-1.5 text-xs px-3 py-1.5">
-                <FileSpreadsheet className="w-3.5 h-3.5" /> Ambientes & Elementos
+                <FileSpreadsheet className="w-3.5 h-3.5" /> Ambientes
               </TabsTrigger>
             </TabsList>
 
-            {abaAtiva === "3d" && (
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="gap-1 text-[11px] bg-slate-100 text-slate-600 font-normal">
-                  <Sparkles className="w-3 h-3 text-amber-500" /> Three.js WebGL
-                </Badge>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="gap-1 text-xs font-mono font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <Coins className="w-3 h-3 text-emerald-600" /> BDI {resumoFinanceiro.bdiTaxa.toFixed(1)}%
+              </Badge>
+            </div>
           </div>
         </Tabs>
       </div>
@@ -241,6 +260,14 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
             ref={viewport3DRef}
             dados={dadosProjeto}
             onCapturarFotoParaCapa={handleCapturaFotoCapa}
+          />
+        )}
+
+        {abaAtiva === "quantitativos" && (
+          <PainelQuantitativosBDI
+            dados={dadosProjeto}
+            configBdi={configBdi}
+            onChangeBdi={(nova) => setConfigBdi(nova)}
           />
         )}
 

@@ -68,6 +68,45 @@ export interface DadosProjetoBIM {
   layers: CamadasVisibilidade;
 }
 
+export interface ItemQuantitativo {
+  id: string;
+  codigo: string;
+  descricao: string;
+  unidade: "m²" | "m³" | "m" | "un";
+  quantidade: number;
+  memoriaCalculo: string;
+  precoUnitario: number;
+  codigoSinapi?: string;
+  tipoItem: "alvenaria" | "revestimento" | "piso" | "pintura" | "cobertura" | "esquadria" | "estrutura";
+}
+
+export interface ConfiguracaoBDI {
+  lucroLiquido: number; // % (ex: 12)
+  impostos: number; // % (ex: 8)
+  administracaoCentral: number; // % (ex: 4)
+  custoIndiretoObra: number; // % (ex: 5)
+  contingencia: number; // % (ex: 3)
+}
+
+export interface ResumoQuantitativosBIM {
+  areaTotalAlvenariaBruta: number;
+  areaTotalVaos: number;
+  areaTotalAlvenariaLiquida: number;
+  areaTotalPisos: number;
+  areaTotalReboco: number;
+  areaTotalPintura: number;
+  perimetroTotalRodape: number;
+  areaTotalCobertura: number;
+  volumeConcretoEstimado: number;
+  totalPortas: number;
+  totalJanelas: number;
+  itens: ItemQuantitativo[];
+  custoDiretoTotal: number;
+  bdiTaxa: number;
+  valorBdiTotal: number;
+  precoVendaTotal: number;
+}
+
 export interface ObraProjetoCadRow {
   id: string;
   obra_id: string;
@@ -78,13 +117,7 @@ export interface ObraProjetoCadRow {
   foto_capa_3d: string | null;
   fotos_adicionais: string[];
   quantitativos_calculados: Record<string, unknown>;
-  config_bdi: {
-    lucroLiquido: number;
-    impostos: number;
-    administracaoLocal: number;
-    contingencia: number;
-    taxaBdiTotal: number;
-  };
+  config_bdi: ConfiguracaoBDI;
   visivel_no_portal: boolean;
   permitir_download_dossie_portal: boolean;
   created_at: string;
