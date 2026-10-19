@@ -483,6 +483,7 @@ function RhPage() {
   // Filters
   const [searchFunc, setSearchFunc] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterObra, setFilterObra] = useState("all");
 
   // Ponto state
   const [pontoFuncId, setPontoFuncId] = useState<string>("");
@@ -610,6 +611,13 @@ function RhPage() {
   const filteredFuncionarios = useMemo(() => {
     let list = funcionarios ?? [];
     if (filterStatus !== "all") list = list.filter(f => f.status === filterStatus);
+    if (filterObra !== "all") {
+      if (filterObra === "sem_obra") {
+        list = list.filter(f => !f.obra_id);
+      } else {
+        list = list.filter(f => f.obra_id === filterObra);
+      }
+    }
     if (searchFunc.trim()) {
       const s = searchFunc.toLowerCase();
       list = list.filter(f =>
@@ -620,7 +628,7 @@ function RhPage() {
       );
     }
     return list;
-  }, [funcionarios, filterStatus, searchFunc]);
+  }, [funcionarios, filterStatus, filterObra, searchFunc]);
 
   // ─── Ponto: build calendar rows ───
   const pontoRows = useMemo(() => {
@@ -1464,6 +1472,18 @@ function RhPage() {
                   <SelectItem value="demitido">Demitido</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={filterObra} onValueChange={setFilterObra}>
+                <SelectTrigger className="w-[180px]"><SelectValue placeholder="Todas as Obras" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas as Obras</SelectItem>
+                  <SelectItem value="sem_obra">Sem Obra Fixa</SelectItem>
+                  {(obras ?? []).map(o => (
+                    <SelectItem key={o.id} value={o.id}>
+                      #{o.numero} — {o.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             {podeEscrever && (
               <Button onClick={() => setFuncModal("new")} className="gap-2 bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white">
@@ -1507,8 +1527,17 @@ function RhPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div>{func.cargo}</div>
-                      {func.departamento && <div className="text-xs text-muted-foreground">{func.departamento}</div>}
+                      <div className="font-medium">{func.cargo}</div>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                        {func.departamento && <span className="text-xs text-muted-foreground">{func.departamento}</span>}
+                        {func.obra_id ? (
+                          <Badge variant="outline" className="text-[10px] h-4 px-1.5 bg-amber-50 text-amber-900 border-amber-300">
+                            🏗️ {obras?.find(o => o.id === func.obra_id)?.nome || "Obra alocada"}
+                          </Badge>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Sem obra fixa</span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="text-xs">{TIPO_CONTRATO_LABEL[func.tipo_contrato]}</Badge>

@@ -24,6 +24,7 @@ import {
   HardHat,
   ShieldCheck,
   Check,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { eachDayOfInterval, endOfMonth, format, isWeekend, parseISO, startOfMonth } from "date-fns";
@@ -185,27 +186,41 @@ function PontoPage() {
     },
   });
 
-  const { data: membrosEquipe = [], isLoading: loadingEquipe } = useQuery<
+  const [buscaEquipe, setBuscaEquipe] = useState("");
+  const [apenasDestaObra, setApenasDestaObra] = useState(false);
+
+  const { data: todosFuncionariosAtivos = [], isLoading: loadingEquipe } = useQuery<
     { id: string; nome: string; cargo: string; matricula: string | null; obra_id: string | null }[]
   >({
-    queryKey: ["ponto-equipe-mestre", obraSelecionadaId],
+    queryKey: ["ponto-equipe-mestre-todos"],
     enabled: isMestreDeObras,
     queryFn: async () => {
-      let query = (supabase as any)
+      const { data, error } = await (supabase as any)
         .from("funcionarios")
         .select("id, nome, cargo, matricula, obra_id")
         .eq("status", "ativo")
         .order("nome");
-
-      if (obraSelecionadaId && obraSelecionadaId !== "todas") {
-        query = query.or(`obra_id.eq.${obraSelecionadaId},obra_id.is.null`);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
   });
+
+  const membrosEquipe = useMemo(() => {
+    let lista = todosFuncionariosAtivos;
+    if (apenasDestaObra && obraSelecionadaId && obraSelecionadaId !== "todas") {
+      lista = lista.filter((f) => f.obra_id === obraSelecionadaId || !f.obra_id);
+    }
+    if (buscaEquipe.trim()) {
+      const b = buscaEquipe.toLowerCase();
+      lista = lista.filter(
+        (f) =>
+          f.nome.toLowerCase().includes(b) ||
+          f.cargo?.toLowerCase().includes(b) ||
+          f.matricula?.toLowerCase().includes(b),
+      );
+    }
+    return lista;
+  }, [todosFuncionariosAtivos, apenasDestaObra, obraSelecionadaId, buscaEquipe]);
 
   const { data: registrosEquipeHoje = [], refetch: refetchRegistrosEquipe } = useQuery<
     (RegistroPonto & { funcionario_id: string })[]
@@ -577,17 +592,28 @@ function PontoPage() {
 
               <Card className="overflow-hidden">
                 <CardHeader className="py-4 px-6 border-b bg-slate-50/50">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <CardTitle className="text-base">Membros da Equipe no Canteiro</CardTitle>
                       <CardDescription className="text-xs">
-                        {membrosEquipe.length} colaboradores ativos encontrados
+                        {membrosEquipe.length} colaborador(es) disponível(is) para bater ponto hoje
                       </CardDescription>
                     </div>
-                    <Badge variant="outline" className="flex items-center gap-1.5 bg-white text-xs">
-                      <ShieldCheck className="size-3.5 text-emerald-600" />
-                      GPS de Auditoria Ativo
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative w-full sm:w-64">
+                        <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Input
+                          placeholder="Buscar por nome, cargo ou matrícula..."
+                          value={buscaEquipe}
+                          onChange={(e) => setBuscaEquipe(e.target.value)}
+                          className="h-8 pl-8 text-xs bg-white"
+                        />
+                      </div>
+                      <Badge variant="outline" className="flex items-center gap-1.5 bg-white text-xs h-8">
+                        <ShieldCheck className="size-3.5 text-emerald-600" />
+                        GPS Ativo
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
