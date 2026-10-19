@@ -79,13 +79,16 @@ export const CATALOGO_MOVEIS: Record<
 > = {
   cama_casal: { nome: "Cama de Casal", categoria: "Quarto", largura: 1.6, comprimento: 2.0, altura: 0.65, icone: "🛏️" },
   cama_solteiro: { nome: "Cama de Solteiro", categoria: "Quarto", largura: 0.9, comprimento: 1.9, altura: 0.65, icone: "🛌" },
+  guarda_roupa: { nome: "Guarda-Roupa 3 Portas", categoria: "Quarto", largura: 2.0, comprimento: 0.6, altura: 2.2, icone: "🚪" },
   sofa: { nome: "Sofá 3 Lugares", categoria: "Sala", largura: 2.2, comprimento: 0.9, altura: 0.85, icone: "🛋️" },
   mesa_jantar: { nome: "Mesa de Jantar 6L", categoria: "Sala", largura: 1.6, comprimento: 0.9, altura: 0.75, icone: "🪑" },
+  tv_rack: { nome: "Rack com Painel TV", categoria: "Sala", largura: 1.8, comprimento: 0.45, altura: 1.6, icone: "📺" },
   bancada_pia: { nome: "Bancada com Pia", categoria: "Cozinha", largura: 1.8, comprimento: 0.6, altura: 0.9, icone: "🍳" },
   geladeira: { nome: "Geladeira Inox", categoria: "Cozinha", largura: 0.75, comprimento: 0.7, altura: 1.8, icone: "❄️" },
   fogao: { nome: "Fogão 4 Bocas", categoria: "Cozinha", largura: 0.6, comprimento: 0.6, altura: 0.85, icone: "🔥" },
   vaso_sanitario: { nome: "Vaso Sanitário", categoria: "Banheiro", largura: 0.4, comprimento: 0.65, altura: 0.8, icone: "🚽" },
   bancada_banheiro: { nome: "Bancada com Cuba", categoria: "Banheiro", largura: 0.8, comprimento: 0.5, altura: 0.85, icone: "🪞" },
+  box_chuveiro: { nome: "Box com Chuveiro", categoria: "Banheiro", largura: 1.0, comprimento: 1.0, altura: 2.0, icone: "🚿" },
 };
 
 export const CORES_PINTURA = [

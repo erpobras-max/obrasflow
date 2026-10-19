@@ -64,7 +64,10 @@ export type TipoMovel =
   | "geladeira"
   | "fogao"
   | "vaso_sanitario"
-  | "bancada_banheiro";
+  | "bancada_banheiro"
+  | "guarda_roupa"
+  | "tv_rack"
+  | "box_chuveiro";
 
 export interface Movel {
   id: string;

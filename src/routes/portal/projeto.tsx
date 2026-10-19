@@ -146,7 +146,12 @@ function PortalProjetoPage() {
       {visualizacao === "3d" ? (
         <div className="space-y-3">
           <div className="h-[550px] w-full rounded-lg overflow-hidden border border-slate-200 shadow-sm">
-            <Viewport3D dados={dadosBim} somenteLeitura={true} />
+            <Viewport3D
+              dados={dadosBim}
+              somenteLeitura={true}
+              obraId={obra?.id}
+              obraNome={obra?.nome}
+            />
           </div>
 
           <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">

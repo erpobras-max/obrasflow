@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
 import * as THREE from "three";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client.custom";
+import { getR2Url } from "@/lib/r2";
 import type { DadosProjetoBIM, Parede, Abertura, Movel } from "@/types/projeto3d";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Camera,
   Maximize2,
@@ -14,6 +24,12 @@ import {
   Eye,
   EyeOff,
   Armchair,
+  Activity,
+  CheckCircle2,
+  Clock,
+  Image as ImageIcon,
+  ExternalLink,
+  ChevronRight,
 } from "lucide-react";
 
 export interface Viewport3DHandle {
@@ -26,18 +42,73 @@ interface Viewport3DProps {
   dados: DadosProjetoBIM;
   onCapturarFotoParaCapa?: (base64: string) => void;
   somenteLeitura?: boolean;
+  obraId?: string;
+  obraNome?: string;
 }
 
 export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
-  function Viewport3D({ dados, onCapturarFotoParaCapa, somenteLeitura = false }, ref) {
+  function Viewport3D({ dados, onCapturarFotoParaCapa, somenteLeitura = false, obraId, obraNome }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
 
     const [modoCorte, setModoCorte] = useState(false);
+    const [modo4D, setModo4D] = useState(false);
+    const [modalFotosAberto, setModalFotosAberto] = useState(false);
     const [camadas, setCamadas] = useState(dados.layers);
     const [snapshotFeedback, setSnapshotFeedback] = useState(false);
+
+    // Buscar histórico de medições desta obra para alimentar a visão 4D
+    const { data: medicoesObra } = useQuery({
+      queryKey: ["medicoes_4d", obraId],
+      enabled: !!obraId,
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from("medicoes")
+          .select("id, numero, periodo_inicio, periodo_fim, percentual_total, status, valor_total")
+          .eq("obra_id", obraId!)
+          .neq("status", "cancelada")
+          .order("periodo_fim", { ascending: false });
+        if (error) throw error;
+        return data || [];
+      },
+    });
+
+    // Buscar fotos do canteiro registradas nos Diários de Obra desta obra
+    const { data: fotosCanteiro } = useQuery({
+      queryKey: ["fotos_canteiro_3d", obraId],
+      enabled: !!obraId,
+      queryFn: async () => {
+        const { data: diarios, error: dErr } = await supabase
+          .from("diarios_obra")
+          .select("id, data, clima, atividades")
+          .eq("obra_id", obraId!);
+        if (dErr) throw dErr;
+        if (!diarios || diarios.length === 0) return [];
+
+        const diarioIds = diarios.map((d) => d.id);
+        const { data: fotos, error: fErr } = await supabase
+          .from("diarios_obra_fotos")
+          .select("id, diario_id, url, descricao, created_at")
+          .in("diario_id", diarioIds)
+          .order("created_at", { ascending: false });
+        if (fErr) throw fErr;
+
+        const diariosMap = new Map(diarios.map((d) => [d.id, d]));
+        return (fotos || []).map((f) => ({
+          ...f,
+          diario: diariosMap.get(f.diario_id),
+          signedUrl: getR2Url(f.url),
+        }));
+      },
+    });
+
+    // Calcular avanço físico real consolidado das medições
+    const avancoConsolidado = (medicoesObra || []).reduce(
+      (max, m) => Math.max(max, Number(m.percentual_total || 0)),
+      0
+    );
 
     // Grupos da cena Three.js
     const groupParedesRef = useRef<THREE.Group>(new THREE.Group());
@@ -268,10 +339,43 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         const dirX = dx / comprimento;
         const dirZ = dy / comprimento;
 
-        // Cor customizada da pintura da parede se definida pelo engenheiro
-        const matParede = parede.cor
-          ? new THREE.MeshStandardMaterial({ color: new THREE.Color(parede.cor), roughness: 0.85 })
-          : matParedeExterna;
+        // -------------------------------------------------------------
+        // Determinar cor do material (Modo Normal vs Modo 4D Medições)
+        // -------------------------------------------------------------
+        let matParede = matParedeExterna;
+        if (modo4D) {
+          // No Modo 4D: Colorir por progresso real consolidado das medições
+          // A proporção de paredes concluídas segue o percentual de medição da obra
+          const indexParede = dados.paredes.indexOf(parede);
+          const percentualParede = ((indexParede + 1) / dados.paredes.length) * 100;
+
+          if (percentualParede <= avancoConsolidado) {
+            // Executado e Medido (Verde Esmeralda)
+            matParede = new THREE.MeshStandardMaterial({
+              color: 0x10b981,
+              roughness: 0.6,
+            });
+          } else if (percentualParede - (100 / dados.paredes.length) < avancoConsolidado) {
+            // Em execução no momento (Âmbar / Amarelo)
+            matParede = new THREE.MeshStandardMaterial({
+              color: 0xf59e0b,
+              roughness: 0.6,
+            });
+          } else {
+            // Futuro / A executar (Cinza Translúcido)
+            matParede = new THREE.MeshStandardMaterial({
+              color: 0x94a3b8,
+              roughness: 0.9,
+              transparent: true,
+              opacity: 0.45,
+            });
+          }
+        } else if (parede.cor) {
+          matParede = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(parede.cor),
+            roughness: 0.85,
+          });
+        }
 
         const aberturasNaParede = (dados.aberturas || [])
           .filter((a) => a.paredeId === parede.id)
@@ -622,6 +726,30 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
             const cuba = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.14, 0.12, 16), matBranco);
             cuba.position.set(0, 0.8, 0);
             mGroup.add(gab, tampo, cuba);
+          } else if (movel.tipo === "guarda_roupa") {
+            const corpo = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.2, 0.6), matMadeira);
+            corpo.position.y = 1.1;
+            const pux1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.4, 0.04), matInox);
+            pux1.position.set(-0.35, 1.1, 0.32);
+            const pux2 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.4, 0.04), matInox);
+            pux2.position.set(0.35, 1.1, 0.32);
+            mGroup.add(corpo, pux1, pux2);
+          } else if (movel.tipo === "tv_rack") {
+            const base = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.45, 0.45), matMadeira);
+            base.position.y = 0.225;
+            const painel = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.2, 0.05), matMadeira);
+            painel.position.set(0, 1.05, -0.2);
+            const tv = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.7, 0.04), matGranitoPreto);
+            tv.position.set(0, 1.15, -0.15);
+            mGroup.add(base, painel, tv);
+          } else if (movel.tipo === "box_chuveiro") {
+            const vidro = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.0, 0.02), matVidro);
+            vidro.position.set(0, 1.0, 0.49);
+            const perfil = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.04, 0.04), matInox);
+            perfil.position.set(0, 2.02, 0.49);
+            const chuveiro = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.04, 16), matInox);
+            chuveiro.position.set(0, 2.1, 0);
+            mGroup.add(vidro, perfil, chuveiro);
           }
 
           groupMoveis.add(mGroup);
@@ -647,7 +775,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         telhadoMesh.castShadow = true;
         groupTelhado.add(telhadoMesh);
       }
-    }, [dados, modoCorte]);
+    }, [dados, modoCorte, modo4D, avancoConsolidado]);
 
     function calcularLimites(paredes: Parede[]) {
       if (paredes.length === 0) return { minX: 0, maxX: 0, minZ: 0, maxZ: 0 };
@@ -750,6 +878,36 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
 
         {/* Barra Flutuante de Ferramentas da Câmera & Camadas */}
         <div className="absolute top-3 right-3 z-10 flex flex-wrap gap-2 items-center bg-slate-950/90 backdrop-blur-md p-1.5 rounded-lg border border-slate-700 shadow-2xl">
+          {/* Botão de Modo 4D (Evolução das Medições) */}
+          <Button
+            size="sm"
+            variant="ghost"
+            className={
+              modo4D
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold border border-emerald-500 shadow-xs"
+                : "bg-slate-800 hover:bg-slate-700 text-white font-medium border border-slate-600 shadow-xs"
+            }
+            onClick={() => setModo4D((prev) => !prev)}
+            title="Visualizar paredes coloridas pelo status de execução das medições"
+          >
+            <Activity className="w-4 h-4 mr-1.5 text-emerald-300" />
+            {modo4D ? `Modo 4D (${avancoConsolidado.toFixed(0)}%)` : "Visão 4D"}
+          </Button>
+
+          {/* Botão Fotos do Canteiro (Diário de Obra) */}
+          {fotosCanteiro && fotosCanteiro.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="bg-slate-800 hover:bg-slate-700 text-white font-medium border border-slate-600 shadow-xs"
+              onClick={() => setModalFotosAberto(true)}
+              title="Ver fotos reais registradas no diário desta obra"
+            >
+              <ImageIcon className="w-4 h-4 mr-1.5 text-sky-400" />
+              Fotos Canteiro ({fotosCanteiro.length})
+            </Button>
+          )}
+
           {/* Botão de Corte Horizontal */}
           <Button
             size="sm"
@@ -831,6 +989,89 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
             </Button>
           )}
         </div>
+
+        {/* Legenda Informativa Flutuante do Modo 4D */}
+        {modo4D && (
+          <div className="absolute top-16 right-3 z-10 bg-slate-950/95 backdrop-blur-md p-3 rounded-lg border border-slate-700 shadow-2xl text-xs space-y-2 max-w-xs animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+              <span className="font-bold text-white flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                Status das Medições (4D)
+              </span>
+              <Badge className="bg-emerald-600 text-white text-[10px] px-1.5 font-mono">
+                {avancoConsolidado.toFixed(1)}% executado
+              </Badge>
+            </div>
+
+            <div className="space-y-1.5 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-xs bg-emerald-500 shrink-0 shadow-2xs" />
+                <span className="text-slate-200">Concluído & Medido no Financeiro</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-xs bg-amber-500 shrink-0 shadow-2xs" />
+                <span className="text-slate-200">Em Execução no Período Atual</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-xs bg-slate-400/50 border border-slate-400 shrink-0 shadow-2xs" />
+                <span className="text-slate-400">Etapa Futura / Não iniciada</span>
+              </div>
+            </div>
+
+            {medicoesObra && medicoesObra.length > 0 && (
+              <div className="pt-1.5 border-t border-slate-800/80 text-[10px] text-slate-400 flex justify-between">
+                <span>Total de Medições: {medicoesObra.length}</span>
+                <span className="text-slate-300 font-mono">
+                  Última: #{medicoesObra[0].numero}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Diálogo / Galeria de Fotos Reais do Canteiro (Diário de Obra) */}
+        <Dialog open={modalFotosAberto} onOpenChange={setModalFotosAberto}>
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base text-slate-900">
+                <ImageIcon className="w-5 h-5 text-sky-600" />
+                Diário Visual do Canteiro de Obras
+              </DialogTitle>
+              <DialogDescription className="text-xs text-slate-500">
+                Fotos e mídias capturadas em tempo real durante o avanço desta obra.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {fotosCanteiro?.map((foto) => (
+                  <div
+                    key={foto.id}
+                    className="group relative rounded-lg overflow-hidden border border-slate-200 bg-slate-50 shadow-2xs hover:shadow-md transition-shadow"
+                  >
+                    <img
+                      src={foto.signedUrl}
+                      alt={foto.descricao || "Foto do canteiro"}
+                      className="w-full h-36 object-cover transition-transform group-hover:scale-105 duration-200"
+                    />
+                    <div className="p-2 bg-white text-xs">
+                      <div className="font-semibold text-slate-800 truncate">
+                        {foto.descricao || "Registro de Obra"}
+                      </div>
+                      {foto.diario?.data && (
+                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3" />
+                          {new Date(foto.diario.data + "T00:00").toLocaleDateString("pt-BR")}
+                          {foto.diario.clima && ` • ${foto.diario.clima}`}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Dicas de Navegação no Rodapé */}
         <div className="absolute bottom-3 left-3 z-10 text-xs text-slate-400 bg-slate-950/70 backdrop-blur-sm px-3 py-1.5 rounded border border-slate-800 pointer-events-none">

@@ -338,6 +338,8 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
             ref={viewport3DRef}
             dados={dadosProjeto}
             onCapturarFotoParaCapa={handleCapturaFotoCapa}
+            obraId={obraId}
+            obraNome={obra?.nome}
           />
         )}
 
