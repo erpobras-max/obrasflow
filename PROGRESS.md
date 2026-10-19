@@ -187,12 +187,18 @@ O módulo também cria notificações para a equipe quando uma proposta é receb
 Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambiente de engenharia paramétrica e apresentação visual para obras particulares e clientes exigentes.
 
 ### Funcionalidades implementadas:
-1. **Modelagem 2D CAD Paramétrica (`/projeto3d/$id`)**:
-   - Desenho de paredes em tempo real com snap ao grid e travamento ortogonal (**Modo Ortho 90°** tipo F8 do AutoCAD).
+1. **Modelagem 2D CAD Paramétrica Completa (CADCraft no `/projeto3d/$id`)**:
+   - **Manipulação Direta de Portas e Janelas**:
+     - Arraste interativo com o mouse para deslizar portas e janelas ao longo da parede com snap suave.
+     - **HUD Flutuante no Canvas**: widget posicionado diretamente sobre o vão selecionado com botões `[Apagar Vão]`, `[Centralizar]`, `[<- -10cm]`, `[-> +10cm]` e `[Inverter Folha]`.
+     - **Exclusão Segura e Isolada**: apagar apenas a porta ou janela sem afetar a parede, tanto pelo HUD, pelo painel lateral, quanto pela ferramenta Borracha e pela tecla `Delete`/`Backspace`.
+     - Inversão do sentido de abertura da porta (`invertida`) com desenho do arco de 90° e folha.
+   - **Paredes Contínuas (Polyline)**: desenho de paredes em cadeia ininterrupta ponto-a-ponto, com fechamento automático de cômodo e geração da laje 3D ao tocar no início do polígono.
+   - **Snap Inteligente (OSNAP)**: detecção de extremidades (Endpoints) com marcador verde e pontos médios (Midpoints) com marcador ciano tipo AutoCAD.
+   - **Atalhos de Teclado Profissionais**: `Delete`/`Backspace` (apagar elemento selecionado), `Esc` (cancelar/encerrar cadeia), `Ctrl+Z` (desfazer), `Ctrl+Y` (refazer) e `F8`/`O` (modo ortogonal).
+   - **Ferramentas Complementares**: Régua de medição interativa (Medir Distância) e ferramenta de edição de nomes de cômodos e acabamentos de piso.
    - Ferramenta **`+ Novo Cômodo`**: gerador paramétrico em 1 clique (largura x comprimento com geração das 4 paredes e laje de piso 3D).
-   - Inserção de portas e janelas com posicionamento dinâmico ao longo das paredes.
    - Seletores rápidos de espessura de parede ativa (`10cm`, `15cm`, `20cm`) e larguras de portas (`0.60m` a `1.00m`) e janelas (`0.60m` a `2.00m`).
-   - Painel de edição de propriedades de paredes e aberturas já existentes na planta.
    - **Importador DXF**: leitura nativa de linhas e polilinhas do AutoCAD em ASCII.
    - **Exportador DXF**: geração de arquivo `.dxf` (AutoCAD R12) com camadas separadas (`PAREDES`, `ESQUADRIAS`) para download no PC.
 2. **Visualizador 3D Three.js**:
@@ -222,9 +228,9 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
 
 ## 19. Última entrega publicada
 
-- **Commit**: `41e13ea` — `feat(projeto3d): protecao contra perda de dados ao trocar de abas e seletores de espessura de parede e largura de portas/janelas`.
+- **Commit**: `feat(projeto3d): estudio 2D CADCraft completo com reposicionamento e exclusao de portas/janelas, HUD flutuante, OSNAP e polyline`
 - **Branch**: `main` (enviado com sucesso para `origin/main`).
-- **Validação de Build**: `npx bun run build` concluído com código 0 e tempo de 16.06s.
+- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 15.86s.
 - **Deploy**: Publicação automática em andamento via Cloudflare Worker `obrasflow`.
 
 ## 20. Pendências prioritárias após esta atualização

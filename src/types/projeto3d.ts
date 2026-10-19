@@ -14,6 +14,7 @@ export interface Abertura {
   altura: number; // em metros
   peitoril: number; // em metros (0 para portas)
   distanciaP1: number; // distância do ponto inicial da parede ao centro da abertura
+  invertida?: boolean; // inverter o arco/lado da folha da porta
 }
 
 export interface Parede {
