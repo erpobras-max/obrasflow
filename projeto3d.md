@@ -282,3 +282,16 @@ CREATE POLICY "obra_projetos_cad_portal_cliente_select" ON public.obra_projetos_
   - **Auto-Save / Backup Local (`localStorage`)**: rascunho salvo continuamente no navegador com restauração automática em caso de fechamento acidental.
   - **Aviso `beforeunload`**: alerta nativo se o usuário tentar sair da tela com alterações não salvas.
   - **Badge de Pendência**: indicador visual `● Alterações não salvas`.
+
+### 💰 Fase 5: Integração BIM 3D com Medições & Financeiro — [CONCLUÍDO]
+* [x] **Exportação Seletiva de Serviços / Reformas**:
+  - Engenheiro seleciona na aba **Quantitativos & BDI** exatamente quais serviços farão parte da medição (ex: só piso, só gesso ou só pintura).
+  - Suporte a reformas onde a planta está completa mas a intervenção é pontual.
+* [x] **Lançamento Direto em Medições**:
+  - Botão **"Gerar Medição / Financeiro"** no Projeto 3D cria automaticamente a medição com datas de início e fim.
+  - Valores unitários já incorporam a taxa de BDI calculada no projeto.
+* [x] **Importação Inversa no Módulo de Medições**:
+  - Botão **"Do Projeto 3D"** na tela de Medições (`/medicoes`) importa instantaneamente os quantitativos calculados no 3D para a planilha de medição da obra.
+* [x] **Conexão com o Financeiro**:
+  - Ao aprovar ou faturar a medição gerada a partir do 3D, a trigger do Supabase gera automaticamente os títulos em **Contas a Receber** e provisiona os pagamentos.
+
