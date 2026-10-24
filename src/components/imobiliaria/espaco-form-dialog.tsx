@@ -88,7 +88,7 @@ export function EspacoFormDialog({
     );
     setOutrasComodidades(
       target?.comodidades
-        .filter((item) => !COMODIDADES_PADRAO.includes(item as never))
+        .filter((item) => !COMODIDADES_PADRAO.some((option) => option === item))
         .join(", ") ?? "",
     );
     setExistingKeys(target?.fotos?.map((photo) => photo.object_key) ?? []);
