@@ -42,6 +42,7 @@ const TITLES: Record<string, string> = {
   "/imobiliaria/clientes": "Clientes da Imobiliária",
   "/imobiliaria/fiadores": "Fiadores",
   "/imobiliaria/imoveis": "Imóveis",
+  "/imobiliaria/espacos": "Salas e reservas",
   "/imobiliaria/locacoes": "Locações",
   "/compras": "Compras",
   "/fiscal": "Fiscal",
@@ -62,14 +63,14 @@ export function AppHeader() {
     queryKey: ["notifications-alerts"],
     queryFn: async () => {
       const today = new Date().toISOString().slice(0, 10);
-      
+
       // 1. Obras atrasadas
       const { data: obras, error: obrasError } = await (supabase as any)
         .from("obras")
         .select("id, numero, nome, status, data_fim_prevista")
         .not("status", "in", "(concluida,cancelada)");
       if (obrasError) throw obrasError;
-      
+
       const obrasAtrasadas = (obras ?? [])
         .filter((o: any) => o.data_fim_prevista && o.data_fim_prevista < today)
         .map((o: any) => ({
@@ -78,7 +79,7 @@ export function AppHeader() {
           title: `Obra atrasada: ${o.nome}`,
           description: `Prazo previsto de entrega vencido em ${new Date(o.data_fim_prevista).toLocaleDateString("pt-BR")}`,
           link: `/obras`,
-          severity: "high"
+          severity: "high",
         }));
 
       // 2. Contas a pagar atrasadas
@@ -95,7 +96,7 @@ export function AppHeader() {
           title: `Conta a pagar vencida`,
           description: `${c.descricao} - R$ ${(c.valor_total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (Vencimento: ${new Date(c.data_vencimento).toLocaleDateString("pt-BR")})`,
           link: `/financeiro`,
-          severity: "high"
+          severity: "high",
         }));
 
       // 3. Contas a receber atrasadas
@@ -112,7 +113,7 @@ export function AppHeader() {
           title: `Conta a receber vencida`,
           description: `${c.descricao} - R$ ${(c.valor_total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (Vencimento: ${new Date(c.data_vencimento).toLocaleDateString("pt-BR")})`,
           link: `/financeiro`,
-          severity: "medium"
+          severity: "medium",
         }));
 
       // 4. Estoque baixo
@@ -128,15 +129,10 @@ export function AppHeader() {
           title: "Estoque com saldo negativo",
           description: `Obra: ${item.obra_id} | Saldo: ${Number(item.saldo).toFixed(2)}`,
           link: `/estoque`,
-          severity: "medium"
+          severity: "medium",
         }));
 
-      return [
-        ...obrasAtrasadas,
-        ...pagarAtrasadas,
-        ...receberAtrasadas,
-        ...estoqueBaixo
-      ];
+      return [...obrasAtrasadas, ...pagarAtrasadas, ...receberAtrasadas, ...estoqueBaixo];
     },
     enabled: !!roles,
     refetchInterval: 60000,
@@ -157,7 +153,10 @@ export function AppHeader() {
               <Menu className="size-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="left" className="p-0 w-60 border-r-0 bg-sidebar text-sidebar-foreground">
+          <SheetContent
+            side="left"
+            className="p-0 w-60 border-r-0 bg-sidebar text-sidebar-foreground"
+          >
             <AppSidebar
               roles={roles}
               nome={perfil?.nome ?? user?.email ?? "Usuário"}
@@ -181,7 +180,12 @@ export function AppHeader() {
       <div className="flex items-center gap-2">
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Notificações" className="relative size-9">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Notificações"
+              className="relative size-9"
+            >
               <Bell className="size-5" />
               {alerts.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
@@ -209,7 +213,9 @@ export function AppHeader() {
                 <div className="flex flex-col items-center justify-center p-6 text-center text-xs text-muted-foreground">
                   <CheckCircle2 className="size-8 text-green-500 mb-2 opacity-80" />
                   <p className="font-medium text-foreground">Tudo em dia!</p>
-                  <p className="mt-1 text-muted-foreground">Sem faturas atrasadas, obras pendentes ou estoque crítico.</p>
+                  <p className="mt-1 text-muted-foreground">
+                    Sem faturas atrasadas, obras pendentes ou estoque crítico.
+                  </p>
                 </div>
               ) : (
                 <div className="divide-y divide-border">
@@ -236,7 +242,12 @@ export function AppHeader() {
                         to={alert.link}
                         className="flex gap-3 p-3 hover:bg-muted/50 transition-colors text-left"
                       >
-                        <div className={cn("size-8 rounded-full flex items-center justify-center shrink-0", iconColor)}>
+                        <div
+                          className={cn(
+                            "size-8 rounded-full flex items-center justify-center shrink-0",
+                            iconColor,
+                          )}
+                        >
                           <Icon className="size-4" />
                         </div>
                         <div className="space-y-1">
@@ -256,9 +267,17 @@ export function AppHeader() {
           </PopoverContent>
         </Popover>
         <Button asChild variant="ghost" size="icon" aria-label="Meu perfil" className="size-9">
-          <Link to="/perfil"><User className="size-5" /></Link>
+          <Link to="/perfil">
+            <User className="size-5" />
+          </Link>
         </Button>
-        <Button variant="ghost" size="icon" aria-label="Sair" onClick={handleLogout} className="size-9">
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Sair"
+          onClick={handleLogout}
+          className="size-9"
+        >
           <LogOut className="size-5" />
         </Button>
       </div>

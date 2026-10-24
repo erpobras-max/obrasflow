@@ -17,11 +17,17 @@ type PublicPropertyGalleryProps = {
   token: string;
   title: string;
   photos: PublicPhoto[];
+  resource?: "imovel" | "espaco";
 };
 
 type LoadedPhoto = PublicPhoto & { url: string | null; failed: boolean };
 
-export function PublicPropertyGallery({ token, title, photos }: PublicPropertyGalleryProps) {
+export function PublicPropertyGallery({
+  token,
+  title,
+  photos,
+  resource = "imovel",
+}: PublicPropertyGalleryProps) {
   const [loadedPhotos, setLoadedPhotos] = useState<LoadedPhoto[]>(
     photos.map((photo) => ({ ...photo, url: null, failed: false })),
   );
@@ -35,41 +41,45 @@ export function PublicPropertyGallery({ token, title, photos }: PublicPropertyGa
     const objectUrls: string[] = [];
     setLoadedPhotos(photos.map((photo) => ({ ...photo, url: null, failed: false })));
 
-    void import("@/lib/r2.functions").then(async ({ readPublicPropertyImageServerFn }) => {
-      await Promise.all(
-        photos.map(async (photo, index) => {
-          try {
-            const result = await readPublicPropertyImageServerFn({
-              data: { token, key: photo.object_key },
-            });
-            const binary = atob(result.bodyBase64);
-            const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
-            const url = URL.createObjectURL(new Blob([bytes], { type: result.contentType }));
-            if (!active) {
-              URL.revokeObjectURL(url);
-              return;
+    void import("@/lib/r2.functions").then(
+      async ({ readPublicPropertyImageServerFn, readPublicSpaceImageServerFn }) => {
+        const readImage =
+          resource === "espaco" ? readPublicSpaceImageServerFn : readPublicPropertyImageServerFn;
+        await Promise.all(
+          photos.map(async (photo, index) => {
+            try {
+              const result = await readImage({
+                data: { token, key: photo.object_key },
+              });
+              const binary = atob(result.bodyBase64);
+              const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+              const url = URL.createObjectURL(new Blob([bytes], { type: result.contentType }));
+              if (!active) {
+                URL.revokeObjectURL(url);
+                return;
+              }
+              objectUrls.push(url);
+              setLoadedPhotos((current) =>
+                current.map((item, itemIndex) => (itemIndex === index ? { ...item, url } : item)),
+              );
+            } catch {
+              if (!active) return;
+              setLoadedPhotos((current) =>
+                current.map((item, itemIndex) =>
+                  itemIndex === index ? { ...item, failed: true } : item,
+                ),
+              );
             }
-            objectUrls.push(url);
-            setLoadedPhotos((current) =>
-              current.map((item, itemIndex) => (itemIndex === index ? { ...item, url } : item)),
-            );
-          } catch {
-            if (!active) return;
-            setLoadedPhotos((current) =>
-              current.map((item, itemIndex) =>
-                itemIndex === index ? { ...item, failed: true } : item,
-              ),
-            );
-          }
-        }),
-      );
-    });
+          }),
+        );
+      },
+    );
 
     return () => {
       active = false;
       objectUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [photos, token]);
+  }, [photos, resource, token]);
 
   const updateSelection = useCallback((carouselApi: CarouselApi) => {
     if (carouselApi) setSelectedIndex(carouselApi.selectedScrollSnap());
