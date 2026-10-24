@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { combinarComodidades, type Espaco } from "@/lib/espacos";
+import { combinarComodidades, separarComodidades, type Espaco } from "@/lib/espacos";
 import { buscarCep } from "@/lib/cep";
 import { validateFileSize, validateFileType } from "@/lib/r2";
 import { formatCep, onlyDigits } from "@/lib/validacao-documento";
@@ -67,6 +67,7 @@ export function EspacoFormDialog({
 
   useEffect(() => {
     if (!open) return;
+    const comodidades = separarComodidades(target?.comodidades ?? [], COMODIDADES_PADRAO);
     setForm(
       target
         ? {
@@ -80,17 +81,13 @@ export function EspacoFormDialog({
             duracao_minima_minutos: target.duracao_minima_minutos,
             horario_abertura: target.horario_abertura.slice(0, 5),
             horario_fechamento: target.horario_fechamento.slice(0, 5),
-            comodidades: target.comodidades,
+            comodidades: comodidades.selecionadas,
             regras: target.regras ?? "",
             status: target.status,
           }
         : emptyForm,
     );
-    setOutrasComodidades(
-      target?.comodidades
-        .filter((item) => !COMODIDADES_PADRAO.some((option) => option === item))
-        .join(", ") ?? "",
-    );
+    setOutrasComodidades(comodidades.outras);
     setExistingKeys(target?.fotos?.map((photo) => photo.object_key) ?? []);
     setRemovedKeys([]);
     setFiles([]);
