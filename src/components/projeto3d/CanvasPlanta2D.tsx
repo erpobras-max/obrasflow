@@ -499,6 +499,19 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [dados, elementoSelecionadoId, onChangeDados, registrarHistorico]
   );
 
+  const handleApagarAmbiente = useCallback(
+    (ambienteId: string) => {
+      registrarHistorico();
+      onChangeDados({
+        ...dados,
+        ambientes: dados.ambientes.filter((ambiente) => ambiente.id !== ambienteId),
+      });
+      if (elementoSelecionadoId === ambienteId) setElementoSelecionadoId(null);
+      toast.success("Cômodo removido definitivamente!");
+    },
+    [dados, elementoSelecionadoId, onChangeDados, registrarHistorico]
+  );
+
   // -------------------------------------------------------------
   // ATALHOS DE TECLADO CAD
   // -------------------------------------------------------------
@@ -523,6 +536,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           const par = dados.paredes.find((p) => p.id === elementoSelecionadoId);
           if (par) {
             handleApagarParede(par.id);
+            return;
+          }
+          const amb = dados.ambientes.find((a) => a.id === elementoSelecionadoId);
+          if (amb) {
+            handleApagarAmbiente(amb.id);
             return;
           }
         }
@@ -569,6 +587,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     handleApagarAbertura,
     handleApagarMovel,
     handleApagarParede,
+    handleApagarAmbiente,
     handleDesfazer,
     handleRefazer,
   ]);
@@ -617,7 +636,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     // 2. Ambientes (Pisos com cores estilizadas)
     dados.ambientes.forEach((amb) => {
       if (amb.pontos.length >= 3) {
-        const isHover = elementoHover?.id === amb.id && ferramenta === "texto";
+        const isHover = elementoHover?.id === amb.id && (ferramenta === "texto" || ferramenta === "apagar");
+        const isSelected = elementoSelecionadoId === amb.id;
         const acabamento = (amb.pisoAcabamento || "").toLowerCase();
 
         let corFundo = "rgba(241, 245, 249, 0.6)";
@@ -631,7 +651,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           corFundo = "rgba(220, 252, 231, 0.7)"; // Verde grama suave
         }
 
-        ctx.fillStyle = isHover ? "rgba(224, 231, 255, 0.85)" : corFundo;
+        ctx.fillStyle = isHover
+          ? ferramenta === "apagar"
+            ? "rgba(254, 202, 202, 0.85)"
+            : "rgba(224, 231, 255, 0.85)"
+          : isSelected
+          ? "rgba(254, 240, 138, 0.65)"
+          : corFundo;
         ctx.beginPath();
         const first = worldToScreen(amb.pontos[0].x, amb.pontos[0].y);
         ctx.moveTo(first.x, first.y);
@@ -1066,7 +1092,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         if (parHover && parHover.distanciaPontoReta < 0.35) {
           setElementoHover({ id: parHover.parede.id, tipo: "parede" });
         } else {
-          setElementoHover(null);
+          const ambHover = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+          setElementoHover(ambHover ? { id: ambHover.id, tipo: "ambiente" } : null);
         }
       }
     }
@@ -1248,6 +1275,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         return;
       }
 
+      const ambienteAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+      if (ambienteAlvo) {
+        setElementoSelecionadoId(ambienteAlvo.id);
+        return;
+      }
+
       setElementoSelecionadoId(null);
       return;
     }
@@ -1269,6 +1302,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       const paredeAlvo = encontrarParedeMaisProxima(worldPos);
       if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.35) {
         handleApagarParede(paredeAlvo.parede.id);
+        return;
+      }
+
+      const ambienteAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+      if (ambienteAlvo) {
+        handleApagarAmbiente(ambienteAlvo.id);
         return;
       }
       return;
@@ -2411,4 +2450,5 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
+
 
