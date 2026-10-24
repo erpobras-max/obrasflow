@@ -154,8 +154,17 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     };
 
     const resetarCamera = () => {
-      sphericalRef.current = { radius: 18, theta: Math.PI / 4, phi: Math.PI / 3.2 };
-      targetRef.current.set(3, 1.4, 2);
+      const limites = calcularLimites(dados.paredes);
+      const largura = limites.maxX - limites.minX;
+      const profundidade = limites.maxZ - limites.minZ;
+      const raio = Math.max(6, Math.min(500, Math.hypot(largura, profundidade) * 1.35));
+
+      sphericalRef.current = { radius: raio, theta: Math.PI / 4, phi: Math.PI / 3.2 };
+      targetRef.current.set(
+        (limites.minX + limites.maxX) / 2,
+        dados.config.peDireito / 2,
+        (limites.minZ + limites.maxZ) / 2
+      );
       atualizarPosicaoCamera();
     };
 
@@ -830,8 +839,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
 
     const handleWheel = (e: React.WheelEvent) => {
       sphericalRef.current.radius = Math.max(
-        3,
-        Math.min(50, sphericalRef.current.radius + e.deltaY * 0.02)
+        1,
+        Math.min(500, sphericalRef.current.radius + e.deltaY * 0.02)
       );
       atualizarPosicaoCamera();
     };
@@ -1082,3 +1091,4 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     );
   }
 );
+
