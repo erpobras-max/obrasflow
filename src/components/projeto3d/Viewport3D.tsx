@@ -273,19 +273,36 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
 
       // Resize observer
       const handleResize = () => {
-        if (!container || !renderer || !camera) return;
         const w = container.clientWidth;
         const h = container.clientHeight;
+        if (w === 0 || h === 0) return;
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
         renderer.setSize(w, h);
       };
-      window.addEventListener("resize", handleResize);
+      const resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(container);
 
       return () => {
         cancelAnimationFrame(animationFrameId);
-        window.removeEventListener("resize", handleResize);
+        resizeObserver.disconnect();
+        scene.traverse((objeto) => {
+          if (!(objeto instanceof THREE.Mesh)) return;
+          objeto.geometry.dispose();
+          const materiais = Array.isArray(objeto.material) ? objeto.material : [objeto.material];
+          materiais.forEach((material) => material.dispose());
+        });
+        groupParedesRef.current.clear();
+        groupPisoRef.current.clear();
+        groupEsquadriasRef.current.clear();
+        groupTelhadoRef.current.clear();
+        groupMoveisRef.current.clear();
         renderer.dispose();
+        renderer.forceContextLoss();
+        container.replaceChildren();
+        rendererRef.current = null;
+        sceneRef.current = null;
+        cameraRef.current = null;
       };
     }, []);
 
@@ -1091,4 +1108,5 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     );
   }
 );
+
 
