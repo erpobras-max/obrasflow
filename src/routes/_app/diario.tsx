@@ -8,7 +8,8 @@ import { Plus, Pencil, Trash2, ClipboardList, Image as ImageIcon, Upload, X, Use
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
-import { uploadR2, getR2Url, deleteR2 } from "@/lib/r2";
+import { deleteR2, getDiarioMediaUrl, uploadDiarioMedia } from "@/lib/r2";
+import { getDiarioMediaError } from "@/lib/diario-media";
 import {
   diarioSchema, type DiarioFormValues, CLIMAS, CLIMA_LABEL,
 } from "@/lib/diario.schema";
@@ -576,11 +577,13 @@ function FotosDialog({
 
   useEffect(() => {
     if (!fotos || fotos.length === 0) { setSignedUrls({}); return; }
-    const map: Record<string, string> = {};
-    for (const f of fotos) {
-      map[f.id] = getR2Url(f.url);
-    }
-    setSignedUrls(map);
+    let active = true;
+    void Promise.all(
+      fotos.map(async (foto) => [foto.id, await getDiarioMediaUrl(foto.url)] as const),
+    )
+      .then((entries) => active && setSignedUrls(Object.fromEntries(entries)))
+      .catch((error) => toast.error((error as Error).message));
+    return () => { active = false; };
   }, [fotos]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -588,11 +591,16 @@ function FotosDialog({
     setUploading(true);
     try {
       for (const file of Array.from(e.target.files)) {
-        const path = await uploadR2(file, "diario/fotos");
+        const validationError = getDiarioMediaError(file);
+        if (validationError) throw new Error(validationError);
+        const path = await uploadDiarioMedia(file);
         const { error: insErr } = await supabase.from("diarios_obra_fotos").insert({
           diario_id: target.id, url: path, descricao: file.name,
         });
-        if (insErr) throw insErr;
+        if (insErr) {
+          await deleteR2(path).catch(() => undefined);
+          throw insErr;
+        }
       }
       toast.success("Mídias enviadas com sucesso!");
       qc.invalidateQueries({ queryKey: ["diario-fotos", target.id] });
@@ -642,7 +650,7 @@ function FotosDialog({
                 onChange={handleUpload} disabled={uploading} />
             </label>
             <p className="text-[10px] text-muted-foreground mt-1.5 ml-1">
-              Formatos aceitos: Imagens (PNG, JPG, WEBP) e Vídeos (MP4, WebM, MOV). Máx 10MB por arquivo.
+              Imagens de até 20 MB (PNG, JPG, WebP) e vídeos de até 150 MB (MP4, WebM, MOV).
             </p>
           </div>
         )}
@@ -662,8 +670,8 @@ function FotosDialog({
                     <video 
                       src={signedUrls[f.id]} 
                       className="w-full h-full object-cover" 
-                      controls={false}
-                      muted
+                      controls
+                      preload="metadata"
                       playsInline
                     />
                   ) : (
@@ -671,17 +679,6 @@ function FotosDialog({
                   )
                 ) : (
                   <Skeleton className="w-full h-full" />
-                )}
-                
-                {/* Video Indicator overlay */}
-                {video && signedUrls[f.id] && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <div className="p-2 bg-black/60 text-white rounded-full">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                        <path fillRule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
                 )}
                 
                 {podeEditar && (
