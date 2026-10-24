@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { AmenityIcon, COMODIDADES_PADRAO } from "@/components/imobiliaria/amenity-icon";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -20,8 +22,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import type { Espaco } from "@/lib/espacos";
+import { combinarComodidades, type Espaco } from "@/lib/espacos";
+import { buscarCep } from "@/lib/cep";
 import { validateFileSize, validateFileType } from "@/lib/r2";
+import { formatCep, onlyDigits } from "@/lib/validacao-documento";
 
 export type EspacoFormValue = Omit<Espaco, "id" | "token_publico" | "fotos">;
 
@@ -29,6 +33,7 @@ const emptyForm: EspacoFormValue = {
   codigo: "",
   nome: "",
   descricao: "",
+  cep: "",
   endereco: "",
   capacidade: 1,
   valor_hora: 0,
@@ -57,7 +62,8 @@ export function EspacoFormDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [existingKeys, setExistingKeys] = useState<string[]>([]);
   const [removedKeys, setRemovedKeys] = useState<string[]>([]);
-  const [comodidades, setComodidades] = useState("");
+  const [outrasComodidades, setOutrasComodidades] = useState("");
+  const [buscandoCep, setBuscandoCep] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -67,6 +73,7 @@ export function EspacoFormDialog({
             codigo: target.codigo,
             nome: target.nome,
             descricao: target.descricao ?? "",
+            cep: target.cep ?? "",
             endereco: target.endereco ?? "",
             capacidade: target.capacidade,
             valor_hora: target.valor_hora,
@@ -79,7 +86,11 @@ export function EspacoFormDialog({
           }
         : emptyForm,
     );
-    setComodidades(target?.comodidades.join(", ") ?? "");
+    setOutrasComodidades(
+      target?.comodidades
+        .filter((item) => !COMODIDADES_PADRAO.includes(item as never))
+        .join(", ") ?? "",
+    );
     setExistingKeys(target?.fotos?.map((photo) => photo.object_key) ?? []);
     setRemovedKeys([]);
     setFiles([]);
@@ -87,6 +98,31 @@ export function EspacoFormDialog({
 
   const update = <K extends keyof EspacoFormValue>(key: K, value: EspacoFormValue[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
+
+  const buscarEndereco = async () => {
+    if (onlyDigits(form.cep ?? "").length !== 8) return;
+    setBuscandoCep(true);
+    const endereco = await buscarCep(form.cep ?? "");
+    setBuscandoCep(false);
+    if (!endereco) {
+      toast.error("CEP não encontrado.");
+      return;
+    }
+    update(
+      "endereco",
+      [endereco.logradouro, endereco.bairro, `${endereco.cidade}/${endereco.uf}`]
+        .filter(Boolean)
+        .join(", "),
+    );
+  };
+
+  const toggleComodidade = (item: string, checked: boolean) =>
+    update(
+      "comodidades",
+      checked
+        ? [...new Set([...form.comodidades, item])]
+        : form.comodidades.filter((value) => value !== item),
+    );
 
   const addFiles = (selected: FileList | null) => {
     const next = Array.from(selected ?? []);
@@ -103,10 +139,6 @@ export function EspacoFormDialog({
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    const amenities = comodidades
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
     if (!form.codigo.trim() || !form.nome.trim() || form.valor_hora <= 0 || form.capacidade <= 0) {
       toast.error("Preencha código, nome, capacidade e valor por hora.");
       return;
@@ -116,7 +148,13 @@ export function EspacoFormDialog({
       return;
     }
     onSave(
-      { ...form, codigo: form.codigo.trim(), nome: form.nome.trim(), comodidades: amenities },
+      {
+        ...form,
+        codigo: form.codigo.trim(),
+        nome: form.nome.trim(),
+        cep: onlyDigits(form.cep ?? "") || null,
+        comodidades: combinarComodidades(form.comodidades, outrasComodidades),
+      },
       files,
       removedKeys,
     );
@@ -205,14 +243,36 @@ export function EspacoFormDialog({
               />
             </Field>
           </div>
-          <Field label="Endereço">
-            <Input
-              value={form.endereco ?? ""}
-              maxLength={500}
-              onChange={(e) => update("endereco", e.target.value)}
-              placeholder="Endereço exibido ao cliente"
-            />
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+            <Field label="CEP">
+              <div className="relative">
+                <Input
+                  value={formatCep(form.cep ?? "")}
+                  inputMode="numeric"
+                  maxLength={9}
+                  onChange={(e) => update("cep", onlyDigits(e.target.value).slice(0, 8))}
+                  onBlur={() => void buscarEndereco()}
+                  placeholder="00000-000"
+                />
+                {buscandoCep ? (
+                  <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                ) : (
+                  <Search className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                )}
+              </div>
+            </Field>
+            <Field label="Endereço">
+              <Input
+                value={form.endereco ?? ""}
+                maxLength={500}
+                onChange={(e) => update("endereco", e.target.value)}
+                placeholder="Rua, número, bairro, cidade/UF"
+              />
+            </Field>
+          </div>
+          <p className="-mt-3 text-xs text-muted-foreground">
+            O CEP preenche o endereço; complete o número e o complemento.
+          </p>
           <Field label="Descrição">
             <Textarea
               value={form.descricao ?? ""}
@@ -222,13 +282,30 @@ export function EspacoFormDialog({
               placeholder="Apresente o ambiente e os usos recomendados."
             />
           </Field>
-          <Field label="Comodidades separadas por vírgula">
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium">Comodidades</legend>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {COMODIDADES_PADRAO.map((item) => (
+                <label
+                  key={item}
+                  className="flex min-h-10 cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-muted"
+                >
+                  <Checkbox
+                    checked={form.comodidades.includes(item)}
+                    onCheckedChange={(checked) => toggleComodidade(item, checked === true)}
+                  />
+                  <AmenityIcon name={item} className="size-4 text-muted-foreground" />
+                  {item}
+                </label>
+              ))}
+            </div>
             <Input
-              value={comodidades}
-              onChange={(e) => setComodidades(e.target.value)}
-              placeholder="Wi-Fi, TV, ar-condicionado"
+              value={outrasComodidades}
+              onChange={(e) => setOutrasComodidades(e.target.value)}
+              placeholder="Outras comodidades, separadas por vírgula"
+              aria-label="Outras comodidades"
             />
-          </Field>
+          </fieldset>
           <Field label="Regras de uso">
             <Textarea
               value={form.regras ?? ""}

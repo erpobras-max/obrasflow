@@ -109,6 +109,7 @@ function EspacosPage() {
         const payload = {
           ...value,
           descricao: value.descricao || null,
+          cep: value.cep || null,
           endereco: value.endereco || null,
           regras: value.regras || null,
         };

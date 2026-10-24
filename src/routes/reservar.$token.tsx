@@ -6,13 +6,14 @@ import {
   CheckCircle2,
   Clock3,
   DoorOpen,
+  ExternalLink,
   Loader2,
   MapPin,
   ShieldCheck,
   Users,
-  Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AmenityIcon } from "@/components/imobiliaria/amenity-icon";
 import { PublicPropertyGallery } from "@/components/imobiliaria/public-property-gallery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { calcularValorReserva, type Espaco } from "@/lib/espacos";
-import { formatCpfCnpj, formatTelefone, onlyDigits, validarCPF } from "@/lib/validacao-documento";
+import {
+  formatCep,
+  formatCpfCnpj,
+  formatTelefone,
+  onlyDigits,
+  validarCPF,
+} from "@/lib/validacao-documento";
 
 export const Route = createFileRoute("/reservar/$token")({ component: ReservarEspacoPage });
 
@@ -131,6 +138,11 @@ function ReservarEspacoPage() {
       ? calcularValorReserva(Number(space.valor_hora), brasiliaDate(inicio), brasiliaDate(fim))
       : 0;
   const resetAvailability = () => setAvailable(false);
+  const mapsQuery = encodeURIComponent(
+    [space.endereco, space.cep ? `CEP ${formatCep(space.cep)}` : "", "Brasil"]
+      .filter(Boolean)
+      .join(", "),
+  );
 
   return (
     <main className="min-h-screen bg-stone-50 text-stone-950">
@@ -195,9 +207,40 @@ function ReservarEspacoPage() {
                 <CardContent className="flex flex-wrap gap-2">
                   {space.comodidades.map((item) => (
                     <Badge key={item} variant="secondary" className="gap-1.5 px-3 py-1.5">
-                      <Wifi className="size-3.5" /> {item}
+                      <AmenityIcon name={item} className="size-3.5" /> {item}
                     </Badge>
                   ))}
+                </CardContent>
+              </Card>
+            )}
+            {space.endereco && (
+              <Card className="overflow-hidden">
+                <CardHeader className="flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Localização</CardTitle>
+                    <p className="mt-2 text-sm leading-6 text-stone-600">
+                      {space.endereco}
+                      {space.cep ? ` · CEP ${formatCep(space.cep)}` : ""}
+                    </p>
+                  </div>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex shrink-0 items-center gap-2 text-sm font-semibold text-emerald-700 hover:underline"
+                  >
+                    Abrir mapa <ExternalLink className="size-4" />
+                  </a>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <iframe
+                    title={`Mapa de ${space.nome}`}
+                    src={`https://www.google.com/maps?q=${mapsQuery}&z=17&output=embed`}
+                    className="h-80 w-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    allowFullScreen
+                  />
                 </CardContent>
               </Card>
             )}

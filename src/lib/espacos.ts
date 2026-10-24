@@ -6,6 +6,7 @@ export type Espaco = {
   codigo: string;
   nome: string;
   descricao: string | null;
+  cep: string | null;
   endereco: string | null;
   capacidade: number;
   valor_hora: number;
@@ -49,6 +50,18 @@ export const statusReservaLabel: Record<ReservaEspaco["status"], string> = {
   expirada: "Expirada",
   finalizada: "Finalizada",
 };
+
+export function combinarComodidades(selecionadas: string[], outras: string) {
+  return [
+    ...new Set([
+      ...selecionadas,
+      ...outras
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ]),
+  ].slice(0, 20);
+}
 
 export function calcularValorReserva(valorHora: number, inicio: Date, fim: Date) {
   const duracao = fim.getTime() - inicio.getTime();
