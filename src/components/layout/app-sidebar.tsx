@@ -1,9 +1,27 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  LayoutDashboard, HardHat, FileText, ClipboardList,
-  ShoppingCart, Package, DollarSign, Receipt, Folder,
-  Wrench, BarChart3, Users, Building2, Ruler, UserCheck, Search, Hammer,
-  Calculator, Upload, CalendarDays, Handshake, FileSearch,
+  LayoutDashboard,
+  HardHat,
+  FileText,
+  ClipboardList,
+  ShoppingCart,
+  Package,
+  DollarSign,
+  Receipt,
+  Folder,
+  Wrench,
+  BarChart3,
+  Users,
+  Building2,
+  Ruler,
+  UserCheck,
+  Search,
+  Hammer,
+  Calculator,
+  Upload,
+  CalendarDays,
+  Handshake,
+  FileSearch,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -25,9 +43,7 @@ interface SidebarGroup {
 
 const NAVIGATION_GROUPS: SidebarGroup[] = [
   {
-    items: [
-      { key: "dashboard", label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" },
-    ],
+    items: [{ key: "dashboard", label: "Dashboard", icon: LayoutDashboard, to: "/dashboard" }],
   },
   {
     title: "Comercial",
@@ -55,7 +71,12 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
     items: [
       { key: "compras", label: "Compras", icon: ShoppingCart, to: "/compras" },
       { key: "compras", label: "Cotações", icon: FileSearch, to: "/cotacoes" },
-      { key: "compras", label: "Pedidos de compra", icon: ShoppingCart, to: "/compras?tab=pedidos" },
+      {
+        key: "compras",
+        label: "Pedidos de compra",
+        icon: ShoppingCart,
+        to: "/compras?tab=pedidos",
+      },
       { key: "prestadores", label: "Prestadores de serviços", icon: Hammer, to: "/prestadores" },
       { key: "estoque", label: "Estoque", icon: Package, to: "/estoque" },
       { key: "equipamentos", label: "Equipamentos", icon: Wrench, to: "/equipamentos" },
@@ -70,9 +91,7 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
   },
   {
     title: "Relatórios",
-    items: [
-      { key: "relatorios", label: "Relatórios", icon: BarChart3, to: "/relatorios" },
-    ],
+    items: [{ key: "relatorios", label: "Relatórios", icon: BarChart3, to: "/relatorios" }],
   },
   {
     title: "Gestão",
@@ -86,13 +105,34 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
   {
     title: "Imobiliária",
     items: [
-      { key: "imobiliaria", label: "Dashboard (Imob.)", icon: LayoutDashboard, to: "/imobiliaria/dashboard" },
+      {
+        key: "imobiliaria",
+        label: "Dashboard (Imob.)",
+        icon: LayoutDashboard,
+        to: "/imobiliaria/dashboard",
+      },
       { key: "imobiliaria", label: "Clientes (Imob.)", icon: Users, to: "/imobiliaria/clientes" },
       { key: "imobiliaria", label: "Fiadores", icon: UserCheck, to: "/imobiliaria/fiadores" },
       { key: "imobiliaria", label: "Imóveis", icon: Building2, to: "/imobiliaria/imoveis" },
+      {
+        key: "imobiliaria",
+        label: "Salas e reservas",
+        icon: CalendarDays,
+        to: "/imobiliaria/espacos",
+      },
       { key: "imobiliaria", label: "Locações", icon: ClipboardList, to: "/imobiliaria/locacoes" },
-      { key: "imobiliaria", label: "Vendas de imóveis", icon: Handshake, to: "/imobiliaria/vendas" },
-      { key: "financeiro_imobiliaria", label: "Financeiro Imobiliário", icon: DollarSign, to: "/imobiliaria/financeiro" },
+      {
+        key: "imobiliaria",
+        label: "Vendas de imóveis",
+        icon: Handshake,
+        to: "/imobiliaria/vendas",
+      },
+      {
+        key: "financeiro_imobiliaria",
+        label: "Financeiro Imobiliário",
+        icon: DollarSign,
+        to: "/imobiliaria/financeiro",
+      },
     ],
   },
 ];
@@ -113,16 +153,21 @@ export function AppSidebar({
   const path = useRouterState({ select: (s) => s.location.pathname });
 
   // Filter groups and items inside them based on user role access
-  const filteredGroups = NAVIGATION_GROUPS.map(group => {
-    const allowedItems = group.items.filter(item => canAccessAny(roles, item.key));
+  const filteredGroups = NAVIGATION_GROUPS.map((group) => {
+    const allowedItems = group.items.filter((item) => canAccessAny(roles, item.key));
     return {
       ...group,
-      items: allowedItems
+      items: allowedItems,
     };
-  }).filter(group => group.items.length > 0);
+  }).filter((group) => group.items.length > 0);
 
   return (
-    <aside className={cn("w-60 shrink-0 bg-sidebar text-sidebar-foreground flex flex-col h-screen sticky top-0", className)}>
+    <aside
+      className={cn(
+        "w-60 shrink-0 bg-sidebar text-sidebar-foreground flex flex-col h-screen sticky top-0",
+        className,
+      )}
+    >
       <div className="h-16 flex items-center gap-3 px-5 border-b border-sidebar-border">
         <div className="size-9 rounded-lg bg-accent flex items-center justify-center">
           <Building2 className="size-5 text-accent-foreground" />
@@ -143,9 +188,10 @@ export function AppSidebar({
             )}
             <ul className="space-y-0.5">
               {group.items.map((item) => {
-                const active = item.to === "/dashboard"
-                  ? path === "/dashboard"
-                  : path === item.to || path.startsWith(item.to + "/");
+                const active =
+                  item.to === "/dashboard"
+                    ? path === "/dashboard"
+                    : path === item.to || path.startsWith(item.to + "/");
                 return (
                   <li key={item.to}>
                     <Link
@@ -177,7 +223,9 @@ export function AppSidebar({
         </Avatar>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium truncate">{nome}</div>
-          <div className="text-xs text-sidebar-foreground/60 truncate capitalize">{roles?.[0] ?? "—"}</div>
+          <div className="text-xs text-sidebar-foreground/60 truncate capitalize">
+            {roles?.[0] ?? "—"}
+          </div>
         </div>
       </div>
     </aside>

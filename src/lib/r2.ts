@@ -77,6 +77,7 @@ export type R2Folder =
   | "financeiro/notas"
   | "diario/fotos"
   | "imobiliaria/imoveis"
+  | "imobiliaria/espacos"
   | "imobiliaria/vistorias"
   | "outros";
 
@@ -125,7 +126,7 @@ function fileToBase64(file: File): Promise<string> {
 export async function uploadR2(
   file: File,
   folder: R2Folder | string,
-  customKey?: string
+  customKey?: string,
 ): Promise<string> {
   if (customKey) throw new Error("Caminho personalizado não é permitido.");
   if (!validateFileSize(file) || !validateFileType(file)) {
@@ -174,7 +175,10 @@ export async function deleteManyR2(keys: string[]): Promise<void> {
 // ─────────────────────────────────────────────
 export const ALLOWED_TYPES: Record<string, string[]> = {
   documentos: [
-    "application/pdf", "image/jpeg", "image/png", "image/webp",
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ],
@@ -184,7 +188,7 @@ export const ALLOWED_TYPES: Record<string, string[]> = {
 
 export function validateFileType(
   file: File,
-  category: keyof typeof ALLOWED_TYPES = "documentos"
+  category: keyof typeof ALLOWED_TYPES = "documentos",
 ): boolean {
   return ALLOWED_TYPES[category]?.includes(file.type) ?? false;
 }

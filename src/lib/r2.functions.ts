@@ -1,28 +1,55 @@
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware.custom";
 import { SUPABASE_ANON_KEY, SUPABASE_PROJECT_URL } from "@/integrations/supabase/client.custom";
 
 const folders = [
-  "rh/atestados", "rh/documentos", "documentos/obras", "documentos/contratos",
-  "fiscal/xmls", "fiscal/pdfs", "financeiro/comprovantes", "financeiro/notas",
-  "diario/fotos", "imobiliaria/imoveis", "imobiliaria/vistorias", "outros",
+  "rh/atestados",
+  "rh/documentos",
+  "documentos/obras",
+  "documentos/contratos",
+  "fiscal/xmls",
+  "fiscal/pdfs",
+  "financeiro/comprovantes",
+  "financeiro/notas",
+  "diario/fotos",
+  "imobiliaria/imoveis",
+  "imobiliaria/espacos",
+  "imobiliaria/vistorias",
+  "outros",
 ] as const;
 const allowedMimeTypes = [
-  "application/pdf", "image/jpeg", "image/png", "image/webp",
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/xml", "text/xml", "text/plain",
+  "application/xml",
+  "text/xml",
+  "text/plain",
 ] as const;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const MAX_BASE64_LENGTH = Math.ceil(MAX_FILE_BYTES * 4 / 3) + 8;
+const MAX_BASE64_LENGTH = Math.ceil((MAX_FILE_BYTES * 4) / 3) + 8;
 const writableRoles = [
-  "admin", "diretor", "financeiro", "financeiro_civil", "financeiro_imobiliaria",
-  "imobiliaria", "compras", "engenharia", "almoxarifado", "rh",
+  "admin",
+  "diretor",
+  "financeiro",
+  "financeiro_civil",
+  "financeiro_imobiliaria",
+  "imobiliaria",
+  "compras",
+  "engenharia",
+  "almoxarifado",
+  "rh",
 ];
 
-async function requireActiveProfile(context: any) {
+type AuthContext = { supabase: SupabaseClient; userId: string };
+type PublicImagePayload = { fotos?: Array<{ object_key?: string }> };
+
+async function requireActiveProfile(context: AuthContext) {
   const { data: profile } = await context.supabase
     .from("perfis_usuarios")
     .select("ativo")
@@ -34,7 +61,7 @@ async function requireActiveProfile(context: any) {
   }
 }
 
-async function requireR2WriteAccess(context: any) {
+async function requireR2WriteAccess(context: AuthContext) {
   const { data: profile } = await context.supabase
     .from("perfis_usuarios")
     .select("perfil,ativo")
@@ -45,10 +72,9 @@ async function requireR2WriteAccess(context: any) {
     .from("user_roles")
     .select("role")
     .eq("user_id", context.userId);
-  const roles = new Set<string>([
-    profile?.perfil,
-    ...(roleRows ?? []).map((row: { role: string }) => row.role),
-  ].filter(Boolean));
+  const roles = new Set<string>(
+    [profile?.perfil, ...(roleRows ?? []).map((row: { role: string }) => row.role)].filter(Boolean),
+  );
 
   if (!profile?.ativo || !writableRoles.some((role) => roles.has(role))) {
     throw new Error("Você não tem permissão para alterar arquivos.");
@@ -57,11 +83,15 @@ async function requireR2WriteAccess(context: any) {
 
 function extensionFor(contentType: string) {
   const extensions: Record<string, string> = {
-    "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png",
+    "application/pdf": "pdf",
+    "image/jpeg": "jpg",
+    "image/png": "png",
     "image/webp": "webp",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-    "application/xml": "xml", "text/xml": "xml", "text/plain": "txt",
+    "application/xml": "xml",
+    "text/xml": "xml",
+    "text/plain": "txt",
   };
   return extensions[contentType];
 }
@@ -90,10 +120,12 @@ export const uploadR2ServerFn = createServerFn({ method: "POST" })
     return { key: await uploadToR2Server(key, bytes, data.contentType, data.fileName) };
   });
 
-const keySchema = z.string().regex(
-  /^(rh\/(atestados|documentos)|documentos\/(obras|contratos)|fiscal\/(xmls|pdfs)|financeiro\/(comprovantes|notas)|diario\/fotos|imobiliaria\/(imoveis|vistorias)|outros)\/[a-f0-9-]+\.[a-z0-9]+$/,
-  "Caminho de arquivo inválido.",
-);
+const keySchema = z
+  .string()
+  .regex(
+    /^(rh\/(atestados|documentos)|documentos\/(obras|contratos)|fiscal\/(xmls|pdfs)|financeiro\/(comprovantes|notas)|diario\/fotos|imobiliaria\/(imoveis|espacos|vistorias)|outros)\/[a-f0-9-]+\.[a-z0-9]+$/,
+    "Caminho de arquivo inválido.",
+  );
 
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
@@ -126,11 +158,36 @@ export const readPublicPropertyImageServerFn = createServerFn({ method: "POST" }
     const publicClient = createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
-    const { data: property, error } = await publicClient.rpc("obter_imovel_publico", { _token: data.token });
+    const { data: property, error } = await publicClient.rpc("obter_imovel_publico", {
+      _token: data.token,
+    });
     if (error || !property) throw new Error("Link público inválido.");
-    const photos = Array.isArray((property as any).fotos) ? (property as any).fotos : [];
+    const photos = Array.isArray((property as PublicImagePayload).fotos)
+      ? (property as PublicImagePayload).fotos
+      : [];
     if (!photos.some((photo: { object_key?: string }) => photo.object_key === data.key)) {
       throw new Error("Foto não pertence a este imóvel.");
+    }
+    const { readFromR2Server } = await import("./r2.server");
+    const object = await readFromR2Server(data.key);
+    return { bodyBase64: bytesToBase64(object.bytes), contentType: object.contentType };
+  });
+
+export const readPublicSpaceImageServerFn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ token: z.string().uuid(), key: keySchema }))
+  .handler(async ({ data }) => {
+    const publicClient = createClient(SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: space, error } = await publicClient.rpc("obter_espaco_publico", {
+      _token: data.token,
+    });
+    if (error || !space) throw new Error("Link público inválido.");
+    const photos = Array.isArray((space as PublicImagePayload).fotos)
+      ? (space as PublicImagePayload).fotos
+      : [];
+    if (!photos.some((photo: { object_key?: string }) => photo.object_key === data.key)) {
+      throw new Error("Foto não pertence a esta sala.");
     }
     const { readFromR2Server } = await import("./r2.server");
     const object = await readFromR2Server(data.key);
