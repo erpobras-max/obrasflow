@@ -179,6 +179,33 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const isDraggingCanvas = useRef(false);
   const dragStartPos = useRef<Ponto2D>({ x: 0, y: 0 });
 
+  const enquadrarParedes = useCallback((paredes: Parede[]) => {
+    const canvas = canvasRef.current;
+    if (!canvas || paredes.length === 0) return;
+
+    const xs = paredes.flatMap((parede) => [parede.p1.x, parede.p2.x]);
+    const ys = paredes.flatMap((parede) => [parede.p1.y, parede.p2.y]);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const largura = Math.max(maxX - minX, 0.1);
+    const altura = Math.max(maxY - minY, 0.1);
+    const margem = 48;
+    const larguraCanvas = canvas.parentElement?.clientWidth || 800;
+    const alturaCanvas = canvas.parentElement?.clientHeight || 600;
+    const novoZoom = Math.min(
+      180,
+      Math.max(2, Math.min((larguraCanvas - margem * 2) / largura, (alturaCanvas - margem * 2) / altura))
+    );
+
+    setZoom(novoZoom);
+    setOffset({
+      x: (larguraCanvas - largura * novoZoom) / 2 - minX * novoZoom,
+      y: (alturaCanvas - altura * novoZoom) / 2 - minY * novoZoom,
+    });
+  }, []);
+
   // Salvar no histórico antes de mutação
   const registrarHistorico = useCallback(() => {
     historicoDesfazer.current.push(JSON.parse(JSON.stringify(dados)));
@@ -1614,11 +1641,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                       const text = event.target?.result as string;
                       const novasParedes = extrairParedesDoDxf(text, espessuraAtiva, peDireitoAtivo);
                       if (novasParedes.length > 0) {
+                        const paredesAtualizadas = [...dados.paredes, ...novasParedes];
                         registrarHistorico();
                         onChangeDados({
                           ...dados,
-                          paredes: [...dados.paredes, ...novasParedes],
+                          paredes: paredesAtualizadas,
                         });
+                        requestAnimationFrame(() => enquadrarParedes(paredesAtualizadas));
                         toast.success(`${novasParedes.length} paredes importadas do DXF!`);
                       } else {
                         toast.error("Nenhuma linha compatível encontrada no DXF.");
@@ -2382,3 +2411,4 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
+
