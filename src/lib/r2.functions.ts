@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware.custom";
 import { SUPABASE_ANON_KEY, SUPABASE_PROJECT_URL } from "@/integrations/supabase/client.custom";
+import { getDiarioMediaError } from "@/lib/diario-media";
 
 const folders = [
   "rh/atestados",
@@ -33,6 +34,8 @@ const allowedMimeTypes = [
 ] as const;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_BASE64_LENGTH = Math.ceil((MAX_FILE_BYTES * 4) / 3) + 8;
+const MULTIPART_CHUNK_BYTES = 8 * 1024 * 1024;
+const MAX_MULTIPART_BASE64_LENGTH = Math.ceil((MULTIPART_CHUNK_BYTES * 4) / 3) + 8;
 const writableRoles = [
   "admin",
   "diretor",
@@ -87,6 +90,9 @@ function extensionFor(contentType: string) {
     "image/jpeg": "jpg",
     "image/png": "png",
     "image/webp": "webp",
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
     "application/xml": "xml",
@@ -118,6 +124,92 @@ export const uploadR2ServerFn = createServerFn({ method: "POST" })
     const key = `${data.folder}/${crypto.randomUUID()}.${extension}`;
     const { uploadToR2Server } = await import("./r2.server");
     return { key: await uploadToR2Server(key, bytes, data.contentType, data.fileName) };
+  });
+
+const multipartIdentitySchema = z.object({
+  key: z.string().regex(/^diario\/fotos\/[a-f0-9-]+\.[a-z0-9]+$/),
+  uploadId: z.string().min(1).max(512),
+});
+
+export const startDiarioMediaUploadServerFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    z.object({
+      contentType: z.string().min(1).max(100),
+      fileName: z.string().trim().min(1).max(180),
+      fileSize: z.number().int().positive(),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    await requireR2WriteAccess(context);
+    const validationError = getDiarioMediaError({ size: data.fileSize, type: data.contentType });
+    if (validationError) throw new Error(validationError);
+
+    const extension = extensionFor(data.contentType);
+    if (!extension) throw new Error("Tipo de mídia não permitido.");
+    const key = `diario/fotos/${crypto.randomUUID()}.${extension}`;
+    const { startMultipartUploadServer } = await import("./r2.server");
+    const uploadId = await startMultipartUploadServer(key, data.contentType, data.fileName);
+    return { key, uploadId };
+  });
+
+export const uploadDiarioMediaPartServerFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    multipartIdentitySchema.extend({
+      partNumber: z.number().int().min(1).max(25),
+      bodyBase64: z.string().min(1).max(MAX_MULTIPART_BASE64_LENGTH),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    await requireR2WriteAccess(context);
+    const binary = atob(data.bodyBase64);
+    if (binary.length > MULTIPART_CHUNK_BYTES) throw new Error("Parte do arquivo muito grande.");
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const { uploadMultipartPartServer } = await import("./r2.server");
+    return uploadMultipartPartServer(data.key, data.uploadId, data.partNumber, bytes);
+  });
+
+export const completeDiarioMediaUploadServerFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    multipartIdentitySchema.extend({
+      parts: z
+        .array(z.object({ partNumber: z.number().int().min(1).max(25), etag: z.string().min(1) }))
+        .min(1)
+        .max(25),
+    }),
+  )
+  .handler(async ({ data, context }) => {
+    await requireR2WriteAccess(context);
+    const { completeMultipartUploadServer } = await import("./r2.server");
+    await completeMultipartUploadServer(data.key, data.uploadId, data.parts);
+    return { key: data.key };
+  });
+
+export const abortDiarioMediaUploadServerFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(multipartIdentitySchema)
+  .handler(async ({ data, context }) => {
+    await requireR2WriteAccess(context);
+    const { abortMultipartUploadServer } = await import("./r2.server");
+    await abortMultipartUploadServer(data.key, data.uploadId);
+    return { ok: true };
+  });
+
+export const getDiarioMediaUrlServerFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ key: z.string().regex(/^diario\/fotos\/[a-f0-9-]+\.[a-z0-9]+$/) }))
+  .handler(async ({ data, context }) => {
+    await requireActiveProfile(context);
+    const { data: media, error } = await context.supabase
+      .from("diarios_obra_fotos")
+      .select("id")
+      .eq("url", data.key)
+      .maybeSingle();
+    if (error || !media) throw new Error("Mídia não encontrada ou sem permissão de acesso.");
+    const { createSignedDiarioMediaUrl } = await import("./r2.server");
+    return { url: await createSignedDiarioMediaUrl(data.key) };
   });
 
 const keySchema = z

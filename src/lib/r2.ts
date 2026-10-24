@@ -23,6 +23,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client.custom";
+import { getDiarioMediaError } from "@/lib/diario-media";
 
 // ─────────────────────────────────────────────
 // URL pública (leitura — sem credenciais)
@@ -102,7 +103,7 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 /**
  * Converte um File em base64 string.
  */
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -114,6 +115,53 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
+}
+
+const MULTIPART_CHUNK_BYTES = 8 * 1024 * 1024;
+
+export async function uploadDiarioMedia(file: File): Promise<string> {
+  const validationError = getDiarioMediaError(file);
+  if (validationError) throw new Error(validationError);
+
+  const {
+    abortDiarioMediaUploadServerFn,
+    completeDiarioMediaUploadServerFn,
+    startDiarioMediaUploadServerFn,
+    uploadDiarioMediaPartServerFn,
+  } = await import("./r2.functions");
+  const headers = await getAuthHeaders();
+  const upload = await startDiarioMediaUploadServerFn({
+    headers,
+    data: { contentType: file.type, fileName: file.name, fileSize: file.size },
+  });
+
+  try {
+    const parts: Array<{ partNumber: number; etag: string }> = [];
+    for (let offset = 0, partNumber = 1; offset < file.size; offset += MULTIPART_CHUNK_BYTES) {
+      const bodyBase64 = await fileToBase64(file.slice(offset, offset + MULTIPART_CHUNK_BYTES));
+      parts.push(
+        await uploadDiarioMediaPartServerFn({
+          headers,
+          data: { ...upload, partNumber, bodyBase64 },
+        }),
+      );
+      partNumber += 1;
+    }
+    await completeDiarioMediaUploadServerFn({ headers, data: { ...upload, parts } });
+    return upload.key;
+  } catch (error) {
+    await abortDiarioMediaUploadServerFn({ headers, data: upload }).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function getDiarioMediaUrl(key: string): Promise<string> {
+  const { getDiarioMediaUrlServerFn } = await import("./r2.functions");
+  const result = await getDiarioMediaUrlServerFn({
+    headers: await getAuthHeaders(),
+    data: { key },
+  });
+  return result.url;
 }
 
 /**

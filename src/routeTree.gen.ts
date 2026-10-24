@@ -37,6 +37,7 @@ import { Route as AppPrestadoresRouteImport } from './routes/_app/prestadores'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppRhRouteImport } from './routes/_app/rh'
 import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
+import { Route as ApiDiarioMediaRouteImport } from './routes/api.diario-media'
 import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
 import { Route as CotacaoTokenRouteImport } from './routes/cotacao.$token'
 import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
@@ -204,6 +205,11 @@ const AppUsuariosRoute = AppUsuariosRouteImport.update({
   path: '/usuarios',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiDiarioMediaRoute = ApiDiarioMediaRouteImport.update({
+  id: '/api/diario-media',
+  path: '/api/diario-media',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AssinarTokenRoute = AssinarTokenRouteImport.update({
   id: '/assinar/$token',
   path: '/assinar/$token',
@@ -370,6 +376,7 @@ export interface FileRoutesByFullPath {
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
+  '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
@@ -425,6 +432,7 @@ export interface FileRoutesByTo {
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
+  '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
@@ -483,6 +491,7 @@ export interface FileRoutesById {
   '/_app/relatorios': typeof AppRelatoriosRoute
   '/_app/rh': typeof AppRhRoute
   '/_app/usuarios': typeof AppUsuariosRoute
+  '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
@@ -541,6 +550,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/rh'
     | '/usuarios'
+    | '/api/diario-media'
     | '/assinar/$token'
     | '/cotacao/$token'
     | '/imovel-publico/$token'
@@ -596,6 +606,7 @@ export interface FileRouteTypes {
     | '/relatorios'
     | '/rh'
     | '/usuarios'
+    | '/api/diario-media'
     | '/assinar/$token'
     | '/cotacao/$token'
     | '/imovel-publico/$token'
@@ -653,6 +664,7 @@ export interface FileRouteTypes {
     | '/_app/relatorios'
     | '/_app/rh'
     | '/_app/usuarios'
+    | '/api/diario-media'
     | '/assinar/$token'
     | '/cotacao/$token'
     | '/imovel-publico/$token'
@@ -690,6 +702,7 @@ export interface RootRouteChildren {
   PontoRoute: typeof PontoRoute
   PortalRoute: typeof PortalRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiDiarioMediaRoute: typeof ApiDiarioMediaRoute
   AssinarTokenRoute: typeof AssinarTokenRoute
   CotacaoTokenRoute: typeof CotacaoTokenRoute
   ImovelPublicoTokenRoute: typeof ImovelPublicoTokenRoute
@@ -893,6 +906,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/usuarios'
       preLoaderRoute: typeof AppUsuariosRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/diario-media': {
+      id: '/api/diario-media'
+      path: '/api/diario-media'
+      fullPath: '/api/diario-media'
+      preLoaderRoute: typeof ApiDiarioMediaRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/assinar/$token': {
       id: '/assinar/$token'
@@ -1238,6 +1258,7 @@ const rootRouteChildren: RootRouteChildren = {
   PontoRoute: PontoRoute,
   PortalRoute: PortalRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiDiarioMediaRoute: ApiDiarioMediaRoute,
   AssinarTokenRoute: AssinarTokenRoute,
   CotacaoTokenRoute: CotacaoTokenRoute,
   ImovelPublicoTokenRoute: ImovelPublicoTokenRoute,
