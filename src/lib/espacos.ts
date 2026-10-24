@@ -63,6 +63,14 @@ export function combinarComodidades(selecionadas: string[], outras: string) {
   ].slice(0, 20);
 }
 
+export function separarComodidades(comodidades: string[], padrao: readonly string[]) {
+  const conhecidas = new Set(padrao);
+  return {
+    selecionadas: comodidades.filter((item) => conhecidas.has(item)),
+    outras: comodidades.filter((item) => !conhecidas.has(item)).join(", "),
+  };
+}
+
 export function calcularValorReserva(valorHora: number, inicio: Date, fim: Date) {
   const duracao = fim.getTime() - inicio.getTime();
   if (!Number.isFinite(valorHora) || valorHora <= 0 || duracao <= 0) return 0;
