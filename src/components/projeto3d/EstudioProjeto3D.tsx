@@ -67,26 +67,12 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
   });
 
   // 2. Buscar Projeto CAD / BIM da Obra (SEM refetch automático ao mudar de aba!)
-  const { data: projetoCad, isLoading: loadingProjeto } = useQuery({
+  const { data: projetoCad, isLoading: loadingProjeto, isFetched: projetoCarregado } = useQuery({
     queryKey: ["obra_projeto_cad", obraId],
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     staleTime: Infinity,
     queryFn: async () => {
-      // Verificar se há um rascunho salvo no localStorage para segurança
-      let draftData: DadosProjetoBIM | null = null;
-      try {
-        const local = localStorage.getItem(STORAGE_KEY);
-        if (local) {
-          const parsed = JSON.parse(local);
-          if (parsed && parsed.dados) {
-            draftData = parsed.dados;
-          }
-        }
-      } catch (e) {
-        console.warn("Erro ao ler rascunho local", e);
-      }
-
       const { data, error } = await supabase
         .from("obra_projetos_cad")
         .select("*")
@@ -94,28 +80,41 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
         .maybeSingle();
 
       if (error && error.code !== "PGRST116") throw error;
-
-      if (draftData) {
-        setDadosProjeto(draftData);
-        setTemAlteracoes(true);
-        toast.info("Rascunho recente de alterações não salvas restaurado com segurança.");
-        return data as ObraProjetoCadRow;
-      }
-
-      if (data) {
-        setDadosProjeto(data.dados_projeto as DadosProjetoBIM);
-        setFotoCapa(data.foto_capa_3d);
-        if (data.config_bdi) {
-          setConfigBdi(data.config_bdi as ConfiguracaoBDI);
-        }
-        return data as ObraProjetoCadRow;
-      } else {
-        setDadosProjeto(PROJETO_PADRAO_INICIAL);
-        setConfigBdi(BDI_PADRAO_INICIAL);
-        return null;
-      }
+      return data as ObraProjetoCadRow | null;
     },
   });
+
+  // Hidratar o editor também quando o React Query entrega o projeto diretamente do cache.
+  useEffect(() => {
+    if (!projetoCarregado) return;
+
+    try {
+      const local = localStorage.getItem(STORAGE_KEY);
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed?.dados) {
+          setDadosProjeto(parsed.dados as DadosProjetoBIM);
+          setConfigBdi((parsed.configBdi as ConfiguracaoBDI) || BDI_PADRAO_INICIAL);
+          setFotoCapa(parsed.fotoCapa || null);
+          setTemAlteracoes(true);
+          toast.info("Rascunho recente de alterações não salvas restaurado com segurança.");
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("Erro ao ler rascunho local", e);
+    }
+
+    if (projetoCad) {
+      setDadosProjeto(projetoCad.dados_projeto as DadosProjetoBIM);
+      setFotoCapa(projetoCad.foto_capa_3d);
+      setConfigBdi((projetoCad.config_bdi as ConfiguracaoBDI) || BDI_PADRAO_INICIAL);
+    } else {
+      setDadosProjeto(PROJETO_PADRAO_INICIAL);
+      setFotoCapa(null);
+      setConfigBdi(BDI_PADRAO_INICIAL);
+    }
+  }, [projetoCad, projetoCarregado, STORAGE_KEY]);
 
   // Salvar rascunho localmente a cada alteração feita pelo engenheiro
   const handleUpdateDadosProjeto = (novosDados: DadosProjetoBIM) => {
@@ -433,3 +432,4 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     </div>
   );
 }
+
