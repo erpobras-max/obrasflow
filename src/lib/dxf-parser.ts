@@ -21,9 +21,28 @@ export function extrairParedesDoDxf(
   const segmentos: DxfLine[] = [];
 
   let i = 0;
+  let emEntidades = false;
   while (i < linhas.length) {
     const code = linhas[i]?.trim();
     const val = linhas[i + 1]?.trim();
+
+    if (
+      code === "0" &&
+      val === "SECTION" &&
+      linhas[i + 2]?.trim() === "2" &&
+      linhas[i + 3]?.trim() === "ENTITIES"
+    ) {
+      emEntidades = true;
+      i += 4;
+      continue;
+    }
+
+    if (emEntidades && code === "0" && val === "ENDSEC") break;
+
+    if (!emEntidades) {
+      i += 2;
+      continue;
+    }
 
     if (code === "0" && val === "LINE") {
       i += 2;
@@ -97,16 +116,23 @@ export function extrairParedesDoDxf(
 
   if (segmentos.length === 0) return [];
 
-  // 1. Detectar Escala (se estiver em mm, cm ou m)
-  let maxCoord = 0;
+  // 1. Detectar escala pelo tamanho do desenho, sem depender da distância até a origem do AutoCAD
+  let minCoordX = Infinity;
+  let minCoordY = Infinity;
+  let maxCoordX = -Infinity;
+  let maxCoordY = -Infinity;
   segmentos.forEach((s) => {
-    maxCoord = Math.max(maxCoord, Math.abs(s.x1), Math.abs(s.y1), Math.abs(s.x2), Math.abs(s.y2));
+    minCoordX = Math.min(minCoordX, s.x1, s.x2);
+    minCoordY = Math.min(minCoordY, s.y1, s.y2);
+    maxCoordX = Math.max(maxCoordX, s.x1, s.x2);
+    maxCoordY = Math.max(maxCoordY, s.y1, s.y2);
   });
+  const maiorDimensao = Math.max(maxCoordX - minCoordX, maxCoordY - minCoordY);
 
   let fatorEscala = 1.0;
-  if (maxCoord > 2000) {
+  if (maiorDimensao > 2000) {
     fatorEscala = 0.001; // Milímetros -> Metros
-  } else if (maxCoord > 200) {
+  } else if (maiorDimensao > 200) {
     fatorEscala = 0.01; // Centímetros -> Metros
   }
 
@@ -119,7 +145,8 @@ export function extrairParedesDoDxf(
   });
 
   // 3. Gerar Paredes no formato do ObrasFlow
-  const paredes: Parede[] = segmentos.map((s, idx) => {
+  const instanteImportacao = Date.now();
+  const paredes: Parede[] = segmentos.flatMap((s, idx) => {
     const p1: Ponto2D = {
       x: Number((s.x1 * fatorEscala - minX).toFixed(2)),
       y: Number((s.y1 * fatorEscala - minY).toFixed(2)),
@@ -129,14 +156,16 @@ export function extrairParedesDoDxf(
       y: Number((s.y2 * fatorEscala - minY).toFixed(2)),
     };
 
-    return {
-      id: `dxf_parede_${idx}_${Date.now()}`,
+    if (Math.hypot(p2.x - p1.x, p2.y - p1.y) < 0.01) return [];
+
+    return [{
+      id: `dxf_parede_${idx}_${instanteImportacao}`,
       p1,
       p2,
       espessura: espessuraPadrao,
       altura: peDireito,
       tipo: "alvenaria_vedacao",
-    };
+    }];
   });
 
   return paredes;
@@ -203,3 +232,4 @@ export function exportarParaDxf(dados: {
 
   return lines.join("\n");
 }
+
