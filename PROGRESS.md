@@ -1,22 +1,22 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 19/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 24/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
 As rotas principais estão implementadas com TanStack Router. As páginas protegidas ficam em `src/routes/_app`; os portais, login, assinatura e imóveis públicos ficam fora desse agrupamento.
 
-| Área              | Rotas                                                                                                                                              | Estado                                    |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| Acesso            | `/auth`, `/forgot-password`, `/reset-password`                                                                                                     | Completo                                  |
-| Painel            | `/`, `/dashboard`, `/empresa`, `/perfil`, `/usuarios`                                                                                              | Completo                                  |
-| Comercial         | `/comercial`, `/comercial/clientes`, `/comercial/propostas`, `/comercial/contratos`, `/comercial/licitacoes`                                       | Completo                                  |
-| Obras             | `/obras`, `/cronograma`, `/diario`, `/medicoes`, `/documentos`, `/relatorios`, `/projeto3d/$id`                                                    | Completo                                  |
-| Operacional       | `/compras`, `/cotacoes`, `/prestadores`, `/estoque`, `/equipamentos`, `/orcamentos`, `/fiscal`, `/importacoes`, `/vendas/pedidos`, `/rh`, `/ponto` | Completo                                  |
-| Financeiro        | `/financeiro`, `/imobiliaria/financeiro`                                                                                                           | Completo, com separação civil/imobiliária |
-| Imobiliária       | `/imobiliaria`, `/imobiliaria/dashboard`, `/imobiliaria/clientes`, `/imobiliaria/imoveis`, `/imobiliaria/locacoes`, `/imobiliaria/fiadores`        | Completo                                  |
-| Portal do cliente | `/portal`, `/portal/contratos`, `/portal/documentos`, `/portal/financeiro`, `/portal/fotos`, `/portal/projeto`                                    | Completo                                  |
-| Acesso público    | `/assinar/$token`, `/cotacao/$token`, `/imovel-publico/$token`                                                                                     | Completo                                  |
+| Área              | Rotas                                                                                                                                                               | Estado                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Acesso            | `/auth`, `/forgot-password`, `/reset-password`                                                                                                                      | Completo                                  |
+| Painel            | `/`, `/dashboard`, `/empresa`, `/perfil`, `/usuarios`                                                                                                               | Completo                                  |
+| Comercial         | `/comercial`, `/comercial/clientes`, `/comercial/propostas`, `/comercial/contratos`, `/comercial/licitacoes`                                                        | Completo                                  |
+| Obras             | `/obras`, `/cronograma`, `/diario`, `/medicoes`, `/documentos`, `/relatorios`, `/projeto3d/$id`                                                                     | Completo                                  |
+| Operacional       | `/compras`, `/cotacoes`, `/prestadores`, `/estoque`, `/equipamentos`, `/orcamentos`, `/fiscal`, `/importacoes`, `/vendas/pedidos`, `/rh`, `/ponto`                  | Completo                                  |
+| Financeiro        | `/financeiro`, `/imobiliaria/financeiro`                                                                                                                            | Completo, com separação civil/imobiliária |
+| Imobiliária       | `/imobiliaria`, `/imobiliaria/dashboard`, `/imobiliaria/clientes`, `/imobiliaria/imoveis`, `/imobiliaria/locacoes`, `/imobiliaria/espacos`, `/imobiliaria/fiadores` | Completo, incluindo espaços por período   |
+| Portal do cliente | `/portal`, `/portal/contratos`, `/portal/documentos`, `/portal/financeiro`, `/portal/fotos`, `/portal/projeto`                                                      | Completo                                  |
+| Acesso público    | `/assinar/$token`, `/cotacao/$token`, `/imovel-publico/$token`, `/reservar/$token`                                                                                  | Completo                                  |
 
 Os arquivos de agrupamento (`/comercial`, `/imobiliaria` e `/portal`) funcionam como layouts/índices. Não há placeholder vazio conhecido entre as rotas listadas.
 
@@ -184,10 +184,11 @@ O módulo também cria notificações para a equipe quando uma proposta é receb
 
 ## 18. Módulo de Projeto 3D, CAD Paramétrico & Dossiê Técnico
 
-Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambiente de engenharia paramétrica e apresentação visual para obras particulares e clientes exigentes.
+Entregue em 19/10/2026 e estabilizado em produção em 24/10/2026. Transforma cada obra do ObrasFlow em um ambiente de engenharia paramétrica e apresentação visual. O editor cobre o fluxo arquitetônico básico do ObrasFlow, mas não possui paridade completa com AutoCAD ou CADCraft.
 
 ### Funcionalidades implementadas:
-1. **Modelagem 2D CAD Paramétrica Completa (CADCraft no `/projeto3d/$id`)**:
+
+1. **Modelagem 2D CAD Paramétrica (CADCraft no `/projeto3d/$id`)**:
    - **Manipulação Direta de Portas e Janelas**:
      - Arraste interativo com o mouse para deslizar portas e janelas ao longo da parede com snap suave.
      - **HUD Flutuante no Canvas**: widget posicionado diretamente sobre o vão selecionado com botões `[Apagar Vão]`, `[Centralizar]`, `[<- -10cm]`, `[-> +10cm]` e `[Inverter Folha]`.
@@ -208,7 +209,7 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
    - **Ferramentas Complementares**: Régua de medição interativa (Medir Distância) e ferramenta de edição de nomes de cômodos e acabamentos de piso.
    - Ferramenta **`+ Novo Cômodo`**: gerador paramétrico em 1 clique (largura x comprimento com geração das 4 paredes e laje de piso 3D).
    - Seletores rápidos de espessura de parede ativa (`10cm`, `15cm`, `20cm`) e larguras de portas (`0.60m` a `1.00m`) e janelas (`0.60m` a `2.00m`).
-   - **Importador DXF**: leitura nativa de linhas e polilinhas do AutoCAD em ASCII.
+   - **Importador DXF**: leitura nativa de linhas e polilinhas da seção `ENTITIES` de arquivos AutoCAD ASCII, com normalização de escala, descarte de segmentos degenerados e enquadramento automático da planta.
    - **Exportador DXF**: geração de arquivo `.dxf` (AutoCAD R12) com camadas separadas (`PAREDES`, `ESQUADRIAS`) para download no PC.
 2. **Visualizador 3D Three.js**:
    - **Recorte Real de Vãos de Parede**: as paredes são divididas em blocos e deixam o vão da janela e da porta totalmente aberto, com peitoril e verga, permitindo ver através do vidro e ver a luz atravessar a abertura.
@@ -239,11 +240,37 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
    - **Aviso `beforeunload`**: alerta nativo se o usuário tentar sair da tela com alterações não salvas.
    - **Badge de Pendência**: indicador visual `● Alterações não salvas`.
 
+### Estabilização publicada em 24/10/2026
+
+- Ambientes podem ser selecionados e excluídos definitivamente pela borracha ou pelas teclas `Delete`/`Backspace`; o piso 3D e os quantitativos relacionados deixam de ser gerados, sem apagar as paredes.
+- O arquivo real `predio.dxf` usado na validação caiu de 61.602 segmentos incorretamente interpretados para 80 paredes úteis, com limites aproximados de 16,41 × 14,51 m.
+- O canvas 2D enquadra o desenho importado e a câmera 3D calcula alvo e distância conforme os limites da planta.
+- Ao sair e retornar ao Projeto 3D, o editor volta a hidratar o estado mesmo quando o React Query fornece dados do cache; não é mais necessário usar F5.
+- O viewport observa o tamanho do contêiner e libera animação, geometrias, materiais, canvas e contexto WebGL ao desmontar.
+- As correções foram entregues pelas PRs #120, #123 e #124, sem migration de banco.
+
+### Decisão sobre implementar um CADCraft completo
+
+**Três motivos para não implementar uma cópia completa agora:**
+
+1. O custo de reproduzir um CAD profissional é alto: seleção avançada, cotas, blocos, layers, arcos, curvas, precisão geométrica, impressão em escala e compatibilidade de arquivos exigem manutenção contínua.
+2. A complexidade aumentaria o risco de regressões, perda de desempenho no navegador e dificuldade de uso para clientes que precisam apenas criar uma planta e obter quantitativos.
+3. Uma cópia fiel da interface, marca ou comportamento de um produto de terceiros pode criar riscos de propriedade intelectual e manter o ObrasFlow preso às decisões desse produto.
+
+**Três motivos para evoluir o editor até uma solução CAD mais completa:**
+
+1. O usuário permanece no mesmo fluxo de obra, orçamento, quantitativos, diário e portal, sem alternar entre diversos programas ou redigitar informações.
+2. Um editor próprio pode transformar diretamente a geometria em materiais, custos, BDI, cronograma e apresentação 3D, criando uma vantagem específica do ObrasFlow.
+3. Equipes menores podem trabalhar com uma ferramenta web padronizada, sem depender de instalações locais e licenças CAD adicionais para tarefas arquitetônicas básicas.
+
+**Direção recomendada:** não copiar integralmente outro produto. Evoluir o editor próprio em fases, priorizando recursos confirmados por projetos reais — cotas editáveis, layers, seleção múltipla, copiar/colar, mover/rotacionar com precisão, blocos reutilizáveis e impressão em escala — antes de recursos especializados de CAD generalista.
+
 ## 20. Módulo de Ponto Eletrônico & Gestão de Canteiro (Perfil Mestre de Obras)
 
 Entregue e publicado em 19/10/2026. Habilita o controle operacional diário de presença nos canteiros com alocação dinâmica e sincronização com o Diário de Obra.
 
 ### Funcionalidades implementadas:
+
 1. **Perfil & Permissão de Mestre de Obras (`mestre_obras`)**:
    - Cadastrado no RH com controle de funções operacionais.
    - Restrição de escopo: pedreiros e ajudantes batem apenas o próprio ponto; mestre de obras possui acesso ao registro individual e em lote da sua equipe.
@@ -265,6 +292,7 @@ Entregue e publicado em 19/10/2026. Habilita o controle operacional diário de p
 Realizada varredura completa em todo o pipeline operacional do sistema: **Cadastro de Cliente → Proposta Comercial → Contrato → Obra → Cronograma → Medições → Diário de Obra → Financeiro**.
 
 ### Correções e melhorias implementadas:
+
 1. **Contratos (`/comercial/contratos`)**:
    - **Correção de bug**: Query `propostas-opt` atualizada para incluir `cliente_id`.
    - **Auto-preenchimento**: Ao selecionar uma proposta no modal de contrato, o cliente, o título e o valor total são preenchidos automaticamente.
@@ -276,7 +304,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
      - 📄 **Gerar / Ver Contrato**: abre `/comercial/contratos` pré-preenchido com a proposta e o cliente.
    - Suporte a filtros de busca e `clienteId` via query params.
 3. **Obras (`/obras`)**:
-   - **Correção de layout**: Corrigido `TabsList` no modal `ObraFormDialog` de `grid-cols-3` para `grid-cols-4` (comportando perfeitamente as 4 abas: *Dados*, *Cronograma*, *ITRs*, *Endereço*).
+   - **Correção de layout**: Corrigido `TabsList` no modal `ObraFormDialog` de `grid-cols-3` para `grid-cols-4` (comportando perfeitamente as 4 abas: _Dados_, _Cronograma_, _ITRs_, _Endereço_).
    - **Badges de Origem**: Exibição visual de badges <kbd>Proposta</kbd> e <kbd>Contrato</kbd> abaixo do nome da obra.
    - **Atalhos Operacionais na Tabela**: Botões diretos para abrir o **Cronograma** da obra e o **Diário de Obra** sem necessidade de busca manual.
    - Suporte a filtros de URL (`busca`, `clienteId`).
@@ -290,17 +318,19 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `fix(fluxo): integracao completa ponta a ponta de cliente, proposta, contrato, obras, cronograma, medicoes e diario`
-- **Branch**: `main` (enviado com sucesso para `origin/main`).
-- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 16.98s.
-- **Deploy**: Publicação automática em andamento via Cloudflare Worker `obrasflow`.
+- **Commit**: `44e55990fc428ab7052a4374b980f969f043284f` — correção da reentrada no Projeto 3D, sobre as correções de exclusão de ambientes e importação DXF.
+- **Branch**: `main`.
+- **Validação**: `npm run build`, ESLint dos componentes alterados, teste automatizado do parser e validação com `predio.dxf`.
+- **Deploy**: publicação concluída no Cloudflare Worker `obrasflow` pela execução GitHub Actions `40123630012`; `/imobiliaria/espacos` respondeu HTTP 200 após o deploy.
+- **Aviso de infraestrutura**: o GitHub Actions informou que ações ainda declaradas para Node.js 20 estão sendo executadas em Node.js 24; atualizar as versões das actions deve ser tratado separadamente.
 
 ---
 
 ## 23. Pendências prioritárias após esta atualização
 
 - Executar testes de aceitação visual com os usuários engenheiros desenhando plantas reais de casas no estúdio 2D.
-- Adicionar opção de salvar templates de cômodos frequentes (ex: banheiro padrão 1.5x2.5m).
+- Priorizar a próxima fase do editor com base nesses testes: cotas editáveis, layers, seleção múltipla, copiar/colar, transformações precisas, blocos reutilizáveis e impressão em escala.
+- Adicionar opção de salvar templates de cômodos frequentes (ex.: banheiro padrão 1,5 × 2,5 m).
+- Ampliar a compatibilidade DXF somente a partir de arquivos reais que falharem; o importador atual cobre `LINE` e `LWPOLYLINE` em DXF ASCII, não todos os tipos de entidade do AutoCAD.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
-
 
