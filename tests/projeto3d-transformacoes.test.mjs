@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  calcularCentroSelecao,
   duplicarSelecao,
   selecionarElementosNaJanela,
   transformarSelecao,
@@ -39,6 +40,15 @@ test("seleção considera os limites de móvel em rotação livre", () => {
   const selecionados = selecionarElementosNaJanela(dados, { x: 0.9, y: 0.9 }, { x: 3.1, y: 3.1 }, "conter");
 
   assert.deepEqual(selecionados, [{ tipo: "movel", id: "m1" }]);
+});
+
+test("calcula o centro geométrico dos limites da seleção", () => {
+  const centro = calcularCentroSelecao(projeto(), [
+    { tipo: "parede", id: "p1" },
+    { tipo: "movel", id: "m1" },
+  ]);
+
+  assert.deepEqual(centro, { x: 2, y: 1 });
 });
 
 test("move e rotaciona somente os elementos selecionados com precisão", () => {

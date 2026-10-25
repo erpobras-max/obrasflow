@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import type {
   DadosProjetoBIM,
   Parede,
@@ -61,6 +61,13 @@ import {
   Hand,
 } from "lucide-react";
 import { importarDxf, exportarParaDxf } from "@/lib/dxf-parser";
+import {
+  calcularCentroSelecao,
+  duplicarSelecao,
+  selecionarElementosNaJanela,
+  transformarSelecao,
+  type SelecaoElementoCad,
+} from "@/lib/projeto3d-transformacoes";
 import { toast } from "sonner";
 
 export type FerramentaAtiva =
@@ -132,6 +139,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   // Ferramenta ativa
   const [ferramenta, setFerramenta] = useState<FerramentaAtiva>("mao");
   const [elementoSelecionadoId, setElementoSelecionadoId] = useState<string | null>(null);
+  const [selecaoMultipla, setSelecaoMultipla] = useState<SelecaoElementoCad[]>([]);
+  const [inicioJanelaSelecao, setInicioJanelaSelecao] = useState<Ponto2D | null>(null);
+  const [fimJanelaSelecao, setFimJanelaSelecao] = useState<Ponto2D | null>(null);
+  const [deslocamentoX, setDeslocamentoX] = useState("0.00");
+  const [deslocamentoY, setDeslocamentoY] = useState("0.00");
+  const [rotacaoSelecao, setRotacaoSelecao] = useState("90");
+  const adicionarNaSelecaoRef = useRef(false);
+  const suprimirProximoClick = useRef(false);
 
   // Mobília ativa para inserção
   const [tipoMovelAtivo, setTipoMovelAtivo] = useState<TipoMovel>("cama_casal");
@@ -190,6 +205,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const dragStartPos = useRef<Ponto2D>({ x: 0, y: 0 });
   const dragStartOffset = useRef<Ponto2D>({ x: 0, y: 0 });
 
+  const idsSelecaoMultipla = useMemo(
+    () => new Set(selecaoMultipla.map((item) => item.id)),
+    [selecaoMultipla]
+  );
+
   const enquadrarPlanta = useCallback((projeto: Pick<DadosProjetoBIM, "paredes" | "ambientes" | "moveis">) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -223,6 +243,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     setPodeRefazer(true);
     onChangeDados(estadoAnterior);
     setElementoSelecionadoId(null);
+    setSelecaoMultipla([]);
     toast.info("Ação desfeita");
   }, [dados, onChangeDados]);
 
@@ -235,6 +256,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     setPodeRefazer(historicoRefazer.current.length > 0);
     onChangeDados(proximoEstado);
     setElementoSelecionadoId(null);
+    setSelecaoMultipla([]);
     toast.info("Ação refeita");
   }, [dados, onChangeDados]);
 
@@ -509,6 +531,80 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     [dados, elementoSelecionadoId, onChangeDados, registrarHistorico]
   );
 
+  const limparSelecao = useCallback(() => {
+    setElementoSelecionadoId(null);
+    setSelecaoMultipla([]);
+  }, []);
+
+  const aplicarTransformacaoNaSelecao = useCallback(
+    (tipo: "mover" | "rotacionar") => {
+      if (selecaoMultipla.length === 0) return;
+      const dx = Number(deslocamentoX.replace(",", "."));
+      const dy = Number(deslocamentoY.replace(",", "."));
+      const rotacao = Number(rotacaoSelecao.replace(",", "."));
+      if (![dx, dy, rotacao].every(Number.isFinite)) {
+        toast.error("Informe valores numéricos válidos.");
+        return;
+      }
+
+      const centro = calcularCentroSelecao(dados, selecaoMultipla);
+      if (!centro) return;
+      registrarHistorico();
+      onChangeDados(
+        transformarSelecao(dados, selecaoMultipla, {
+          deslocamento: tipo === "mover" ? { x: dx, y: dy } : undefined,
+          rotacaoGraus: tipo === "rotacionar" ? rotacao : undefined,
+          centroRotacao: centro,
+        })
+      );
+      toast.success(tipo === "mover" ? "Seleção movida." : `Seleção girada ${rotacao}°.`);
+    },
+    [dados, deslocamentoX, deslocamentoY, onChangeDados, registrarHistorico, rotacaoSelecao, selecaoMultipla]
+  );
+
+  const handleDuplicarSelecao = useCallback(() => {
+    if (selecaoMultipla.length === 0) return;
+    const dx = Number(deslocamentoX.replace(",", "."));
+    const dy = Number(deslocamentoY.replace(",", "."));
+    if (![dx, dy].every(Number.isFinite)) {
+      toast.error("Informe deslocamentos numéricos válidos.");
+      return;
+    }
+
+    const sufixo = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    registrarHistorico();
+    const resultado = duplicarSelecao(
+      dados,
+      selecaoMultipla,
+      { x: dx, y: dy },
+      (tipo, originalId) => `${tipo}_${originalId}_${sufixo}`
+    );
+    onChangeDados(resultado.dados);
+    setSelecaoMultipla(resultado.selecao);
+    setElementoSelecionadoId(resultado.selecao.length === 1 ? resultado.selecao[0].id : null);
+    toast.success(`${resultado.selecao.length} item(ns) duplicado(s).`);
+  }, [dados, deslocamentoX, deslocamentoY, onChangeDados, registrarHistorico, selecaoMultipla]);
+
+  const handleApagarSelecao = useCallback(() => {
+    if (selecaoMultipla.length === 0) return;
+    const paredes = new Set(selecaoMultipla.filter((item) => item.tipo === "parede").map((item) => item.id));
+    const ambientes = new Set(
+      selecaoMultipla.filter((item) => item.tipo === "ambiente").map((item) => item.id)
+    );
+    const moveis = new Set(selecaoMultipla.filter((item) => item.tipo === "movel").map((item) => item.id));
+
+    registrarHistorico();
+    onChangeDados({
+      ...dados,
+      paredes: dados.paredes.filter((parede) => !paredes.has(parede.id)),
+      aberturas: dados.aberturas.filter((abertura) => !paredes.has(abertura.paredeId)),
+      ambientes: dados.ambientes.filter((ambiente) => !ambientes.has(ambiente.id)),
+      moveis: (dados.moveis ?? []).filter((movel) => !moveis.has(movel.id)),
+    });
+    limparSelecao();
+    toast.success("Seleção removida.");
+  }, [dados, limparSelecao, onChangeDados, registrarHistorico, selecaoMultipla]);
+
   // -------------------------------------------------------------
   // ATALHOS DE TECLADO CAD
   // -------------------------------------------------------------
@@ -518,6 +614,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
 
       if (e.key === "Delete" || e.key === "Backspace") {
+        if (selecaoMultipla.length > 0) {
+          e.preventDefault();
+          handleApagarSelecao();
+          return;
+        }
         if (elementoSelecionadoId) {
           e.preventDefault();
           const ab = dados.aberturas.find((a) => a.id === elementoSelecionadoId);
@@ -550,8 +651,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           toast.info("Desenho de parede finalizado.");
         } else if (pontoMedirInicio) {
           setPontoMedirInicio(null);
-        } else if (elementoSelecionadoId) {
-          setElementoSelecionadoId(null);
+        } else if (elementoSelecionadoId || selecaoMultipla.length > 0) {
+          limparSelecao();
         }
       }
 
@@ -585,8 +686,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     handleApagarMovel,
     handleApagarParede,
     handleApagarAmbiente,
+    handleApagarSelecao,
     handleDesfazer,
     handleRefazer,
+    limparSelecao,
+    selecaoMultipla,
   ]);
 
   // -------------------------------------------------------------
@@ -634,7 +738,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     dados.ambientes.forEach((amb) => {
       if (amb.pontos.length >= 3) {
         const isHover = elementoHover?.id === amb.id && (ferramenta === "texto" || ferramenta === "apagar");
-        const isSelected = elementoSelecionadoId === amb.id;
+        const isSelected = elementoSelecionadoId === amb.id || idsSelecaoMultipla.has(amb.id);
         const acabamento = (amb.pisoAcabamento || "").toLowerCase();
 
         let corFundo = amb.pisoCor ? `${amb.pisoCor}99` : "rgba(241, 245, 249, 0.6)";
@@ -681,7 +785,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     // 3. Móveis Paramétricos no 2D
     (dados.moveis || []).forEach((movel) => {
-      const isSelected = movel.id === elementoSelecionadoId;
+      const isSelected = movel.id === elementoSelecionadoId || idsSelecaoMultipla.has(movel.id);
       const isHover = elementoHover?.id === movel.id;
       const isHoverApagar = ferramenta === "apagar" && isHover;
       const pCenter = worldToScreen(movel.x, movel.y);
@@ -779,7 +883,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     // 4. Paredes
     dados.paredes.forEach((parede) => {
-      const isSelected = parede.id === elementoSelecionadoId;
+      const isSelected = parede.id === elementoSelecionadoId || idsSelecaoMultipla.has(parede.id);
       const isHoverApagar = ferramenta === "apagar" && elementoHover?.id === parede.id;
       const p1 = worldToScreen(parede.p1.x, parede.p1.y);
       const p2 = worldToScreen(parede.p2.x, parede.p2.y);
@@ -952,6 +1056,21 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       }
       ctx.restore();
     }
+
+    // 9. Janela de seleção CAD: azul contém, verde cruza.
+    if (inicioJanelaSelecao && fimJanelaSelecao) {
+      const inicio = worldToScreen(inicioJanelaSelecao.x, inicioJanelaSelecao.y);
+      const fim = worldToScreen(fimJanelaSelecao.x, fimJanelaSelecao.y);
+      const cruzar = fimJanelaSelecao.x < inicioJanelaSelecao.x;
+      ctx.save();
+      ctx.fillStyle = cruzar ? "rgba(16, 185, 129, 0.12)" : "rgba(37, 99, 235, 0.12)";
+      ctx.strokeStyle = cruzar ? "#059669" : "#2563eb";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash(cruzar ? [6, 4] : []);
+      ctx.fillRect(inicio.x, inicio.y, fim.x - inicio.x, fim.y - inicio.y);
+      ctx.strokeRect(inicio.x, inicio.y, fim.x - inicio.x, fim.y - inicio.y);
+      ctx.restore();
+    }
   }, [
     dados,
     offset,
@@ -960,6 +1079,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     pontoInicial,
     pontoCursor,
     elementoSelecionadoId,
+    idsSelecaoMultipla,
+    inicioJanelaSelecao,
+    fimJanelaSelecao,
     elementoHover,
     pontoSnapAtivo,
     pontoMedirInicio,
@@ -971,6 +1093,21 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   // EVENTOS DE MOUSE NO CANVAS
   // -------------------------------------------------------------
 
+  const selecionarItem = (item: SelecaoElementoCad, adicionar: boolean) => {
+    const existe = selecaoMultipla.some(
+      (selecionado) => selecionado.tipo === item.tipo && selecionado.id === item.id
+    );
+    const novaSelecao = adicionar
+      ? existe
+        ? selecaoMultipla.filter(
+            (selecionado) => selecionado.tipo !== item.tipo || selecionado.id !== item.id
+          )
+        : [...selecaoMultipla, item]
+      : [item];
+    setSelecaoMultipla(novaSelecao);
+    setElementoSelecionadoId(novaSelecao.length === 1 ? novaSelecao[0].id : null);
+  };
+
   const iniciarArrasteVista = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -980,7 +1117,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (ferramenta === "mao" || e.button === 1 || e.shiftKey) {
+    if (ferramenta === "mao" || e.button === 1 || (e.shiftKey && ferramenta !== "selecionar")) {
       iniciarArrasteVista(e);
       return;
     }
@@ -994,10 +1131,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     const worldPos = screenToWorld(screenX, screenY);
 
     if (ferramenta === "selecionar") {
+      const adicionar = e.ctrlKey || e.metaKey || e.shiftKey;
       // 1. Verificar móvel
       const movelAlvo = encontrarMovelMaisProximo(worldPos);
       if (movelAlvo) {
-        setElementoSelecionadoId(movelAlvo.id);
+        selecionarItem({ tipo: "movel", id: movelAlvo.id }, adicionar);
+        suprimirProximoClick.current = true;
         arrastoMovelId.current = movelAlvo.id;
         dragOffsetMovel.current = { x: worldPos.x - movelAlvo.x, y: worldPos.y - movelAlvo.y };
         return;
@@ -1006,10 +1145,22 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       // 2. Verificar abertura
       const abAlvo = encontrarAberturaMaisProxima(worldPos);
       if (abAlvo) {
+        setSelecaoMultipla([]);
         setElementoSelecionadoId(abAlvo.id);
+        suprimirProximoClick.current = true;
         arrastoAberturaId.current = abAlvo.id;
         return;
       }
+
+      const paredeAlvo = encontrarParedeMaisProxima(worldPos);
+      const ambienteAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+      if ((paredeAlvo && paredeAlvo.distanciaPontoReta < 0.35) || ambienteAlvo) return;
+
+      e.preventDefault();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      adicionarNaSelecaoRef.current = adicionar;
+      setInicioJanelaSelecao(worldPos);
+      setFimJanelaSelecao(worldPos);
     }
   };
 
@@ -1030,6 +1181,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     }
 
     let worldPos = screenToWorld(screenX, screenY);
+
+    if (inicioJanelaSelecao) {
+      setFimJanelaSelecao(worldPos);
+      return;
+    }
 
     const snap = detectarSnap(worldPos);
     setPontoSnapAtivo(snap);
@@ -1116,6 +1272,37 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         })
       );
     }
+    if (inicioJanelaSelecao && e.type !== "pointercancel") {
+      const rect = canvasRef.current?.getBoundingClientRect();
+      if (rect) {
+        const fim = screenToWorld(e.clientX - rect.left, e.clientY - rect.top);
+        const distanciaPixels = Math.hypot(
+          (fim.x - inicioJanelaSelecao.x) * zoom,
+          (fim.y - inicioJanelaSelecao.y) * zoom
+        );
+        if (distanciaPixels > 3) {
+          const encontrados = selecionarElementosNaJanela(
+            dados,
+            inicioJanelaSelecao,
+            fim,
+            fim.x >= inicioJanelaSelecao.x ? "conter" : "cruzar"
+          );
+          const combinados = adicionarNaSelecaoRef.current
+            ? [...selecaoMultipla, ...encontrados].filter(
+                (item, indice, lista) =>
+                  lista.findIndex(
+                    (candidato) => candidato.tipo === item.tipo && candidato.id === item.id
+                  ) === indice
+              )
+            : encontrados;
+          setSelecaoMultipla(combinados);
+          setElementoSelecionadoId(combinados.length === 1 ? combinados[0].id : null);
+          suprimirProximoClick.current = true;
+        }
+      }
+    }
+    setInicioJanelaSelecao(null);
+    setFimJanelaSelecao(null);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
@@ -1125,6 +1312,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   };
 
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (suprimirProximoClick.current) {
+      suprimirProximoClick.current = false;
+      return;
+    }
     if (somenteLeitura) return;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -1267,16 +1458,18 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     // 4. FERRAMENTA SELECIONAR
     if (ferramenta === "selecionar") {
+      const adicionar = e.ctrlKey || e.metaKey || e.shiftKey;
       // Prioridade 1: Móvel
       const movelAlvo = encontrarMovelMaisProximo(worldPos);
       if (movelAlvo) {
-        setElementoSelecionadoId(movelAlvo.id);
+        selecionarItem({ tipo: "movel", id: movelAlvo.id }, adicionar);
         return;
       }
 
       // Prioridade 2: Abertura (porta/janela)
       const abAlvo = encontrarAberturaMaisProxima(worldPos);
       if (abAlvo) {
+        setSelecaoMultipla([]);
         setElementoSelecionadoId(abAlvo.id);
         return;
       }
@@ -1284,17 +1477,17 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       // Prioridade 3: Parede
       const paredeAlvo = encontrarParedeMaisProxima(worldPos);
       if (paredeAlvo && paredeAlvo.distanciaPontoReta < 0.35) {
-        setElementoSelecionadoId(paredeAlvo.parede.id);
+        selecionarItem({ tipo: "parede", id: paredeAlvo.parede.id }, adicionar);
         return;
       }
 
       const ambienteAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
       if (ambienteAlvo) {
-        setElementoSelecionadoId(ambienteAlvo.id);
+        selecionarItem({ tipo: "ambiente", id: ambienteAlvo.id }, adicionar);
         return;
       }
 
-      setElementoSelecionadoId(null);
+      if (!adicionar) limparSelecao();
       return;
     }
 
@@ -1527,6 +1720,90 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           >
             <Hand className="w-3.5 h-3.5" /> Arrastar planta
           </Button>
+
+          {ferramenta === "selecionar" && (
+            <div className="rounded-md border border-blue-200 bg-blue-50/70 p-2 space-y-2">
+              <div className="flex items-center justify-between text-[10px] text-blue-800">
+                <span>Arraste no vazio para selecionar</span>
+                <Badge variant="outline" className="h-5 bg-white text-[10px]">
+                  {selecaoMultipla.length} item(ns)
+                </Badge>
+              </div>
+              <p className="text-[9px] leading-3 text-slate-500">
+                → contém • ← cruza • Ctrl/Shift adiciona
+              </p>
+
+              {selecaoMultipla.length > 0 && (
+                <div className="space-y-2 border-t border-blue-200 pt-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <Label htmlFor="cad-dx" className="text-[9px] text-slate-600">X (m)</Label>
+                      <Input
+                        id="cad-dx"
+                        inputMode="decimal"
+                        value={deslocamentoX}
+                        onChange={(e) => setDeslocamentoX(e.target.value)}
+                        className="h-7 text-[11px] font-mono bg-white"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="cad-dy" className="text-[9px] text-slate-600">Y (m)</Label>
+                      <Input
+                        id="cad-dy"
+                        inputMode="decimal"
+                        value={deslocamentoY}
+                        onChange={(e) => setDeslocamentoY(e.target.value)}
+                        className="h-7 text-[11px] font-mono bg-white"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[10px] bg-white"
+                      onClick={() => aplicarTransformacaoNaSelecao("mover")}
+                    >
+                      Mover
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-[10px] bg-white"
+                      onClick={handleDuplicarSelecao}
+                    >
+                      Duplicar
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-[1fr_auto] gap-1">
+                    <Input
+                      aria-label="Rotação da seleção em graus"
+                      inputMode="decimal"
+                      value={rotacaoSelecao}
+                      onChange={(e) => setRotacaoSelecao(e.target.value)}
+                      className="h-7 text-[11px] font-mono bg-white"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[10px] bg-white gap-1"
+                      onClick={() => aplicarTransformacaoNaSelecao("rotacionar")}
+                    >
+                      <RotateCw className="w-3 h-3" /> Girar
+                    </Button>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="w-full h-7 text-[10px]"
+                    onClick={handleApagarSelecao}
+                  >
+                    <Trash2 className="w-3 h-3 mr-1" /> Apagar seleção
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Novo Cômodo */}
           <Button
