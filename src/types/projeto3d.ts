@@ -25,6 +25,7 @@ export interface Parede {
   altura: number; // metros (ex: 2.80)
   tipo: string;
   cor?: string;
+  layer?: string;
   acabamento?: string;
 }
 

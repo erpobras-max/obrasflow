@@ -41,3 +41,4 @@ test("leva acabamentos personalizados para os quantitativos sem misturar ambient
   assert.equal(pintura.descricao.match(/Pintura acetinada bege/g).length, 1);
 });
 
+
