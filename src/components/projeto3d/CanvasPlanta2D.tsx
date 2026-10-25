@@ -8,7 +8,13 @@ import type {
   Movel,
   TipoMovel,
 } from "@/types/projeto3d";
-import { calcularEnquadramentoPlanta, snapAoGrid, calcularComprimentoParede } from "@/lib/projeto3d.utils";
+import {
+  calcularEnquadramentoPlanta,
+  calcularOffsetAposArraste,
+  calcularOffsetAposZoom,
+  snapAoGrid,
+  calcularComprimentoParede,
+} from "@/lib/projeto3d.utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -182,6 +188,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const [offset, setOffset] = useState<Ponto2D>({ x: 150, y: 150 });
   const isDraggingCanvas = useRef(false);
   const dragStartPos = useRef<Ponto2D>({ x: 0, y: 0 });
+  const dragStartOffset = useRef<Ponto2D>({ x: 0, y: 0 });
 
   const enquadrarPlanta = useCallback((projeto: Pick<DadosProjetoBIM, "paredes" | "ambientes" | "moveis">) => {
     const canvas = canvasRef.current;
@@ -969,6 +976,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     e.currentTarget.setPointerCapture(e.pointerId);
     isDraggingCanvas.current = true;
     dragStartPos.current = { x: e.clientX, y: e.clientY };
+    dragStartOffset.current = offset;
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -1012,11 +1020,12 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     const screenY = e.clientY - rect.top;
 
     if (isDraggingCanvas.current) {
-      setOffset((prev) => ({
-        x: prev.x + (e.clientX - dragStartPos.current.x),
-        y: prev.y + (e.clientY - dragStartPos.current.y),
-      }));
-      dragStartPos.current = { x: e.clientX, y: e.clientY };
+      setOffset(
+        calcularOffsetAposArraste(dragStartOffset.current, dragStartPos.current, {
+          x: e.clientX,
+          y: e.clientY,
+        })
+      );
       return;
     }
 
@@ -1099,6 +1108,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (isDraggingCanvas.current) {
+      setOffset(
+        calcularOffsetAposArraste(dragStartOffset.current, dragStartPos.current, {
+          x: e.clientX,
+          y: e.clientY,
+        })
+      );
+    }
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
@@ -1342,16 +1359,20 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     const focoX = e.clientX - rect.left;
     const focoY = e.clientY - rect.top;
-    const mundoX = (focoX - offset.x) / zoom;
-    const mundoY = (focoY - offset.y) / zoom;
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     const novoZoom = Math.min(Math.max(zoom * delta, 2), 180);
 
+    setOffset(calcularOffsetAposZoom(offset, zoom, novoZoom, { x: focoX, y: focoY }));
     setZoom(novoZoom);
-    setOffset({
-      x: focoX - mundoX * novoZoom,
-      y: focoY - mundoY * novoZoom,
-    });
+  };
+
+  const alterarZoomCentralizado = (fator: number) => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const novoZoom = Math.min(Math.max(zoom * fator, 2), 180);
+    setOffset(calcularOffsetAposZoom(offset, zoom, novoZoom, { x: rect.width / 2, y: rect.height / 2 }));
+    setZoom(novoZoom);
   };
 
   // Coordenadas da tela da abertura selecionada para HUD
@@ -2193,7 +2214,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           <Button
             size="icon-xs"
             variant="ghost"
-            onClick={() => setZoom((prev) => Math.min(prev * 1.2, 180))}
+            onClick={() => alterarZoomCentralizado(1.2)}
             title="Aumentar Zoom"
           >
             <ZoomIn className="w-3.5 h-3.5" />
@@ -2201,7 +2222,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           <Button
             size="icon-xs"
             variant="ghost"
-            onClick={() => setZoom((prev) => Math.max(prev * 0.8, 2))}
+            onClick={() => alterarZoomCentralizado(0.8)}
             title="Diminuir Zoom"
           >
             <ZoomOut className="w-3.5 h-3.5" />
@@ -2589,6 +2610,7 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
+
 
 
 
