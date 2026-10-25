@@ -94,4 +94,3 @@ test("duplicação remapeia paredes e suas aberturas", () => {
   assert.deepEqual(resultado.selecao, [{ tipo: "parede", id: "parede_copia_p1" }]);
 });
 
-

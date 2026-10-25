@@ -2893,4 +2893,3 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
 
 
 
-
