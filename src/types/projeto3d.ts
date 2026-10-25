@@ -25,6 +25,7 @@ export interface Parede {
   altura: number; // metros (ex: 2.80)
   tipo: string;
   cor?: string;
+  layer?: string;
 }
 
 export interface Ambiente {
@@ -152,3 +153,4 @@ export interface ObraProjetoCadRow {
   created_at: string;
   updated_at: string;
 }
+
