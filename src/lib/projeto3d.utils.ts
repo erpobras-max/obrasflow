@@ -211,6 +211,13 @@ export function calcularQuantitativosBIM(
   const areaTotalAlvenariaLiquida = Math.max(areaTotalAlvenariaBruta - areaTotalVaos, 0);
   const areaTotalReboco = areaTotalAlvenariaLiquida * 2; // Duas faces
   const areaTotalPintura = areaTotalReboco;
+  const pisosEspecificados = [...new Set(dados.ambientes.map((a) => a.pisoAcabamento).filter(Boolean))];
+  const pinturasEspecificadas = [
+    ...new Set([
+      ...dados.ambientes.map((a) => a.paredeAcabamento),
+      ...dados.paredes.map((p) => p.acabamento),
+    ].filter(Boolean)),
+  ];
 
   // Área de piso dos ambientes (ou estimativa baseada nas paredes)
   let areaTotalPisos = dados.ambientes.reduce((acc, a) => acc + a.area, 0);
@@ -267,7 +274,9 @@ export function calcularQuantitativosBIM(
       id: "item_piso",
       codigo: "PIS-01",
       codigoSinapi: "87251",
-      descricao: "Revestimento cerâmico / porcelanato para piso com argamassa colante e rejunte",
+      descricao: pisosEspecificados.length > 0
+        ? `Pisos especificados: ${pisosEspecificados.join(", ")}`
+        : "Revestimento cerâmico / porcelanato para piso com argamassa colante e rejunte",
       unidade: "m²",
       quantidade: areaTotalPisos,
       memoriaCalculo: `Soma das áreas de piso dos cômodos (${areaTotalPisos.toFixed(2)}m²)`,
@@ -289,7 +298,9 @@ export function calcularQuantitativosBIM(
       id: "item_pintura",
       codigo: "PIN-01",
       codigoSinapi: "88489",
-      descricao: "Pintura látex acrílica com selador e duas demãos de acabamento",
+      descricao: pinturasEspecificadas.length > 0
+        ? `Pinturas especificadas: ${pinturasEspecificadas.join(", ")}`
+        : "Pintura látex acrílica com selador e duas demãos de acabamento",
       unidade: "m²",
       quantidade: areaTotalPintura,
       memoriaCalculo: `Área de reboco total (${areaTotalReboco.toFixed(2)}m²)`,
@@ -344,3 +355,4 @@ export function calcularQuantitativosBIM(
     precoVendaTotal,
   };
 }
+
