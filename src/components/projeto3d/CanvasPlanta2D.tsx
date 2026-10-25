@@ -124,7 +124,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Ferramenta ativa
-  const [ferramenta, setFerramenta] = useState<FerramentaAtiva>("selecionar");
+  const [ferramenta, setFerramenta] = useState<FerramentaAtiva>("mao");
   const [elementoSelecionadoId, setElementoSelecionadoId] = useState<string | null>(null);
 
   // Mobília ativa para inserção
@@ -964,14 +964,16 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   // EVENTOS DE MOUSE NO CANVAS
   // -------------------------------------------------------------
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const iniciarArrasteVista = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    isDraggingCanvas.current = true;
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (ferramenta === "mao" || e.button === 1 || e.shiftKey) {
-      e.preventDefault();
-      isDraggingCanvas.current = true;
-      const rect = canvasRef.current?.getBoundingClientRect();
-      if (rect) {
-        dragStartPos.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      }
+      iniciarArrasteVista(e);
       return;
     }
 
@@ -1003,7 +1005,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     }
   };
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const screenX = e.clientX - rect.left;
@@ -1011,10 +1013,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     if (isDraggingCanvas.current) {
       setOffset((prev) => ({
-        x: prev.x + (screenX - dragStartPos.current.x),
-        y: prev.y + (screenY - dragStartPos.current.y),
+        x: prev.x + (e.clientX - dragStartPos.current.x),
+        y: prev.y + (e.clientY - dragStartPos.current.y),
       }));
-      dragStartPos.current = { x: screenX, y: screenY };
+      dragStartPos.current = { x: e.clientX, y: e.clientY };
       return;
     }
 
@@ -1096,7 +1098,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     setPontoCursor(worldPos);
   };
 
-  const handleMouseUp = () => {
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
     isDraggingCanvas.current = false;
     arrastoAberturaId.current = null;
     arrastoMovelId.current = null;
@@ -1486,7 +1491,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               setPontoInicial(null);
             }}
           >
-            <MousePointer className="w-3.5 h-3.5" /> Selecionar / Mover
+            <MousePointer className="w-3.5 h-3.5" /> Selecionar / Mover itens
           </Button>
 
           <Button
@@ -1499,7 +1504,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             }}
             title="Arraste a planta com o botão esquerdo do mouse"
           >
-            <Hand className="w-3.5 h-3.5" /> Mão / Mover vista
+            <Hand className="w-3.5 h-3.5" /> Arrastar planta
           </Button>
 
           {/* Novo Cômodo */}
@@ -2014,7 +2019,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       <div className="relative flex-1 h-full overflow-hidden">
         <canvas
           ref={canvasRef}
-          className={`w-full h-full ${
+          className={`w-full h-full touch-none select-none ${
             ferramenta === "apagar"
               ? "cursor-not-allowed"
               : ferramenta === "mao"
@@ -2026,10 +2031,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               : "cursor-crosshair"
           }`}
           onClick={handleCanvasClick}
-          onMouseMove={handleMouseMove}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
+          onPointerMove={handlePointerMove}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           onWheel={handleWheel}
         />
 
@@ -2584,6 +2589,7 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
+
 
 
 
