@@ -8,7 +8,7 @@ import type {
   Movel,
   TipoMovel,
 } from "@/types/projeto3d";
-import { snapAoGrid, calcularComprimentoParede } from "@/lib/projeto3d.utils";
+import { calcularEnquadramentoPlanta, snapAoGrid, calcularComprimentoParede } from "@/lib/projeto3d.utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -52,12 +52,14 @@ import {
   RotateCw,
   Palette,
   Bed,
+  Hand,
 } from "lucide-react";
 import { importarDxf, exportarParaDxf } from "@/lib/dxf-parser";
 import { toast } from "sonner";
 
 export type FerramentaAtiva =
   | "selecionar"
+  | "mao"
   | "parede"
   | "porta"
   | "janela"
@@ -102,12 +104,14 @@ export const CORES_PINTURA = [
 ];
 
 export const PRESETS_PISOS = [
-  { nome: "Porcelanato Retificado 84x84 (Polido Claro)", tag: "🏛️ Porcelanato Polido" },
-  { nome: "Madeira / Piso Laminado (Aconchegante)", tag: "🪵 Madeira Laminada" },
-  { nome: "Cimento Queimado (Moderno Industrial)", tag: "🏭 Cimento Queimado" },
-  { nome: "Cerâmica / Terracota (Rústico)", tag: "🧱 Cerâmica Terracota" },
-  { nome: "Grama / Área Externa (Verde)", tag: "🌿 Grama Verde" },
+  { nome: "Porcelanato Retificado 84x84 (Polido Claro)", tag: "🏛️ Porcelanato Polido", cor: "#f8fafc" },
+  { nome: "Madeira / Piso Laminado (Aconchegante)", tag: "🪵 Madeira Laminada", cor: "#92400e" },
+  { nome: "Cimento Queimado (Moderno Industrial)", tag: "🏭 Cimento Queimado", cor: "#475569" },
+  { nome: "Cerâmica / Terracota (Rústico)", tag: "🧱 Cerâmica Terracota", cor: "#c2410c" },
+  { nome: "Grama / Área Externa (Verde)", tag: "🌿 Grama Verde", cor: "#16a34a" },
 ];
+
+const PRESETS_TETOS = ["Forro de Gesso com Pintura Branca", "Laje Aparente", "Forro de Madeira"];
 
 interface CanvasPlanta2DProps {
   dados: DadosProjetoBIM;
@@ -179,31 +183,17 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const isDraggingCanvas = useRef(false);
   const dragStartPos = useRef<Ponto2D>({ x: 0, y: 0 });
 
-  const enquadrarParedes = useCallback((paredes: Parede[]) => {
+  const enquadrarPlanta = useCallback((projeto: Pick<DadosProjetoBIM, "paredes" | "ambientes" | "moveis">) => {
     const canvas = canvasRef.current;
-    if (!canvas || paredes.length === 0) return;
+    if (!canvas) return;
 
-    const xs = paredes.flatMap((parede) => [parede.p1.x, parede.p2.x]);
-    const ys = paredes.flatMap((parede) => [parede.p1.y, parede.p2.y]);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const largura = Math.max(maxX - minX, 0.1);
-    const altura = Math.max(maxY - minY, 0.1);
-    const margem = 48;
     const larguraCanvas = canvas.parentElement?.clientWidth || 800;
     const alturaCanvas = canvas.parentElement?.clientHeight || 600;
-    const novoZoom = Math.min(
-      180,
-      Math.max(2, Math.min((larguraCanvas - margem * 2) / largura, (alturaCanvas - margem * 2) / altura))
-    );
+    const enquadramento = calcularEnquadramentoPlanta(projeto, larguraCanvas, alturaCanvas);
+    if (!enquadramento) return;
 
-    setZoom(novoZoom);
-    setOffset({
-      x: (larguraCanvas - largura * novoZoom) / 2 - minX * novoZoom,
-      y: (alturaCanvas - altura * novoZoom) / 2 - minY * novoZoom,
-    });
+    setZoom(enquadramento.zoom);
+    setOffset(enquadramento.offset);
   }, []);
 
   // Salvar no histórico antes de mutação
@@ -640,14 +630,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         const isSelected = elementoSelecionadoId === amb.id;
         const acabamento = (amb.pisoAcabamento || "").toLowerCase();
 
-        let corFundo = "rgba(241, 245, 249, 0.6)";
-        if (acabamento.includes("madeira") || acabamento.includes("laminado")) {
+        let corFundo = amb.pisoCor ? `${amb.pisoCor}99` : "rgba(241, 245, 249, 0.6)";
+        if (!amb.pisoCor && (acabamento.includes("madeira") || acabamento.includes("laminado"))) {
           corFundo = "rgba(254, 243, 199, 0.65)"; // Bege amadeirado suave
-        } else if (acabamento.includes("cimento")) {
+        } else if (!amb.pisoCor && acabamento.includes("cimento")) {
           corFundo = "rgba(226, 232, 240, 0.7)"; // Cinza cimento
-        } else if (acabamento.includes("cerâmica") || acabamento.includes("ceramica")) {
+        } else if (!amb.pisoCor && (acabamento.includes("cerâmica") || acabamento.includes("ceramica"))) {
           corFundo = "rgba(255, 237, 213, 0.7)"; // Terracota suave
-        } else if (acabamento.includes("grama") || acabamento.includes("externo")) {
+        } else if (!amb.pisoCor && (acabamento.includes("grama") || acabamento.includes("externo"))) {
           corFundo = "rgba(220, 252, 231, 0.7)"; // Verde grama suave
         }
 
@@ -975,7 +965,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   // -------------------------------------------------------------
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button === 1 || e.shiftKey) {
+    if (ferramenta === "mao" || e.button === 1 || e.shiftKey) {
+      e.preventDefault();
       isDraggingCanvas.current = true;
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
@@ -1340,8 +1331,22 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const focoX = e.clientX - rect.left;
+    const focoY = e.clientY - rect.top;
+    const mundoX = (focoX - offset.x) / zoom;
+    const mundoY = (focoY - offset.y) / zoom;
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom((prev) => Math.min(Math.max(prev * delta, 15), 180));
+    const novoZoom = Math.min(Math.max(zoom * delta, 2), 180);
+
+    setZoom(novoZoom);
+    setOffset({
+      x: focoX - mundoX * novoZoom,
+      y: focoY - mundoY * novoZoom,
+    });
   };
 
   // Coordenadas da tela da abertura selecionada para HUD
@@ -1482,6 +1487,19 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             }}
           >
             <MousePointer className="w-3.5 h-3.5" /> Selecionar / Mover
+          </Button>
+
+          <Button
+            size="sm"
+            variant={ferramenta === "mao" ? "default" : "ghost"}
+            className="justify-start gap-2 h-8 text-xs"
+            onClick={() => {
+              setFerramenta("mao");
+              setPontoInicial(null);
+            }}
+            title="Arraste a planta com o botão esquerdo do mouse"
+          >
+            <Hand className="w-3.5 h-3.5" /> Mão / Mover vista
           </Button>
 
           {/* Novo Cômodo */}
@@ -1686,7 +1704,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                           ...dados,
                           paredes: paredesAtualizadas,
                         });
-                        requestAnimationFrame(() => enquadrarParedes(paredesAtualizadas));
+                        requestAnimationFrame(() => enquadrarPlanta({ ...dados, paredes: paredesAtualizadas }));
                         toast.success(
                           `${novasParedes.length} segmentos importados de ${resumo.entidadesConvertidas} entidades ` +
                           `(${resumo.layers.length} layers; unidade: ${resumo.unidade}).`
@@ -1898,13 +1916,48 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                         onChangeDados({
                           ...dados,
                           paredes: dados.paredes.map((p) =>
-                            p.id === paredeSelecionada.id ? { ...p, cor: c.hex } : p
+                            p.id === paredeSelecionada.id ? { ...p, cor: c.hex, acabamento: c.nome } : p
                           ),
                         });
                         toast.success(`Cor "${c.nome}" aplicada à parede!`);
                       }}
                     />
                   ))}
+                </div>
+                <div className="grid grid-cols-[44px_1fr] gap-1.5 mt-1.5">
+                  <Input
+                    type="color"
+                    value={paredeSelecionada.cor || "#ededed"}
+                    onChange={(e) => {
+                      registrarHistorico();
+                      onChangeDados({
+                        ...dados,
+                        paredes: dados.paredes.map((p) =>
+                          p.id === paredeSelecionada.id ? { ...p, cor: e.target.value } : p
+                        ),
+                      });
+                    }}
+                    className="h-8 p-1"
+                    aria-label="Cor personalizada da parede"
+                  />
+                  <Input
+                    key={paredeSelecionada.id}
+                    defaultValue={paredeSelecionada.acabamento || "Pintura acrílica"}
+                    onBlur={(e) => {
+                      const acabamento = e.target.value.trim();
+                      if (acabamento === (paredeSelecionada.acabamento || "Pintura acrílica")) return;
+                      registrarHistorico();
+                      onChangeDados({
+                        ...dados,
+                        paredes: dados.paredes.map((p) =>
+                          p.id === paredeSelecionada.id ? { ...p, acabamento } : p
+                        ),
+                      });
+                    }}
+                    className="h-8 text-[11px]"
+                    aria-label="Descrição da pintura da parede"
+                    placeholder="Ex.: Tinta acrílica fosca"
+                  />
                 </div>
               </div>
 
@@ -1949,6 +2002,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             Atalhos: <kbd className="bg-white px-1 border rounded">Del</kbd> apagar •{" "}
             <kbd className="bg-white px-1 border rounded">Esc</kbd> cancelar •{" "}
             <kbd className="bg-white px-1 border rounded">F8</kbd> ortho •{" "}
+            <kbd className="bg-white px-1 border rounded">Shift+arrastar</kbd> mover vista •{" "}
             <kbd className="bg-white px-1 border rounded">Ctrl+Z</kbd> desfazer.
           </div>
         </div>
@@ -1963,6 +2017,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           className={`w-full h-full ${
             ferramenta === "apagar"
               ? "cursor-not-allowed"
+              : ferramenta === "mao"
+              ? "cursor-grab active:cursor-grabbing"
               : ferramenta === "medir"
               ? "cursor-help"
               : ferramenta === "movel"
@@ -1973,6 +2029,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
         />
 
@@ -2139,7 +2196,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           <Button
             size="icon-xs"
             variant="ghost"
-            onClick={() => setZoom((prev) => Math.max(prev * 0.8, 15))}
+            onClick={() => setZoom((prev) => Math.max(prev * 0.8, 2))}
             title="Diminuir Zoom"
           >
             <ZoomOut className="w-3.5 h-3.5" />
@@ -2147,11 +2204,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           <Button
             size="icon-xs"
             variant="ghost"
-            onClick={() => {
-              setZoom(50);
-              setOffset({ x: 150, y: 150 });
-            }}
-            title="Centralizar Visualização"
+            onClick={() => enquadrarPlanta(dados)}
+            title="Zoom Total: mostrar toda a planta"
           >
             <Maximize className="w-3.5 h-3.5" />
           </Button>
@@ -2338,10 +2392,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       {/* MODAL DE EDIÇÃO DE AMBIENTE & PISO */}
       {/* ----------------------------------------------------------- */}
       <Dialog open={modalEditarAmbienteAberto} onOpenChange={setModalEditarAmbienteAberto}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
-              <Type className="w-5 h-5 text-indigo-600" /> Editar Ambiente & Acabamento de Piso
+              <Type className="w-5 h-5 text-indigo-600" /> Editar Ambiente & Acabamentos
             </DialogTitle>
           </DialogHeader>
 
@@ -2375,7 +2429,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                           : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
                       }`}
                       onClick={() =>
-                        setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoAcabamento: p.nome })
+                        setAmbienteEmEdicao({
+                          ...ambienteEmEdicao,
+                          pisoAcabamento: p.nome,
+                          pisoCor: p.cor,
+                        })
                       }
                     >
                       <span>{p.tag}</span>
@@ -2384,6 +2442,76 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                       )}
                     </button>
                   ))}
+                </div>
+                <div className="grid grid-cols-[48px_1fr] gap-2 mt-2">
+                  <Input
+                    type="color"
+                    value={ambienteEmEdicao.pisoCor || "#f8fafc"}
+                    onChange={(e) => setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoCor: e.target.value })}
+                    className="h-9 p-1"
+                    aria-label="Cor personalizada do piso"
+                  />
+                  <Input
+                    value={ambienteEmEdicao.pisoAcabamento || ""}
+                    onChange={(e) =>
+                      setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoAcabamento: e.target.value })
+                    }
+                    className="h-9 text-xs"
+                    placeholder="Outro acabamento de piso"
+                    aria-label="Acabamento personalizado do piso"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                  Pintura / acabamento das paredes
+                </Label>
+                <Input
+                  value={ambienteEmEdicao.paredeAcabamento || ""}
+                  onChange={(e) =>
+                    setAmbienteEmEdicao({ ...ambienteEmEdicao, paredeAcabamento: e.target.value })
+                  }
+                  className="h-9 text-xs"
+                  placeholder="Ex.: Pintura acrílica fosca lavável"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                  Teto / forro
+                </Label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {PRESETS_TETOS.map((acabamento) => (
+                    <Button
+                      key={acabamento}
+                      type="button"
+                      size="sm"
+                      variant={ambienteEmEdicao.tetoAcabamento === acabamento ? "default" : "outline"}
+                      className="h-7 text-[10px]"
+                      onClick={() => setAmbienteEmEdicao({ ...ambienteEmEdicao, tetoAcabamento: acabamento })}
+                    >
+                      {acabamento}
+                    </Button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-[48px_1fr] gap-2">
+                  <Input
+                    type="color"
+                    value={ambienteEmEdicao.tetoCor || "#ffffff"}
+                    onChange={(e) => setAmbienteEmEdicao({ ...ambienteEmEdicao, tetoCor: e.target.value })}
+                    className="h-9 p-1"
+                    aria-label="Cor personalizada do teto"
+                  />
+                  <Input
+                    value={ambienteEmEdicao.tetoAcabamento || ""}
+                    onChange={(e) =>
+                      setAmbienteEmEdicao({ ...ambienteEmEdicao, tetoAcabamento: e.target.value })
+                    }
+                    className="h-9 text-xs"
+                    placeholder="Outro acabamento de teto"
+                    aria-label="Acabamento personalizado do teto"
+                  />
                 </div>
               </div>
 
@@ -2418,7 +2546,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                       amb.id === ambienteEmEdicao.id ? ambienteEmEdicao : amb
                     ),
                   });
-                  toast.success("Ambiente e piso atualizados no 2D e 3D!");
+                  toast.success("Ambiente e acabamentos atualizados no 2D e 3D!");
                 }
                 setModalEditarAmbienteAberto(false);
               }}
@@ -2456,6 +2584,7 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
+
 
 
 

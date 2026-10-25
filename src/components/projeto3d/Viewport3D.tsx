@@ -113,6 +113,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     // Grupos da cena Three.js
     const groupParedesRef = useRef<THREE.Group>(new THREE.Group());
     const groupPisoRef = useRef<THREE.Group>(new THREE.Group());
+    const groupForroRef = useRef<THREE.Group>(new THREE.Group());
     const groupEsquadriasRef = useRef<THREE.Group>(new THREE.Group());
     const groupTelhadoRef = useRef<THREE.Group>(new THREE.Group());
     const groupMoveisRef = useRef<THREE.Group>(new THREE.Group());
@@ -131,12 +132,13 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
 
     // Atualizar visibilidade das camadas na cena
     useEffect(() => {
-      groupTelhadoRef.current.visible = camadas.telhado && !modoCorte;
+      groupTelhadoRef.current.visible = dados.cobertura.ativa !== false && camadas.telhado && !modoCorte;
       groupParedesRef.current.visible = camadas.paredes;
       groupEsquadriasRef.current.visible = camadas.esquadrias;
       groupPisoRef.current.visible = camadas.piso;
+      groupForroRef.current.visible = camadas.forro && !modoCorte;
       groupMoveisRef.current.visible = (camadas.moveis !== false);
-    }, [camadas, modoCorte]);
+    }, [camadas, modoCorte, dados.cobertura.ativa]);
 
     // Função de captura de tela
     const capturarFoto = () => {
@@ -256,6 +258,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
 
       // Adicionar grupos à cena
       scene.add(groupPisoRef.current);
+      scene.add(groupForroRef.current);
       scene.add(groupParedesRef.current);
       scene.add(groupEsquadriasRef.current);
       scene.add(groupTelhadoRef.current);
@@ -294,6 +297,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         });
         groupParedesRef.current.clear();
         groupPisoRef.current.clear();
+        groupForroRef.current.clear();
         groupEsquadriasRef.current.clear();
         groupTelhadoRef.current.clear();
         groupMoveisRef.current.clear();
@@ -310,6 +314,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     useEffect(() => {
       const groupParedes = groupParedesRef.current;
       const groupPiso = groupPisoRef.current;
+      const groupForro = groupForroRef.current;
       const groupEsquadrias = groupEsquadriasRef.current;
       const groupTelhado = groupTelhadoRef.current;
       const groupMoveis = groupMoveisRef.current;
@@ -317,6 +322,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       // Limpar malhas antigas
       groupParedes.clear();
       groupPiso.clear();
+      groupForro.clear();
       groupEsquadrias.clear();
       groupTelhado.clear();
       groupMoveis.clear();
@@ -342,7 +348,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       });
       const matTelha = new THREE.MeshStandardMaterial({
         color: new THREE.Color(dados.cobertura.corTelha || "#b94a32"),
-        roughness: 0.7,
+        roughness: dados.cobertura.material === "metalica" ? 0.35 : 0.7,
+        metalness: dados.cobertura.material === "metalica" ? 0.65 : 0,
       });
 
       // Se não há paredes, limpa a cena e não constrói nada
@@ -603,30 +610,30 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
 
             // Identificar acabamento do piso
             let matPisoAmb = new THREE.MeshStandardMaterial({
-              color: 0xf8fafc,
+              color: amb.pisoCor ? new THREE.Color(amb.pisoCor) : 0xf8fafc,
               roughness: 0.25,
               metalness: 0.08,
             });
             const acabamento = (amb.pisoAcabamento || "").toLowerCase();
-            if (acabamento.includes("madeira") || acabamento.includes("laminado")) {
+            if (!amb.pisoCor && (acabamento.includes("madeira") || acabamento.includes("laminado"))) {
               matPisoAmb = new THREE.MeshStandardMaterial({
                 color: 0x92400e,
                 roughness: 0.45,
                 metalness: 0.05,
               });
-            } else if (acabamento.includes("cimento")) {
+            } else if (!amb.pisoCor && acabamento.includes("cimento")) {
               matPisoAmb = new THREE.MeshStandardMaterial({
                 color: 0x475569,
                 roughness: 0.85,
                 metalness: 0.0,
               });
-            } else if (acabamento.includes("cerâmica") || acabamento.includes("ceramica")) {
+            } else if (!amb.pisoCor && (acabamento.includes("cerâmica") || acabamento.includes("ceramica"))) {
               matPisoAmb = new THREE.MeshStandardMaterial({
                 color: 0xc2410c,
                 roughness: 0.6,
                 metalness: 0.0,
               });
-            } else if (acabamento.includes("grama") || acabamento.includes("externo")) {
+            } else if (!amb.pisoCor && (acabamento.includes("grama") || acabamento.includes("externo"))) {
               matPisoAmb = new THREE.MeshStandardMaterial({
                 color: 0x16a34a,
                 roughness: 0.9,
@@ -639,6 +646,19 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
             floorMesh.position.y = 0.01;
             floorMesh.receiveShadow = true;
             groupPiso.add(floorMesh);
+
+            const forroMesh = new THREE.Mesh(
+              floorGeo.clone(),
+              new THREE.MeshStandardMaterial({
+                color: amb.tetoCor ? new THREE.Color(amb.tetoCor) : 0xffffff,
+                roughness: 0.8,
+                side: THREE.DoubleSide,
+              })
+            );
+            forroMesh.rotation.x = Math.PI / 2;
+            forroMesh.position.y = dados.config.peDireito;
+            forroMesh.receiveShadow = true;
+            groupForro.add(forroMesh);
           }
         });
       } else if (dados.paredes.length >= 3) {
@@ -785,7 +805,12 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       // -------------------------------------------------------------
       // 5. COBERTURA / TELHADO 3D (se houver pelo menos 3 paredes)
       // -------------------------------------------------------------
-      if (!modoCorte && dados.layers.telhado && dados.paredes.length >= 3) {
+      if (
+        dados.cobertura.ativa !== false &&
+        !modoCorte &&
+        dados.layers.telhado &&
+        dados.paredes.length >= 3
+      ) {
         const box = calcularLimites(dados.paredes);
         const beiral = dados.cobertura.beiral || 0.6;
         const w = box.maxX - box.minX + beiral * 2;
@@ -960,14 +985,19 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
                 : "bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700"
             }
             onClick={() => setCamadas((prev) => ({ ...prev, telhado: !prev.telhado }))}
-            title="Ligar ou desligar telhado para ver o interior"
+            disabled={dados.cobertura.ativa === false}
+            title={
+              dados.cobertura.ativa === false
+                ? "Este projeto está configurado sem cobertura"
+                : "Ligar ou desligar telhado para ver o interior"
+            }
           >
             {camadas.telhado ? (
               <Eye className="w-4 h-4 mr-1.5 text-emerald-400" />
             ) : (
               <EyeOff className="w-4 h-4 mr-1.5 text-slate-400" />
             )}
-            Telhado
+            {dados.cobertura.ativa === false ? "Sem cobertura" : "Telhado"}
           </Button>
 
           {/* Toggle de Móveis */}
@@ -1108,5 +1138,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     );
   }
 );
+
+
+
 
 

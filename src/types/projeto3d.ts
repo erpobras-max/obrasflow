@@ -26,6 +26,7 @@ export interface Parede {
   tipo: string;
   cor?: string;
   layer?: string;
+  acabamento?: string;
 }
 
 export interface Ambiente {
@@ -35,15 +36,19 @@ export interface Ambiente {
   area: number; // m²
   perimetro: number; // m
   pisoAcabamento?: string;
+  pisoCor?: string;
   tetoAcabamento?: string;
+  tetoCor?: string;
   paredeAcabamento?: string;
 }
 
 export interface CoberturaConfig {
+  ativa?: boolean; // ausente em projetos antigos equivale a true
   tipo: "colonial_duas_aguas" | "embutida_platibanda" | "uma_agua" | "quatro_aguas";
   inclinacao: number; // porcentagem (ex: 30)
   beiral: number; // metros (ex: 0.60)
   corTelha?: string;
+  material?: "ceramica" | "fibrocimento" | "metalica" | "shingle" | "laje";
 }
 
 export interface CamadasVisibilidade {
@@ -153,4 +158,5 @@ export interface ObraProjetoCadRow {
   created_at: string;
   updated_at: string;
 }
+
 

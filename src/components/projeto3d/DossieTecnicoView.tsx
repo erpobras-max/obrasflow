@@ -35,6 +35,13 @@ export function DossieTecnicoView({
   fotoCapa,
 }: DossieTecnicoViewProps) {
   const resumo = calcularQuantitativosBIM(dados, configBdi);
+  const materialCobertura = {
+    ceramica: "cerâmica",
+    fibrocimento: "fibrocimento",
+    metalica: "metálica",
+    shingle: "shingle",
+    laje: "laje",
+  }[dados.cobertura.material ?? "ceramica"];
   const dataHoje = new Date().toLocaleDateString("pt-BR", {
     day: "2-digit",
     month: "long",
@@ -192,7 +199,11 @@ export function DossieTecnicoView({
               <div className="text-2xl font-bold text-slate-900 mt-1 font-mono">
                 {formatarM2(resumo.areaTotalCobertura)}
               </div>
-              <span className="text-[10px] text-slate-400">Com beirais e inclinação</span>
+              <span className="text-[10px] text-slate-400">
+                {dados.cobertura.ativa === false
+                  ? "Não prevista no projeto"
+                  : `Material: ${materialCobertura}`}
+              </span>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
@@ -225,6 +236,7 @@ export function DossieTecnicoView({
                     <th className="p-3 text-right">Área</th>
                     <th className="p-3 text-right">Perímetro</th>
                     <th className="p-3">Piso Especificado</th>
+                    <th className="p-3">Parede / Pintura</th>
                     <th className="p-3">Teto / Forro</th>
                   </tr>
                 </thead>
@@ -235,6 +247,7 @@ export function DossieTecnicoView({
                       <td className="p-3 text-right font-mono font-semibold">{amb.area.toFixed(2)} m²</td>
                       <td className="p-3 text-right font-mono text-slate-600">{amb.perimetro.toFixed(2)} m</td>
                       <td className="p-3 text-slate-700">{amb.pisoAcabamento || "Porcelanato Retificado 84x84"}</td>
+                      <td className="p-3 text-slate-700">{amb.paredeAcabamento || "Pintura acrílica"}</td>
                       <td className="p-3 text-slate-700">{amb.tetoAcabamento || "Forro de Gesso c/ Pintura"}</td>
                     </tr>
                   ))}
@@ -394,3 +407,6 @@ export function DossieTecnicoView({
     </div>
   );
 }
+
+
+
