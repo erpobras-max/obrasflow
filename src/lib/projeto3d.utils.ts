@@ -26,10 +26,12 @@ export const PROJETO_EM_BRANCO: DadosProjetoBIM = {
   aberturas: [],
   ambientes: [],
   cobertura: {
+    ativa: false,
     tipo: "colonial_duas_aguas",
     inclinacao: 30,
     beiral: 0.60,
     corTelha: "#b94a32",
+    material: "ceramica",
   },
   layers: {
     telhado: true,
@@ -127,10 +129,12 @@ export const PROJETO_DEMO_EXEMPLO: DadosProjetoBIM = {
     },
   ],
   cobertura: {
+    ativa: true,
     tipo: "colonial_duas_aguas",
     inclinacao: 30,
     beiral: 0.60,
     corTelha: "#b94a32",
+    material: "ceramica",
   },
   layers: {
     telhado: true,
@@ -146,6 +150,50 @@ export function calcularComprimentoParede(p1: Ponto2D, p2: Ponto2D): number {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function calcularEnquadramentoPlanta(
+  dados: Pick<DadosProjetoBIM, "paredes" | "ambientes" | "moveis">,
+  larguraCanvas: number,
+  alturaCanvas: number,
+  margem = 48
+): { zoom: number; offset: Ponto2D } | null {
+  const pontos: Ponto2D[] = [
+    ...dados.paredes.flatMap((parede) => [parede.p1, parede.p2]),
+    ...dados.ambientes.flatMap((ambiente) => ambiente.pontos),
+  ];
+
+  for (const movel of dados.moveis ?? []) {
+    const girado = Math.abs(movel.rotacao) % 180 === 90;
+    const meiaLargura = (girado ? movel.comprimento : movel.largura) / 2;
+    const meioComprimento = (girado ? movel.largura : movel.comprimento) / 2;
+    pontos.push(
+      { x: movel.x - meiaLargura, y: movel.y - meioComprimento },
+      { x: movel.x + meiaLargura, y: movel.y + meioComprimento }
+    );
+  }
+
+  if (pontos.length === 0) return null;
+
+  const xs = pontos.map((ponto) => ponto.x);
+  const ys = pontos.map((ponto) => ponto.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const larguraPlanta = Math.max(maxX - minX, 0.1);
+  const alturaPlanta = Math.max(maxY - minY, 0.1);
+  const areaUtilLargura = Math.max(larguraCanvas - margem * 2, 1);
+  const areaUtilAltura = Math.max(alturaCanvas - margem * 2, 1);
+  const zoom = Math.min(180, Math.max(2, Math.min(areaUtilLargura / larguraPlanta, areaUtilAltura / alturaPlanta)));
+
+  return {
+    zoom,
+    offset: {
+      x: (larguraCanvas - larguraPlanta * zoom) / 2 - minX * zoom,
+      y: (alturaCanvas - alturaPlanta * zoom) / 2 - minY * zoom,
+    },
+  };
 }
 
 export function snapAoGrid(valor: number, passo = 0.10): number {
@@ -239,9 +287,20 @@ export function calcularQuantitativosBIM(
   const perimetroTotalRodape = Math.max(perimetroTotal - larguraTotalPortas, 0);
 
   // Cobertura (projeção + beiral de 0.60m + inclinação de 30% -> fator 1.15)
-  const beiral = dados.cobertura.beiral || 0.6;
-  const fatorInclinacao = 1 + (dados.cobertura.inclinacao || 30) / 200; // ~1.15
-  const areaTotalCobertura = (areaTotalPisos + comprimentoTotalParedes * beiral) * fatorInclinacao;
+  const temCobertura = dados.cobertura.ativa !== false;
+  const beiral = dados.cobertura.beiral ?? 0.6;
+  const fatorInclinacao = 1 + (dados.cobertura.inclinacao ?? 30) / 200; // ~1.15
+  const areaTotalCobertura = temCobertura
+    ? (areaTotalPisos + comprimentoTotalParedes * beiral) * fatorInclinacao
+    : 0;
+  const materialCobertura = dados.cobertura.material ?? "ceramica";
+  const nomeMaterialCobertura = {
+    ceramica: "telha cerâmica",
+    fibrocimento: "telha de fibrocimento",
+    metalica: "telha metálica",
+    shingle: "telha shingle",
+    laje: "laje",
+  }[materialCobertura];
 
   // Concreto estimado de vigas e baldrame (seção 0.15m x 0.30m)
   const volumeConcretoEstimado = comprimentoTotalParedes * 0.15 * 0.3;
@@ -311,10 +370,14 @@ export function calcularQuantitativosBIM(
       id: "item_cobertura",
       codigo: "COB-01",
       codigoSinapi: "94441",
-      descricao: "Estrutura e telhado cerâmico com inclinação e beiral",
+      descricao: temCobertura
+        ? `Estrutura e cobertura em ${nomeMaterialCobertura} com inclinação e beiral`
+        : "Cobertura não prevista no projeto",
       unidade: "m²",
       quantidade: areaTotalCobertura,
-      memoriaCalculo: `Área projetada c/ beiral x inclinação ${dados.cobertura.inclinacao}%`,
+      memoriaCalculo: temCobertura
+        ? `Área projetada c/ beiral x inclinação ${dados.cobertura.inclinacao}%`
+        : "Projeto configurado sem cobertura",
       precoUnitario: 98.0,
       tipoItem: "cobertura",
     },
@@ -355,4 +418,5 @@ export function calcularQuantitativosBIM(
     precoVendaTotal,
   };
 }
+
 

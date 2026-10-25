@@ -21,6 +21,10 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ArrowLeft,
   Save,
@@ -367,6 +371,140 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
         {abaAtiva === "elementos" && (
           <div className="h-full bg-white rounded-lg border border-slate-200 p-6 overflow-y-auto">
             <div className="max-w-4xl mx-auto space-y-6">
+              <Card className="border-slate-200 shadow-2xs">
+                <CardContent className="p-4 space-y-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-slate-900">Cobertura da edificação</h3>
+                      <p className="text-xs text-slate-500">
+                        Ative somente quando o projeto realmente possuir telhado ou laje de cobertura.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="cobertura-ativa" className="text-xs">
+                        {dadosProjeto.cobertura.ativa !== false ? "Com cobertura" : "Sem cobertura"}
+                      </Label>
+                      <Switch
+                        id="cobertura-ativa"
+                        checked={dadosProjeto.cobertura.ativa !== false}
+                        onCheckedChange={(ativa) =>
+                          handleUpdateDadosProjeto({
+                            ...dadosProjeto,
+                            cobertura: { ...dadosProjeto.cobertura, ativa },
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {dadosProjeto.cobertura.ativa !== false && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                      <div className="space-y-1.5 lg:col-span-2">
+                        <Label htmlFor="cobertura-tipo" className="text-xs">Tipo</Label>
+                        <Select
+                          value={dadosProjeto.cobertura.tipo}
+                          onValueChange={(tipo) =>
+                            handleUpdateDadosProjeto({
+                              ...dadosProjeto,
+                              cobertura: {
+                                ...dadosProjeto.cobertura,
+                                tipo: tipo as DadosProjetoBIM["cobertura"]["tipo"],
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger id="cobertura-tipo"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="colonial_duas_aguas">Duas águas</SelectItem>
+                            <SelectItem value="quatro_aguas">Quatro águas</SelectItem>
+                            <SelectItem value="uma_agua">Uma água</SelectItem>
+                            <SelectItem value="embutida_platibanda">Embutida / platibanda</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cobertura-material" className="text-xs">Material</Label>
+                        <Select
+                          value={dadosProjeto.cobertura.material || "ceramica"}
+                          onValueChange={(material) =>
+                            handleUpdateDadosProjeto({
+                              ...dadosProjeto,
+                              cobertura: {
+                                ...dadosProjeto.cobertura,
+                                material: material as NonNullable<DadosProjetoBIM["cobertura"]["material"]>,
+                              },
+                            })
+                          }
+                        >
+                          <SelectTrigger id="cobertura-material"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="ceramica">Cerâmica</SelectItem>
+                            <SelectItem value="fibrocimento">Fibrocimento</SelectItem>
+                            <SelectItem value="metalica">Metálica</SelectItem>
+                            <SelectItem value="shingle">Shingle</SelectItem>
+                            <SelectItem value="laje">Laje</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cobertura-inclinacao" className="text-xs">Inclinação (%)</Label>
+                        <Input
+                          id="cobertura-inclinacao"
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={dadosProjeto.cobertura.inclinacao}
+                          onChange={(e) =>
+                            handleUpdateDadosProjeto({
+                              ...dadosProjeto,
+                              cobertura: {
+                                ...dadosProjeto.cobertura,
+                                inclinacao: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cobertura-beiral" className="text-xs">Beiral (m)</Label>
+                        <Input
+                          id="cobertura-beiral"
+                          type="number"
+                          min="0"
+                          max="5"
+                          step="0.05"
+                          value={dadosProjeto.cobertura.beiral}
+                          onChange={(e) =>
+                            handleUpdateDadosProjeto({
+                              ...dadosProjeto,
+                              cobertura: {
+                                ...dadosProjeto.cobertura,
+                                beiral: Math.min(5, Math.max(0, Number(e.target.value) || 0)),
+                              },
+                            })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="cobertura-cor" className="text-xs">Cor</Label>
+                        <Input
+                          id="cobertura-cor"
+                          type="color"
+                          value={dadosProjeto.cobertura.corTelha || "#b94a32"}
+                          onChange={(e) =>
+                            handleUpdateDadosProjeto({
+                              ...dadosProjeto,
+                              cobertura: { ...dadosProjeto.cobertura, corTelha: e.target.value },
+                            })
+                          }
+                          className="p-1"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               <div>
                 <h3 className="text-base font-semibold text-slate-900">Relação de Ambientes da Obra</h3>
                 <p className="text-xs text-slate-500">
@@ -413,15 +551,19 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
                     </div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded border border-slate-100">
-                    <div className="text-slate-400">Tipo de Telhado</div>
+                    <div className="text-slate-400">Tipo de Cobertura</div>
                     <div className="font-semibold text-slate-800 text-sm capitalize">
-                      {dadosProjeto.cobertura.tipo.replace("_", " ")}
+                      {dadosProjeto.cobertura.ativa === false
+                        ? "Sem cobertura"
+                        : dadosProjeto.cobertura.tipo.replaceAll("_", " ")}
                     </div>
                   </div>
                   <div className="p-3 bg-slate-50 rounded border border-slate-100">
                     <div className="text-slate-400">Beiral</div>
                     <div className="font-semibold text-slate-800 text-sm">
-                      {dadosProjeto.cobertura.beiral.toFixed(2)} m
+                      {dadosProjeto.cobertura.ativa === false
+                        ? "—"
+                        : `${dadosProjeto.cobertura.beiral.toFixed(2)} m`}
                     </div>
                   </div>
                 </div>
@@ -433,5 +575,6 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     </div>
   );
 }
+
 
 

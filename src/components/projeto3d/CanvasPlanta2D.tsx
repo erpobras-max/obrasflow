@@ -8,7 +8,7 @@ import type {
   Movel,
   TipoMovel,
 } from "@/types/projeto3d";
-import { snapAoGrid, calcularComprimentoParede } from "@/lib/projeto3d.utils";
+import { calcularEnquadramentoPlanta, snapAoGrid, calcularComprimentoParede } from "@/lib/projeto3d.utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -52,12 +52,14 @@ import {
   RotateCw,
   Palette,
   Bed,
+  Hand,
 } from "lucide-react";
 import { extrairParedesDoDxf, exportarParaDxf } from "@/lib/dxf-parser";
 import { toast } from "sonner";
 
 export type FerramentaAtiva =
   | "selecionar"
+  | "mao"
   | "parede"
   | "porta"
   | "janela"
@@ -181,31 +183,17 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const isDraggingCanvas = useRef(false);
   const dragStartPos = useRef<Ponto2D>({ x: 0, y: 0 });
 
-  const enquadrarParedes = useCallback((paredes: Parede[]) => {
+  const enquadrarPlanta = useCallback((projeto: Pick<DadosProjetoBIM, "paredes" | "ambientes" | "moveis">) => {
     const canvas = canvasRef.current;
-    if (!canvas || paredes.length === 0) return;
+    if (!canvas) return;
 
-    const xs = paredes.flatMap((parede) => [parede.p1.x, parede.p2.x]);
-    const ys = paredes.flatMap((parede) => [parede.p1.y, parede.p2.y]);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const largura = Math.max(maxX - minX, 0.1);
-    const altura = Math.max(maxY - minY, 0.1);
-    const margem = 48;
     const larguraCanvas = canvas.parentElement?.clientWidth || 800;
     const alturaCanvas = canvas.parentElement?.clientHeight || 600;
-    const novoZoom = Math.min(
-      180,
-      Math.max(2, Math.min((larguraCanvas - margem * 2) / largura, (alturaCanvas - margem * 2) / altura))
-    );
+    const enquadramento = calcularEnquadramentoPlanta(projeto, larguraCanvas, alturaCanvas);
+    if (!enquadramento) return;
 
-    setZoom(novoZoom);
-    setOffset({
-      x: (larguraCanvas - largura * novoZoom) / 2 - minX * novoZoom,
-      y: (alturaCanvas - altura * novoZoom) / 2 - minY * novoZoom,
-    });
+    setZoom(enquadramento.zoom);
+    setOffset(enquadramento.offset);
   }, []);
 
   // Salvar no histórico antes de mutação
@@ -977,7 +965,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   // -------------------------------------------------------------
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (e.button === 1 || e.shiftKey) {
+    if (ferramenta === "mao" || e.button === 1 || e.shiftKey) {
+      e.preventDefault();
       isDraggingCanvas.current = true;
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
@@ -1342,8 +1331,22 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   };
 
   const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const focoX = e.clientX - rect.left;
+    const focoY = e.clientY - rect.top;
+    const mundoX = (focoX - offset.x) / zoom;
+    const mundoY = (focoY - offset.y) / zoom;
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom((prev) => Math.min(Math.max(prev * delta, 15), 180));
+    const novoZoom = Math.min(Math.max(zoom * delta, 2), 180);
+
+    setZoom(novoZoom);
+    setOffset({
+      x: focoX - mundoX * novoZoom,
+      y: focoY - mundoY * novoZoom,
+    });
   };
 
   // Coordenadas da tela da abertura selecionada para HUD
@@ -1484,6 +1487,19 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             }}
           >
             <MousePointer className="w-3.5 h-3.5" /> Selecionar / Mover
+          </Button>
+
+          <Button
+            size="sm"
+            variant={ferramenta === "mao" ? "default" : "ghost"}
+            className="justify-start gap-2 h-8 text-xs"
+            onClick={() => {
+              setFerramenta("mao");
+              setPontoInicial(null);
+            }}
+            title="Arraste a planta com o botão esquerdo do mouse"
+          >
+            <Hand className="w-3.5 h-3.5" /> Mão / Mover vista
           </Button>
 
           {/* Novo Cômodo */}
@@ -1688,7 +1704,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                           ...dados,
                           paredes: paredesAtualizadas,
                         });
-                        requestAnimationFrame(() => enquadrarParedes(paredesAtualizadas));
+                        requestAnimationFrame(() => enquadrarPlanta({ ...dados, paredes: paredesAtualizadas }));
                         toast.success(`${novasParedes.length} paredes importadas do DXF!`);
                       } else {
                         toast.error("Nenhuma linha compatível encontrada no DXF.");
@@ -1980,6 +1996,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             Atalhos: <kbd className="bg-white px-1 border rounded">Del</kbd> apagar •{" "}
             <kbd className="bg-white px-1 border rounded">Esc</kbd> cancelar •{" "}
             <kbd className="bg-white px-1 border rounded">F8</kbd> ortho •{" "}
+            <kbd className="bg-white px-1 border rounded">Shift+arrastar</kbd> mover vista •{" "}
             <kbd className="bg-white px-1 border rounded">Ctrl+Z</kbd> desfazer.
           </div>
         </div>
@@ -1994,6 +2011,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           className={`w-full h-full ${
             ferramenta === "apagar"
               ? "cursor-not-allowed"
+              : ferramenta === "mao"
+              ? "cursor-grab active:cursor-grabbing"
               : ferramenta === "medir"
               ? "cursor-help"
               : ferramenta === "movel"
@@ -2004,6 +2023,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseUp}
           onWheel={handleWheel}
         />
 
@@ -2170,7 +2190,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           <Button
             size="icon-xs"
             variant="ghost"
-            onClick={() => setZoom((prev) => Math.max(prev * 0.8, 15))}
+            onClick={() => setZoom((prev) => Math.max(prev * 0.8, 2))}
             title="Diminuir Zoom"
           >
             <ZoomOut className="w-3.5 h-3.5" />
@@ -2178,11 +2198,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           <Button
             size="icon-xs"
             variant="ghost"
-            onClick={() => {
-              setZoom(50);
-              setOffset({ x: 150, y: 150 });
-            }}
-            title="Centralizar Visualização"
+            onClick={() => enquadrarPlanta(dados)}
+            title="Zoom Total: mostrar toda a planta"
           >
             <Maximize className="w-3.5 h-3.5" />
           </Button>
@@ -2561,6 +2578,5 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
-
 
 
