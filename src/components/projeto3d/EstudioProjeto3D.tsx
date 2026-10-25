@@ -389,6 +389,7 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
                       </div>
                       <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500 space-y-1">
                         <div>Piso: {amb.pisoAcabamento || "Porcelanato Padrão"}</div>
+                        <div>Paredes: {amb.paredeAcabamento || "Pintura acrílica"}</div>
                         <div>Teto: {amb.tetoAcabamento || "Forro de Gesso"}</div>
                       </div>
                     </CardContent>
@@ -432,4 +433,5 @@ export function EstudioProjeto3D({ obraId }: EstudioProjeto3DProps) {
     </div>
   );
 }
+
 
