@@ -90,6 +90,33 @@ export function selecionarElementosNaJanela(
   return selecionados;
 }
 
+export function calcularCentroSelecao(
+  dados: DadosProjetoBIM,
+  selecao: SelecaoElementoCad[]
+): Ponto2D | null {
+  const idsParede = new Set(selecao.filter((item) => item.tipo === "parede").map((item) => item.id));
+  const idsAmbiente = new Set(selecao.filter((item) => item.tipo === "ambiente").map((item) => item.id));
+  const idsMovel = new Set(selecao.filter((item) => item.tipo === "movel").map((item) => item.id));
+  const pontos: Ponto2D[] = [];
+
+  for (const parede of dados.paredes) {
+    if (idsParede.has(parede.id)) pontos.push(parede.p1, parede.p2);
+  }
+  for (const ambiente of dados.ambientes) {
+    if (idsAmbiente.has(ambiente.id)) pontos.push(...ambiente.pontos);
+  }
+  for (const movel of dados.moveis ?? []) {
+    if (idsMovel.has(movel.id)) pontos.push({ x: movel.x, y: movel.y });
+  }
+
+  if (pontos.length === 0) return null;
+  const limites = limitesPontos(pontos);
+  return {
+    x: (limites.minX + limites.maxX) / 2,
+    y: (limites.minY + limites.maxY) / 2,
+  };
+}
+
 function transformarPonto(
   ponto: Ponto2D,
   deslocamento: Ponto2D,
@@ -220,4 +247,5 @@ export function duplicarSelecao(
     selecao: novaSelecao,
   };
 }
+
 
