@@ -152,6 +152,50 @@ export function calcularComprimentoParede(p1: Ponto2D, p2: Ponto2D): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+export function calcularEnquadramentoPlanta(
+  dados: Pick<DadosProjetoBIM, "paredes" | "ambientes" | "moveis">,
+  larguraCanvas: number,
+  alturaCanvas: number,
+  margem = 48
+): { zoom: number; offset: Ponto2D } | null {
+  const pontos: Ponto2D[] = [
+    ...dados.paredes.flatMap((parede) => [parede.p1, parede.p2]),
+    ...dados.ambientes.flatMap((ambiente) => ambiente.pontos),
+  ];
+
+  for (const movel of dados.moveis ?? []) {
+    const girado = Math.abs(movel.rotacao) % 180 === 90;
+    const meiaLargura = (girado ? movel.comprimento : movel.largura) / 2;
+    const meioComprimento = (girado ? movel.largura : movel.comprimento) / 2;
+    pontos.push(
+      { x: movel.x - meiaLargura, y: movel.y - meioComprimento },
+      { x: movel.x + meiaLargura, y: movel.y + meioComprimento }
+    );
+  }
+
+  if (pontos.length === 0) return null;
+
+  const xs = pontos.map((ponto) => ponto.x);
+  const ys = pontos.map((ponto) => ponto.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const larguraPlanta = Math.max(maxX - minX, 0.1);
+  const alturaPlanta = Math.max(maxY - minY, 0.1);
+  const areaUtilLargura = Math.max(larguraCanvas - margem * 2, 1);
+  const areaUtilAltura = Math.max(alturaCanvas - margem * 2, 1);
+  const zoom = Math.min(180, Math.max(2, Math.min(areaUtilLargura / larguraPlanta, areaUtilAltura / alturaPlanta)));
+
+  return {
+    zoom,
+    offset: {
+      x: (larguraCanvas - larguraPlanta * zoom) / 2 - minX * zoom,
+      y: (alturaCanvas - alturaPlanta * zoom) / 2 - minY * zoom,
+    },
+  };
+}
+
 export function snapAoGrid(valor: number, passo = 0.10): number {
   return Math.round(valor / passo) * passo;
 }
@@ -363,4 +407,5 @@ export function calcularQuantitativosBIM(
     precoVendaTotal,
   };
 }
+
 
