@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client.custom";
 import { getR2Url } from "@/lib/r2";
-import type { DadosProjetoBIM, Parede, Abertura, Movel } from "@/types/projeto3d";
+import type { DadosProjetoBIM, Parede } from "@/types/projeto3d";
+import { elementoCadVisivel } from "@/lib/projeto3d-camadas";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -156,7 +157,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     };
 
     const resetarCamera = () => {
-      const limites = calcularLimites(dados.paredes);
+      const paredesVisiveis = dados.paredes.filter((parede) => elementoCadVisivel(dados, parede));
+      const limites = calcularLimites(paredesVisiveis.length > 0 ? paredesVisiveis : dados.paredes);
       const largura = limites.maxX - limites.minX;
       const profundidade = limites.maxZ - limites.minZ;
       const raio = Math.max(6, Math.min(500, Math.hypot(largura, profundidade) * 1.35));
@@ -328,6 +330,17 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       groupMoveis.clear();
 
       const alturaParedes = modoCorte ? 1.2 : dados.config.peDireito;
+      const paredesVisiveis = dados.paredes.filter((parede) => elementoCadVisivel(dados, parede));
+      const idsParedesVisiveis = new Set(paredesVisiveis.map((parede) => parede.id));
+      const aberturasVisiveis = (dados.aberturas ?? []).filter((abertura) =>
+        idsParedesVisiveis.has(abertura.paredeId)
+      );
+      const ambientesVisiveis = (dados.ambientes ?? []).filter((ambiente) =>
+        elementoCadVisivel(dados, ambiente)
+      );
+      const moveisVisiveis = (dados.moveis ?? []).filter((movel) =>
+        elementoCadVisivel(dados, movel)
+      );
 
       // Materiais base
       const matParedeExterna = new THREE.MeshStandardMaterial({
@@ -361,7 +374,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       // 1. CONSTRUIR PAREDES COM RECORTES DE VÃOS REAIS
       // (Isso garante que a janela não fique afogada dentro do tijolo!)
       // -------------------------------------------------------------
-      dados.paredes.forEach((parede) => {
+      paredesVisiveis.forEach((parede, indexParede) => {
         const dx = parede.p2.x - parede.p1.x;
         const dy = parede.p2.y - parede.p1.y;
         const comprimento = Math.sqrt(dx * dx + dy * dy);
@@ -379,8 +392,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         if (modo4D) {
           // No Modo 4D: Colorir por progresso real consolidado das medições
           // A proporção de paredes concluídas segue o percentual de medição da obra
-          const indexParede = dados.paredes.indexOf(parede);
-          const percentualParede = ((indexParede + 1) / dados.paredes.length) * 100;
+          const percentualParede = ((indexParede + 1) / paredesVisiveis.length) * 100;
 
           if (percentualParede <= avancoConsolidado) {
             // Executado e Medido (Verde Esmeralda)
@@ -388,7 +400,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
               color: 0x10b981,
               roughness: 0.6,
             });
-          } else if (percentualParede - (100 / dados.paredes.length) < avancoConsolidado) {
+          } else if (percentualParede - (100 / paredesVisiveis.length) < avancoConsolidado) {
             // Em execução no momento (Âmbar / Amarelo)
             matParede = new THREE.MeshStandardMaterial({
               color: 0xf59e0b,
@@ -410,7 +422,7 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
           });
         }
 
-        const aberturasNaParede = (dados.aberturas || [])
+        const aberturasNaParede = aberturasVisiveis
           .filter((a) => a.paredeId === parede.id)
           .sort((a, b) => a.distanciaP1 - b.distanciaP1);
 
@@ -484,9 +496,9 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       // -------------------------------------------------------------
       // 2. CONSTRUIR ESQUADRIAS 3D (JANELAS COM VIDRO/MOLDURA E PORTAS)
       // -------------------------------------------------------------
-      if (!modoCorte && dados.aberturas) {
-        dados.aberturas.forEach((abertura) => {
-          const parede = dados.paredes.find((p) => p.id === abertura.paredeId);
+      if (!modoCorte) {
+        aberturasVisiveis.forEach((abertura) => {
+          const parede = paredesVisiveis.find((p) => p.id === abertura.paredeId);
           if (!parede) return;
 
           const dx = parede.p2.x - parede.p1.x;
@@ -596,8 +608,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       // -------------------------------------------------------------
       // 3. PISOS DOS AMBIENTES COM ACABAMENTOS REALISTAS
       // -------------------------------------------------------------
-      if (dados.ambientes && dados.ambientes.length > 0) {
-        dados.ambientes.forEach((amb) => {
+      if (ambientesVisiveis.length > 0) {
+        ambientesVisiveis.forEach((amb) => {
           if (amb.pontos.length >= 3) {
             const shape = new THREE.Shape();
             shape.moveTo(amb.pontos[0].x, amb.pontos[0].y);
@@ -661,8 +673,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
             groupForro.add(forroMesh);
           }
         });
-      } else if (dados.paredes.length >= 3) {
-        const box = calcularLimites(dados.paredes);
+      } else if (paredesVisiveis.length >= 3) {
+        const box = calcularLimites(paredesVisiveis);
         const w = Math.max(box.maxX - box.minX, 1);
         const d = Math.max(box.maxZ - box.minZ, 1);
         const floorGeo = new THREE.PlaneGeometry(w, d);
@@ -677,8 +689,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       // -------------------------------------------------------------
       // 4. MÓVEIS PARAMÉTRICOS 3D (HUMANIZAÇÃO DA MAQUETE)
       // -------------------------------------------------------------
-      if (dados.moveis && dados.moveis.length > 0 && !modoCorte) {
-        dados.moveis.forEach((movel) => {
+      if (moveisVisiveis.length > 0 && !modoCorte) {
+        moveisVisiveis.forEach((movel) => {
           const posX = movel.x;
           const posZ = movel.y;
           const rotRad = ((movel.rotacao || 0) * Math.PI) / 180;
@@ -809,9 +821,9 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
         dados.cobertura.ativa !== false &&
         !modoCorte &&
         dados.layers.telhado &&
-        dados.paredes.length >= 3
+        paredesVisiveis.length >= 3
       ) {
-        const box = calcularLimites(dados.paredes);
+        const box = calcularLimites(paredesVisiveis);
         const beiral = dados.cobertura.beiral || 0.6;
         const w = box.maxX - box.minX + beiral * 2;
         const d = box.maxZ - box.minZ + beiral * 2;

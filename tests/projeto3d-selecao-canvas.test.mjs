@@ -14,3 +14,13 @@ test("canvas integra seleção CAD por janela e operações numéricas", async (
   assert.match(fonte, /duplicarSelecao\(/);
   assert.match(fonte, /Apagar seleção/);
 });
+
+test("canvas integra criação, associação, visibilidade e bloqueio de layers", async () => {
+  const fonte = await readFile(arquivo, "utf8");
+
+  assert.match(fonte, /Layers CAD/);
+  assert.match(fonte, /Aplicar à seleção/);
+  assert.match(fonte, /criarCamadaCad\(/);
+  assert.match(fonte, /atualizarCamadaCad\(/);
+  assert.match(fonte, /filtrarSelecaoEditavel\(/);
+});
