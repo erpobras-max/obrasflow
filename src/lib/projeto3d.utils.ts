@@ -196,6 +196,29 @@ export function calcularEnquadramentoPlanta(
   };
 }
 
+export function calcularOffsetAposZoom(
+  offset: Ponto2D,
+  zoomAtual: number,
+  novoZoom: number,
+  foco: Ponto2D
+): Ponto2D {
+  return {
+    x: foco.x - ((foco.x - offset.x) / zoomAtual) * novoZoom,
+    y: foco.y - ((foco.y - offset.y) / zoomAtual) * novoZoom,
+  };
+}
+
+export function calcularOffsetAposArraste(
+  offsetInicial: Ponto2D,
+  ponteiroInicial: Ponto2D,
+  ponteiroAtual: Ponto2D
+): Ponto2D {
+  return {
+    x: offsetInicial.x + ponteiroAtual.x - ponteiroInicial.x,
+    y: offsetInicial.y + ponteiroAtual.y - ponteiroInicial.y,
+  };
+}
+
 export function snapAoGrid(valor: number, passo = 0.10): number {
   return Math.round(valor / passo) * passo;
 }
@@ -418,6 +441,7 @@ export function calcularQuantitativosBIM(
     precoVendaTotal,
   };
 }
+
 
 
 

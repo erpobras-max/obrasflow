@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { calcularEnquadramentoPlanta } from "../src/lib/projeto3d.utils.ts";
+import {
+  calcularEnquadramentoPlanta,
+  calcularOffsetAposArraste,
+  calcularOffsetAposZoom,
+} from "../src/lib/projeto3d.utils.ts";
 
 test("enquadra uma planta deslocada dentro do canvas", () => {
   const dados = {
@@ -46,6 +50,24 @@ test("não altera a vista quando não há geometria", () => {
     null
   );
 });
+
+test("mantém o ponto focal imóvel ao alterar o zoom", () => {
+  const foco = { x: 300, y: 200 };
+  const offset = { x: 100, y: 50 };
+  const novoOffset = calcularOffsetAposZoom(offset, 50, 100, foco);
+
+  assert.deepEqual(novoOffset, { x: -100, y: -100 });
+  assert.equal((foco.x - offset.x) / 50, (foco.x - novoOffset.x) / 100);
+  assert.equal((foco.y - offset.y) / 50, (foco.y - novoOffset.y) / 100);
+});
+
+test("calcula o pan pela posição inicial e final do ponteiro", () => {
+  assert.deepEqual(
+    calcularOffsetAposArraste({ x: 10, y: 20 }, { x: 100, y: 100 }, { x: 250, y: 40 }),
+    { x: 160, y: -40 }
+  );
+});
+
 
 
 
