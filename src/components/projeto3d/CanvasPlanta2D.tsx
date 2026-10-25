@@ -104,12 +104,14 @@ export const CORES_PINTURA = [
 ];
 
 export const PRESETS_PISOS = [
-  { nome: "Porcelanato Retificado 84x84 (Polido Claro)", tag: "🏛️ Porcelanato Polido" },
-  { nome: "Madeira / Piso Laminado (Aconchegante)", tag: "🪵 Madeira Laminada" },
-  { nome: "Cimento Queimado (Moderno Industrial)", tag: "🏭 Cimento Queimado" },
-  { nome: "Cerâmica / Terracota (Rústico)", tag: "🧱 Cerâmica Terracota" },
-  { nome: "Grama / Área Externa (Verde)", tag: "🌿 Grama Verde" },
+  { nome: "Porcelanato Retificado 84x84 (Polido Claro)", tag: "🏛️ Porcelanato Polido", cor: "#f8fafc" },
+  { nome: "Madeira / Piso Laminado (Aconchegante)", tag: "🪵 Madeira Laminada", cor: "#92400e" },
+  { nome: "Cimento Queimado (Moderno Industrial)", tag: "🏭 Cimento Queimado", cor: "#475569" },
+  { nome: "Cerâmica / Terracota (Rústico)", tag: "🧱 Cerâmica Terracota", cor: "#c2410c" },
+  { nome: "Grama / Área Externa (Verde)", tag: "🌿 Grama Verde", cor: "#16a34a" },
 ];
+
+const PRESETS_TETOS = ["Forro de Gesso com Pintura Branca", "Laje Aparente", "Forro de Madeira"];
 
 interface CanvasPlanta2DProps {
   dados: DadosProjetoBIM;
@@ -628,14 +630,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         const isSelected = elementoSelecionadoId === amb.id;
         const acabamento = (amb.pisoAcabamento || "").toLowerCase();
 
-        let corFundo = "rgba(241, 245, 249, 0.6)";
-        if (acabamento.includes("madeira") || acabamento.includes("laminado")) {
+        let corFundo = amb.pisoCor ? `${amb.pisoCor}99` : "rgba(241, 245, 249, 0.6)";
+        if (!amb.pisoCor && (acabamento.includes("madeira") || acabamento.includes("laminado"))) {
           corFundo = "rgba(254, 243, 199, 0.65)"; // Bege amadeirado suave
-        } else if (acabamento.includes("cimento")) {
+        } else if (!amb.pisoCor && acabamento.includes("cimento")) {
           corFundo = "rgba(226, 232, 240, 0.7)"; // Cinza cimento
-        } else if (acabamento.includes("cerâmica") || acabamento.includes("ceramica")) {
+        } else if (!amb.pisoCor && (acabamento.includes("cerâmica") || acabamento.includes("ceramica"))) {
           corFundo = "rgba(255, 237, 213, 0.7)"; // Terracota suave
-        } else if (acabamento.includes("grama") || acabamento.includes("externo")) {
+        } else if (!amb.pisoCor && (acabamento.includes("grama") || acabamento.includes("externo"))) {
           corFundo = "rgba(220, 252, 231, 0.7)"; // Verde grama suave
         }
 
@@ -1908,13 +1910,48 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                         onChangeDados({
                           ...dados,
                           paredes: dados.paredes.map((p) =>
-                            p.id === paredeSelecionada.id ? { ...p, cor: c.hex } : p
+                            p.id === paredeSelecionada.id ? { ...p, cor: c.hex, acabamento: c.nome } : p
                           ),
                         });
                         toast.success(`Cor "${c.nome}" aplicada à parede!`);
                       }}
                     />
                   ))}
+                </div>
+                <div className="grid grid-cols-[44px_1fr] gap-1.5 mt-1.5">
+                  <Input
+                    type="color"
+                    value={paredeSelecionada.cor || "#ededed"}
+                    onChange={(e) => {
+                      registrarHistorico();
+                      onChangeDados({
+                        ...dados,
+                        paredes: dados.paredes.map((p) =>
+                          p.id === paredeSelecionada.id ? { ...p, cor: e.target.value } : p
+                        ),
+                      });
+                    }}
+                    className="h-8 p-1"
+                    aria-label="Cor personalizada da parede"
+                  />
+                  <Input
+                    key={paredeSelecionada.id}
+                    defaultValue={paredeSelecionada.acabamento || "Pintura acrílica"}
+                    onBlur={(e) => {
+                      const acabamento = e.target.value.trim();
+                      if (acabamento === (paredeSelecionada.acabamento || "Pintura acrílica")) return;
+                      registrarHistorico();
+                      onChangeDados({
+                        ...dados,
+                        paredes: dados.paredes.map((p) =>
+                          p.id === paredeSelecionada.id ? { ...p, acabamento } : p
+                        ),
+                      });
+                    }}
+                    className="h-8 text-[11px]"
+                    aria-label="Descrição da pintura da parede"
+                    placeholder="Ex.: Tinta acrílica fosca"
+                  />
                 </div>
               </div>
 
@@ -2349,10 +2386,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       {/* MODAL DE EDIÇÃO DE AMBIENTE & PISO */}
       {/* ----------------------------------------------------------- */}
       <Dialog open={modalEditarAmbienteAberto} onOpenChange={setModalEditarAmbienteAberto}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base font-bold text-slate-900">
-              <Type className="w-5 h-5 text-indigo-600" /> Editar Ambiente & Acabamento de Piso
+              <Type className="w-5 h-5 text-indigo-600" /> Editar Ambiente & Acabamentos
             </DialogTitle>
           </DialogHeader>
 
@@ -2386,7 +2423,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                           : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
                       }`}
                       onClick={() =>
-                        setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoAcabamento: p.nome })
+                        setAmbienteEmEdicao({
+                          ...ambienteEmEdicao,
+                          pisoAcabamento: p.nome,
+                          pisoCor: p.cor,
+                        })
                       }
                     >
                       <span>{p.tag}</span>
@@ -2395,6 +2436,76 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                       )}
                     </button>
                   ))}
+                </div>
+                <div className="grid grid-cols-[48px_1fr] gap-2 mt-2">
+                  <Input
+                    type="color"
+                    value={ambienteEmEdicao.pisoCor || "#f8fafc"}
+                    onChange={(e) => setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoCor: e.target.value })}
+                    className="h-9 p-1"
+                    aria-label="Cor personalizada do piso"
+                  />
+                  <Input
+                    value={ambienteEmEdicao.pisoAcabamento || ""}
+                    onChange={(e) =>
+                      setAmbienteEmEdicao({ ...ambienteEmEdicao, pisoAcabamento: e.target.value })
+                    }
+                    className="h-9 text-xs"
+                    placeholder="Outro acabamento de piso"
+                    aria-label="Acabamento personalizado do piso"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                  Pintura / acabamento das paredes
+                </Label>
+                <Input
+                  value={ambienteEmEdicao.paredeAcabamento || ""}
+                  onChange={(e) =>
+                    setAmbienteEmEdicao({ ...ambienteEmEdicao, paredeAcabamento: e.target.value })
+                  }
+                  className="h-9 text-xs"
+                  placeholder="Ex.: Pintura acrílica fosca lavável"
+                />
+              </div>
+
+              <div>
+                <Label className="text-xs font-semibold text-slate-700 mb-1.5 block">
+                  Teto / forro
+                </Label>
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {PRESETS_TETOS.map((acabamento) => (
+                    <Button
+                      key={acabamento}
+                      type="button"
+                      size="sm"
+                      variant={ambienteEmEdicao.tetoAcabamento === acabamento ? "default" : "outline"}
+                      className="h-7 text-[10px]"
+                      onClick={() => setAmbienteEmEdicao({ ...ambienteEmEdicao, tetoAcabamento: acabamento })}
+                    >
+                      {acabamento}
+                    </Button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-[48px_1fr] gap-2">
+                  <Input
+                    type="color"
+                    value={ambienteEmEdicao.tetoCor || "#ffffff"}
+                    onChange={(e) => setAmbienteEmEdicao({ ...ambienteEmEdicao, tetoCor: e.target.value })}
+                    className="h-9 p-1"
+                    aria-label="Cor personalizada do teto"
+                  />
+                  <Input
+                    value={ambienteEmEdicao.tetoAcabamento || ""}
+                    onChange={(e) =>
+                      setAmbienteEmEdicao({ ...ambienteEmEdicao, tetoAcabamento: e.target.value })
+                    }
+                    className="h-9 text-xs"
+                    placeholder="Outro acabamento de teto"
+                    aria-label="Acabamento personalizado do teto"
+                  />
                 </div>
               </div>
 
@@ -2429,7 +2540,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                       amb.id === ambienteEmEdicao.id ? ambienteEmEdicao : amb
                     ),
                   });
-                  toast.success("Ambiente e piso atualizados no 2D e 3D!");
+                  toast.success("Ambiente e acabamentos atualizados no 2D e 3D!");
                 }
                 setModalEditarAmbienteAberto(false);
               }}
@@ -2467,7 +2578,5 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
-
-
 
 

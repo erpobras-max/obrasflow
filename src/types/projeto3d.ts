@@ -25,6 +25,7 @@ export interface Parede {
   altura: number; // metros (ex: 2.80)
   tipo: string;
   cor?: string;
+  acabamento?: string;
 }
 
 export interface Ambiente {
@@ -34,7 +35,9 @@ export interface Ambiente {
   area: number; // m²
   perimetro: number; // m
   pisoAcabamento?: string;
+  pisoCor?: string;
   tetoAcabamento?: string;
+  tetoCor?: string;
   paredeAcabamento?: string;
 }
 
@@ -154,4 +157,5 @@ export interface ObraProjetoCadRow {
   created_at: string;
   updated_at: string;
 }
+
 

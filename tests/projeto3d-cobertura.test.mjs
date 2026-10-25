@@ -37,3 +37,4 @@ test("projeto antigo sem campo ativa preserva a cobertura", () => {
   assert.ok(resumo.areaTotalCobertura > 0);
 });
 
+
