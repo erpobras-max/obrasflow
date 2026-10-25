@@ -59,6 +59,12 @@ import {
   Palette,
   Bed,
   Hand,
+  Eye,
+  EyeOff,
+  Lock,
+  LockOpen,
+  Layers3,
+  Pencil,
 } from "lucide-react";
 import { importarDxf, exportarParaDxf } from "@/lib/dxf-parser";
 import {
@@ -68,6 +74,18 @@ import {
   transformarSelecao,
   type SelecaoElementoCad,
 } from "@/lib/projeto3d-transformacoes";
+import {
+  CAMADA_CAD_PADRAO_ID,
+  aplicarCamadaNaSelecao,
+  atualizarCamadaCad,
+  criarCamadaCad,
+  elementoCadEditavel,
+  elementoCadVisivel,
+  filtrarSelecaoEditavel,
+  listarCamadasCad,
+  removerCamadaCad,
+  renomearCamadaCad,
+} from "@/lib/projeto3d-camadas";
 import { toast } from "sonner";
 
 export type FerramentaAtiva =
@@ -145,6 +163,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const [deslocamentoX, setDeslocamentoX] = useState("0.00");
   const [deslocamentoY, setDeslocamentoY] = useState("0.00");
   const [rotacaoSelecao, setRotacaoSelecao] = useState("90");
+  const [camadaAtivaId, setCamadaAtivaId] = useState(CAMADA_CAD_PADRAO_ID);
+  const [novoNomeCamada, setNovoNomeCamada] = useState("");
   const adicionarNaSelecaoRef = useRef(false);
   const suprimirProximoClick = useRef(false);
 
@@ -209,6 +229,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     () => new Set(selecaoMultipla.map((item) => item.id)),
     [selecaoMultipla]
   );
+  const camadasCad = useMemo(() => listarCamadasCad(dados), [dados]);
+  const camadaAtivaCad = camadasCad.find((camada) => camada.id === camadaAtivaId) ?? camadasCad[0];
+
+  useEffect(() => {
+    if (!camadasCad.some((camada) => camada.id === camadaAtivaId)) {
+      setCamadaAtivaId(CAMADA_CAD_PADRAO_ID);
+    }
+  }, [camadaAtivaId, camadasCad]);
 
   const enquadrarPlanta = useCallback((projeto: Pick<DadosProjetoBIM, "paredes" | "ambientes" | "moveis">) => {
     const canvas = canvasRef.current;
@@ -286,6 +314,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const detectarSnap = useCallback(
     (posMundo: Ponto2D, raioSnapMundo: number = 0.35): SnapInfo | null => {
       for (const p of dados.paredes) {
+        if (!elementoCadVisivel(dados, p)) continue;
         const dist1 = Math.hypot(posMundo.x - p.p1.x, posMundo.y - p.p1.y);
         if (dist1 <= raioSnapMundo) {
           return { x: p.p1.x, y: p.p1.y, tipo: "endpoint", paredeId: p.id };
@@ -297,6 +326,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       }
 
       for (const p of dados.paredes) {
+        if (!elementoCadVisivel(dados, p)) continue;
         const midX = (p.p1.x + p.p2.x) / 2;
         const midY = (p.p1.y + p.p2.y) / 2;
         const distMid = Math.hypot(posMundo.x - midX, posMundo.y - midY);
@@ -307,7 +337,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
       return null;
     },
-    [dados.paredes]
+    [dados]
   );
 
   // Modo Ortogonal (Ortho Lock 90°)
@@ -329,7 +359,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
       dados.aberturas.forEach((ab) => {
         const parede = dados.paredes.find((p) => p.id === ab.paredeId);
-        if (!parede) return;
+        if (!parede || !elementoCadEditavel(dados, parede)) return;
         const dx = parede.p2.x - parede.p1.x;
         const dy = parede.p2.y - parede.p1.y;
         const comp = Math.sqrt(dx * dx + dy * dy);
@@ -346,7 +376,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
       return maisProxima;
     },
-    [dados.aberturas, dados.paredes]
+    [dados]
   );
 
   // Encontrar Móvel Mais Próximo
@@ -354,6 +384,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     (pos: Ponto2D): Movel | null => {
       if (!dados.moveis || dados.moveis.length === 0) return null;
       for (const m of dados.moveis) {
+        if (!elementoCadEditavel(dados, m)) continue;
         const dx = Math.abs(pos.x - m.x);
         const dy = Math.abs(pos.y - m.y);
         if (dx <= m.largura / 1.8 && dy <= m.comprimento / 1.8) {
@@ -362,7 +393,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       }
       return null;
     },
-    [dados.moveis]
+    [dados]
   );
 
   // Encontrar Parede Mais Próxima
@@ -373,6 +404,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       let distAoInicio = 0;
 
       dados.paredes.forEach((p) => {
+        if (!elementoCadEditavel(dados, p)) return;
         const dx = p.p2.x - p.p1.x;
         const dy = p.p2.y - p.p1.y;
         const comp = Math.sqrt(dx * dx + dy * dy);
@@ -394,7 +426,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         ? { parede: maisProxima, distanciaPontoReta: menorDist, distanciaAoInicio: distAoInicio }
         : null;
     },
-    [dados.paredes]
+    [dados]
   );
 
   // Elementos selecionados atualmente
@@ -538,7 +570,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
   const aplicarTransformacaoNaSelecao = useCallback(
     (tipo: "mover" | "rotacionar") => {
-      if (selecaoMultipla.length === 0) return;
+      const selecaoEditavel = filtrarSelecaoEditavel(dados, selecaoMultipla);
+      if (selecaoEditavel.length === 0) return;
       const dx = Number(deslocamentoX.replace(",", "."));
       const dy = Number(deslocamentoY.replace(",", "."));
       const rotacao = Number(rotacaoSelecao.replace(",", "."));
@@ -547,11 +580,11 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         return;
       }
 
-      const centro = calcularCentroSelecao(dados, selecaoMultipla);
+      const centro = calcularCentroSelecao(dados, selecaoEditavel);
       if (!centro) return;
       registrarHistorico();
       onChangeDados(
-        transformarSelecao(dados, selecaoMultipla, {
+        transformarSelecao(dados, selecaoEditavel, {
           deslocamento: tipo === "mover" ? { x: dx, y: dy } : undefined,
           rotacaoGraus: tipo === "rotacionar" ? rotacao : undefined,
           centroRotacao: centro,
@@ -563,7 +596,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   );
 
   const handleDuplicarSelecao = useCallback(() => {
-    if (selecaoMultipla.length === 0) return;
+    const selecaoEditavel = filtrarSelecaoEditavel(dados, selecaoMultipla);
+    if (selecaoEditavel.length === 0) return;
     const dx = Number(deslocamentoX.replace(",", "."));
     const dy = Number(deslocamentoY.replace(",", "."));
     if (![dx, dy].every(Number.isFinite)) {
@@ -575,7 +609,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     registrarHistorico();
     const resultado = duplicarSelecao(
       dados,
-      selecaoMultipla,
+      selecaoEditavel,
       { x: dx, y: dy },
       (tipo, originalId) => `${tipo}_${originalId}_${sufixo}`
     );
@@ -586,12 +620,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   }, [dados, deslocamentoX, deslocamentoY, onChangeDados, registrarHistorico, selecaoMultipla]);
 
   const handleApagarSelecao = useCallback(() => {
-    if (selecaoMultipla.length === 0) return;
-    const paredes = new Set(selecaoMultipla.filter((item) => item.tipo === "parede").map((item) => item.id));
+    const selecaoEditavel = filtrarSelecaoEditavel(dados, selecaoMultipla);
+    if (selecaoEditavel.length === 0) return;
+    const paredes = new Set(selecaoEditavel.filter((item) => item.tipo === "parede").map((item) => item.id));
     const ambientes = new Set(
-      selecaoMultipla.filter((item) => item.tipo === "ambiente").map((item) => item.id)
+      selecaoEditavel.filter((item) => item.tipo === "ambiente").map((item) => item.id)
     );
-    const moveis = new Set(selecaoMultipla.filter((item) => item.tipo === "movel").map((item) => item.id));
+    const moveis = new Set(selecaoEditavel.filter((item) => item.tipo === "movel").map((item) => item.id));
 
     registrarHistorico();
     onChangeDados({
@@ -604,6 +639,54 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     limparSelecao();
     toast.success("Seleção removida.");
   }, [dados, limparSelecao, onChangeDados, registrarHistorico, selecaoMultipla]);
+
+  const handleCriarCamada = () => {
+    const id = `camada_${Date.now()}`;
+    const atualizado = criarCamadaCad(dados, id, novoNomeCamada);
+    if (atualizado === dados) {
+      toast.error("Informe um nome novo para a camada.");
+      return;
+    }
+    registrarHistorico();
+    onChangeDados(atualizado);
+    setCamadaAtivaId(id);
+    setNovoNomeCamada("");
+  };
+
+  const handleAplicarCamada = () => {
+    if (selecaoMultipla.length === 0) return;
+    registrarHistorico();
+    onChangeDados(aplicarCamadaNaSelecao(dados, selecaoMultipla, camadaAtivaId));
+    limparSelecao();
+    toast.success("Camada aplicada à seleção.");
+  };
+
+  const handleAlternarCamada = (camadaId: string, campo: "visivel" | "bloqueada", valor: boolean) => {
+    registrarHistorico();
+    onChangeDados(atualizarCamadaCad(dados, camadaId, { [campo]: valor }));
+    limparSelecao();
+  };
+
+  const handleRenomearCamada = (camadaId: string, nomeAtual: string) => {
+    const nome = window.prompt("Nome da camada", nomeAtual);
+    if (nome === null || nome.trim() === nomeAtual) return;
+    const atualizado = renomearCamadaCad(dados, camadaId, nome);
+    if (atualizado === dados) {
+      toast.error("Use um nome não vazio e ainda não utilizado.");
+      return;
+    }
+    registrarHistorico();
+    onChangeDados(atualizado);
+  };
+
+  const handleRemoverCamada = (camadaId: string) => {
+    const camada = camadasCad.find((item) => item.id === camadaId);
+    if (!camada || !window.confirm(`Excluir a camada "${camada.nome}"? Os itens serão movidos para Geral.`)) return;
+    registrarHistorico();
+    onChangeDados(removerCamadaCad(dados, camadaId));
+    if (camadaAtivaId === camadaId) setCamadaAtivaId(CAMADA_CAD_PADRAO_ID);
+    limparSelecao();
+  };
 
   // -------------------------------------------------------------
   // ATALHOS DE TECLADO CAD
@@ -735,7 +818,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     }
 
     // 2. Ambientes (Pisos com cores estilizadas)
-    dados.ambientes.forEach((amb) => {
+    dados.ambientes.filter((amb) => elementoCadVisivel(dados, amb)).forEach((amb) => {
       if (amb.pontos.length >= 3) {
         const isHover = elementoHover?.id === amb.id && (ferramenta === "texto" || ferramenta === "apagar");
         const isSelected = elementoSelecionadoId === amb.id || idsSelecaoMultipla.has(amb.id);
@@ -784,7 +867,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     });
 
     // 3. Móveis Paramétricos no 2D
-    (dados.moveis || []).forEach((movel) => {
+    (dados.moveis || []).filter((movel) => elementoCadVisivel(dados, movel)).forEach((movel) => {
       const isSelected = movel.id === elementoSelecionadoId || idsSelecaoMultipla.has(movel.id);
       const isHover = elementoHover?.id === movel.id;
       const isHoverApagar = ferramenta === "apagar" && isHover;
@@ -882,7 +965,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     });
 
     // 4. Paredes
-    dados.paredes.forEach((parede) => {
+    dados.paredes.filter((parede) => elementoCadVisivel(dados, parede)).forEach((parede) => {
       const isSelected = parede.id === elementoSelecionadoId || idsSelecaoMultipla.has(parede.id);
       const isHoverApagar = ferramenta === "apagar" && elementoHover?.id === parede.id;
       const p1 = worldToScreen(parede.p1.x, parede.p1.y);
@@ -918,7 +1001,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     // 5. Aberturas (Portas e Janelas)
     dados.aberturas.forEach((ab) => {
       const parede = dados.paredes.find((p) => p.id === ab.paredeId);
-      if (!parede) return;
+      if (!parede || !elementoCadVisivel(dados, parede)) return;
 
       const comp = calcularComprimentoParede(parede.p1, parede.p2);
       const t = Math.min(Math.max(ab.distanciaP1 / comp, 0), 1);
@@ -1153,7 +1236,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       }
 
       const paredeAlvo = encontrarParedeMaisProxima(worldPos);
-      const ambienteAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+      const ambienteAlvo = dados.ambientes.find(
+        (amb) => elementoCadEditavel(dados, amb) && pontoDentroPoligono(worldPos, amb.pontos)
+      );
       if ((paredeAlvo && paredeAlvo.distanciaPontoReta < 0.35) || ambienteAlvo) return;
 
       e.preventDefault();
@@ -1250,7 +1335,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         if (parHover && parHover.distanciaPontoReta < 0.35) {
           setElementoHover({ id: parHover.parede.id, tipo: "parede" });
         } else {
-          const ambHover = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+          const ambHover = dados.ambientes.find(
+            (amb) => elementoCadEditavel(dados, amb) && pontoDentroPoligono(worldPos, amb.pontos)
+          );
           setElementoHover(ambHover ? { id: ambHover.id, tipo: "ambiente" } : null);
         }
       }
@@ -1281,11 +1368,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
           (fim.y - inicioJanelaSelecao.y) * zoom
         );
         if (distanciaPixels > 3) {
-          const encontrados = selecionarElementosNaJanela(
+          const encontrados = filtrarSelecaoEditavel(
             dados,
-            inicioJanelaSelecao,
-            fim,
-            fim.x >= inicioJanelaSelecao.x ? "conter" : "cruzar"
+            selecionarElementosNaJanela(
+              dados,
+              inicioJanelaSelecao,
+              fim,
+              fim.x >= inicioJanelaSelecao.x ? "conter" : "cruzar"
+            )
           );
           const combinados = adicionarNaSelecaoRef.current
             ? [...selecaoMultipla, ...encontrados].filter(
@@ -1324,6 +1414,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     const screenY = e.clientY - rect.top;
     let worldPos = screenToWorld(screenX, screenY);
 
+    if (
+      (ferramenta === "movel" || ferramenta === "parede") &&
+      (!camadaAtivaCad.visivel || camadaAtivaCad.bloqueada)
+    ) {
+      toast.error("Mostre e desbloqueie o layer ativo antes de desenhar.");
+      return;
+    }
+
     if (pontoSnapAtivo) {
       worldPos = { x: pontoSnapAtivo.x, y: pontoSnapAtivo.y };
     }
@@ -1341,6 +1439,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         comprimento: configMovel.comprimento,
         altura: configMovel.altura,
         rotacao: 0,
+        camadaId: camadaAtivaId,
       };
 
       registrarHistorico();
@@ -1372,6 +1471,8 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
             espessura: espessuraAtiva,
             altura: peDireitoAtivo,
             tipo: "alvenaria_vedacao",
+            camadaId: camadaAtivaId,
+            layer: camadasCad.find((camada) => camada.id === camadaAtivaId)?.nome,
           };
 
           const primeiroPonto = cadeiaParedes.current[0];
@@ -1389,6 +1490,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               pisoAcabamento: "Porcelanato Retificado 84x84 (Polido Claro)",
               tetoAcabamento: "Forro de Gesso",
               paredeAcabamento: "Pintura Acrílica Fosca Lavável",
+              camadaId: camadaAtivaId,
             };
 
             onChangeDados({
@@ -1481,7 +1583,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         return;
       }
 
-      const ambienteAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+      const ambienteAlvo = dados.ambientes.find(
+        (amb) => elementoCadEditavel(dados, amb) && pontoDentroPoligono(worldPos, amb.pontos)
+      );
       if (ambienteAlvo) {
         selecionarItem({ tipo: "ambiente", id: ambienteAlvo.id }, adicionar);
         return;
@@ -1511,7 +1615,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         return;
       }
 
-      const ambienteAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+      const ambienteAlvo = dados.ambientes.find(
+        (amb) => elementoCadEditavel(dados, amb) && pontoDentroPoligono(worldPos, amb.pontos)
+      );
       if (ambienteAlvo) {
         handleApagarAmbiente(ambienteAlvo.id);
         return;
@@ -1534,7 +1640,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     // 7. FERRAMENTA TEXTO / AMBIENTE
     if (ferramenta === "texto") {
-      const ambAlvo = dados.ambientes.find((amb) => pontoDentroPoligono(worldPos, amb.pontos));
+      const ambAlvo = dados.ambientes.find(
+        (amb) => elementoCadEditavel(dados, amb) && pontoDentroPoligono(worldPos, amb.pontos)
+      );
       if (ambAlvo) {
         setAmbienteEmEdicao(ambAlvo);
         setModalEditarAmbienteAberto(true);
@@ -1589,6 +1697,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
   // Criação instantânea de cômodo paramétrico
   const handleCriarComodoRapido = () => {
+    if (!camadaAtivaCad.visivel || camadaAtivaCad.bloqueada) {
+      toast.error("Mostre e desbloqueie o layer ativo antes de criar o cômodo.");
+      return;
+    }
     const larg = parseFloat(comodoLargura) || 4.0;
     const comp = parseFloat(comodoComprimento) || 3.0;
 
@@ -1605,6 +1717,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     const espessura = espessuraAtiva;
     const altura = peDireitoAtivo;
     const timestamp = Date.now();
+    const nomeCamadaAtiva = camadasCad.find((camada) => camada.id === camadaAtivaId)?.nome;
 
     const pTL: Ponto2D = { x: startX, y: startY };
     const pTR: Ponto2D = { x: startX + larg, y: startY };
@@ -1612,10 +1725,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     const pBL: Ponto2D = { x: startX, y: startY + comp };
 
     const novasParedes: Parede[] = [
-      { id: `parede_${timestamp}_1`, p1: pTL, p2: pTR, espessura, altura, tipo: "alvenaria_vedacao" },
-      { id: `parede_${timestamp}_2`, p1: pTR, p2: pBR, espessura, altura, tipo: "alvenaria_vedacao" },
-      { id: `parede_${timestamp}_3`, p1: pBR, p2: pBL, espessura, altura, tipo: "alvenaria_vedacao" },
-      { id: `parede_${timestamp}_4`, p1: pBL, p2: pTL, espessura, altura, tipo: "alvenaria_vedacao" },
+      { id: `parede_${timestamp}_1`, p1: pTL, p2: pTR, espessura, altura, tipo: "alvenaria_vedacao", camadaId: camadaAtivaId, layer: nomeCamadaAtiva },
+      { id: `parede_${timestamp}_2`, p1: pTR, p2: pBR, espessura, altura, tipo: "alvenaria_vedacao", camadaId: camadaAtivaId, layer: nomeCamadaAtiva },
+      { id: `parede_${timestamp}_3`, p1: pBR, p2: pBL, espessura, altura, tipo: "alvenaria_vedacao", camadaId: camadaAtivaId, layer: nomeCamadaAtiva },
+      { id: `parede_${timestamp}_4`, p1: pBL, p2: pTL, espessura, altura, tipo: "alvenaria_vedacao", camadaId: camadaAtivaId, layer: nomeCamadaAtiva },
     ];
 
     const novoAmbiente: Ambiente = {
@@ -1627,6 +1740,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       pisoAcabamento: "Porcelanato Retificado 84x84 (Polido Claro)",
       tetoAcabamento: "Forro de Gesso",
       paredeAcabamento: "Pintura Acrílica Fosca Lavável",
+      camadaId: camadaAtivaId,
     };
 
     registrarHistorico();
@@ -1804,6 +1918,97 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
               )}
             </div>
           )}
+
+          <div className="rounded-md border border-slate-200 bg-white p-2 space-y-2">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-700">
+              <Layers3 className="h-3.5 w-3.5 text-indigo-600" /> Layers CAD
+            </div>
+            <select
+              aria-label="Layer CAD ativo"
+              value={camadaAtivaId}
+              onChange={(e) => setCamadaAtivaId(e.target.value)}
+              className="h-7 w-full rounded border border-slate-200 bg-white px-2 text-[10px]"
+            >
+              {camadasCad.map((camada) => (
+                <option key={camada.id} value={camada.id}>
+                  {camada.nome}{camada.bloqueada ? " (bloqueado)" : ""}
+                </option>
+              ))}
+            </select>
+            {selecaoMultipla.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 w-full text-[10px]"
+                onClick={handleAplicarCamada}
+              >
+                Aplicar à seleção ({selecaoMultipla.length})
+              </Button>
+            )}
+            <div className="space-y-1">
+              {camadasCad.map((camada) => (
+                <div key={camada.id} className="flex items-center gap-1 rounded bg-slate-50 px-1 py-0.5">
+                  <span className="min-w-0 flex-1 truncate text-[10px]" title={camada.nome}>
+                    {camada.nome}
+                  </span>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-slate-500 hover:bg-white hover:text-slate-900"
+                    onClick={() => handleAlternarCamada(camada.id, "visivel", !camada.visivel)}
+                    aria-label={`${camada.visivel ? "Ocultar" : "Mostrar"} camada ${camada.nome}`}
+                  >
+                    {camada.visivel ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-slate-500 hover:bg-white hover:text-slate-900"
+                    onClick={() => handleAlternarCamada(camada.id, "bloqueada", !camada.bloqueada)}
+                    aria-label={`${camada.bloqueada ? "Desbloquear" : "Bloquear"} camada ${camada.nome}`}
+                  >
+                    {camada.bloqueada ? <Lock className="h-3 w-3" /> : <LockOpen className="h-3 w-3" />}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded p-1 text-slate-500 hover:bg-white hover:text-slate-900"
+                    onClick={() => handleRenomearCamada(camada.id, camada.nome)}
+                    aria-label={`Renomear camada ${camada.nome}`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={camada.id === CAMADA_CAD_PADRAO_ID}
+                    className="rounded p-1 text-slate-500 hover:bg-white hover:text-red-600 disabled:opacity-25"
+                    onClick={() => handleRemoverCamada(camada.id)}
+                    aria-label={`Excluir camada ${camada.nome}`}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-1">
+              <Input
+                aria-label="Nome da nova camada"
+                value={novoNomeCamada}
+                onChange={(e) => setNovoNomeCamada(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCriarCamada();
+                }}
+                placeholder="Nova camada"
+                className="h-7 min-w-0 text-[10px]"
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 shrink-0"
+                onClick={handleCriarCamada}
+                aria-label="Criar camada"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
 
           {/* Novo Cômodo */}
           <Button

@@ -26,6 +26,7 @@ export interface Parede {
   tipo: string;
   cor?: string;
   layer?: string;
+  camadaId?: string;
   acabamento?: string;
 }
 
@@ -40,6 +41,7 @@ export interface Ambiente {
   tetoAcabamento?: string;
   tetoCor?: string;
   paredeAcabamento?: string;
+  camadaId?: string;
 }
 
 export interface CoberturaConfig {
@@ -59,6 +61,13 @@ export interface CamadasVisibilidade {
   piso: boolean;
   estrutura: boolean;
   moveis?: boolean;
+}
+
+export interface CamadaCad {
+  id: string;
+  nome: string;
+  visivel: boolean;
+  bloqueada: boolean;
 }
 
 export type TipoMovel =
@@ -85,6 +94,7 @@ export interface Movel {
   comprimento: number; // metros
   altura: number; // metros
   rotacao: number; // graus: 0, 90, 180, 270
+  camadaId?: string;
 }
 
 export interface ConfigProjeto {
@@ -100,6 +110,7 @@ export interface DadosProjetoBIM {
   ambientes: Ambiente[];
   cobertura: CoberturaConfig;
   layers: CamadasVisibilidade;
+  camadasCad?: CamadaCad[];
   moveis?: Movel[];
 }
 
