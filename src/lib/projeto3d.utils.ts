@@ -26,10 +26,12 @@ export const PROJETO_EM_BRANCO: DadosProjetoBIM = {
   aberturas: [],
   ambientes: [],
   cobertura: {
+    ativa: false,
     tipo: "colonial_duas_aguas",
     inclinacao: 30,
     beiral: 0.60,
     corTelha: "#b94a32",
+    material: "ceramica",
   },
   layers: {
     telhado: true,
@@ -127,10 +129,12 @@ export const PROJETO_DEMO_EXEMPLO: DadosProjetoBIM = {
     },
   ],
   cobertura: {
+    ativa: true,
     tipo: "colonial_duas_aguas",
     inclinacao: 30,
     beiral: 0.60,
     corTelha: "#b94a32",
+    material: "ceramica",
   },
   layers: {
     telhado: true,
@@ -276,9 +280,20 @@ export function calcularQuantitativosBIM(
   const perimetroTotalRodape = Math.max(perimetroTotal - larguraTotalPortas, 0);
 
   // Cobertura (projeção + beiral de 0.60m + inclinação de 30% -> fator 1.15)
-  const beiral = dados.cobertura.beiral || 0.6;
-  const fatorInclinacao = 1 + (dados.cobertura.inclinacao || 30) / 200; // ~1.15
-  const areaTotalCobertura = (areaTotalPisos + comprimentoTotalParedes * beiral) * fatorInclinacao;
+  const temCobertura = dados.cobertura.ativa !== false;
+  const beiral = dados.cobertura.beiral ?? 0.6;
+  const fatorInclinacao = 1 + (dados.cobertura.inclinacao ?? 30) / 200; // ~1.15
+  const areaTotalCobertura = temCobertura
+    ? (areaTotalPisos + comprimentoTotalParedes * beiral) * fatorInclinacao
+    : 0;
+  const materialCobertura = dados.cobertura.material ?? "ceramica";
+  const nomeMaterialCobertura = {
+    ceramica: "telha cerâmica",
+    fibrocimento: "telha de fibrocimento",
+    metalica: "telha metálica",
+    shingle: "telha shingle",
+    laje: "laje",
+  }[materialCobertura];
 
   // Concreto estimado de vigas e baldrame (seção 0.15m x 0.30m)
   const volumeConcretoEstimado = comprimentoTotalParedes * 0.15 * 0.3;
@@ -344,10 +359,14 @@ export function calcularQuantitativosBIM(
       id: "item_cobertura",
       codigo: "COB-01",
       codigoSinapi: "94441",
-      descricao: "Estrutura e telhado cerâmico com inclinação e beiral",
+      descricao: temCobertura
+        ? `Estrutura e cobertura em ${nomeMaterialCobertura} com inclinação e beiral`
+        : "Cobertura não prevista no projeto",
       unidade: "m²",
       quantidade: areaTotalCobertura,
-      memoriaCalculo: `Área projetada c/ beiral x inclinação ${dados.cobertura.inclinacao}%`,
+      memoriaCalculo: temCobertura
+        ? `Área projetada c/ beiral x inclinação ${dados.cobertura.inclinacao}%`
+        : "Projeto configurado sem cobertura",
       precoUnitario: 98.0,
       tipoItem: "cobertura",
     },
@@ -388,4 +407,5 @@ export function calcularQuantitativosBIM(
     precoVendaTotal,
   };
 }
+
 

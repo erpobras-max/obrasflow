@@ -157,7 +157,7 @@ function PortalProjetoPage() {
           <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-800">
             <Info className="w-4 h-4 shrink-0 text-blue-600" />
             <span>
-              <strong>Dica de visualização:</strong> Clique e arraste para girar a maquete, use a roda do mouse para aproximar, e clique no botão <strong>"Telhado"</strong> para ver a divisão interna dos cômodos da sua obra!
+              <strong>Dica de visualização:</strong> Clique e arraste para girar a maquete, use a roda do mouse para aproximar e, quando houver cobertura configurada, clique em <strong>"Telhado"</strong> para ver a divisão interna dos cômodos.
             </span>
           </div>
         </div>
@@ -174,3 +174,4 @@ function PortalProjetoPage() {
     </div>
   );
 }
+

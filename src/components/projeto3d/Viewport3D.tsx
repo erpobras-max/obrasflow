@@ -131,12 +131,12 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
 
     // Atualizar visibilidade das camadas na cena
     useEffect(() => {
-      groupTelhadoRef.current.visible = camadas.telhado && !modoCorte;
+      groupTelhadoRef.current.visible = dados.cobertura.ativa !== false && camadas.telhado && !modoCorte;
       groupParedesRef.current.visible = camadas.paredes;
       groupEsquadriasRef.current.visible = camadas.esquadrias;
       groupPisoRef.current.visible = camadas.piso;
       groupMoveisRef.current.visible = (camadas.moveis !== false);
-    }, [camadas, modoCorte]);
+    }, [camadas, modoCorte, dados.cobertura.ativa]);
 
     // Função de captura de tela
     const capturarFoto = () => {
@@ -342,7 +342,8 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       });
       const matTelha = new THREE.MeshStandardMaterial({
         color: new THREE.Color(dados.cobertura.corTelha || "#b94a32"),
-        roughness: 0.7,
+        roughness: dados.cobertura.material === "metalica" ? 0.35 : 0.7,
+        metalness: dados.cobertura.material === "metalica" ? 0.65 : 0,
       });
 
       // Se não há paredes, limpa a cena e não constrói nada
@@ -785,7 +786,12 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
       // -------------------------------------------------------------
       // 5. COBERTURA / TELHADO 3D (se houver pelo menos 3 paredes)
       // -------------------------------------------------------------
-      if (!modoCorte && dados.layers.telhado && dados.paredes.length >= 3) {
+      if (
+        dados.cobertura.ativa !== false &&
+        !modoCorte &&
+        dados.layers.telhado &&
+        dados.paredes.length >= 3
+      ) {
         const box = calcularLimites(dados.paredes);
         const beiral = dados.cobertura.beiral || 0.6;
         const w = box.maxX - box.minX + beiral * 2;
@@ -960,14 +966,19 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
                 : "bg-slate-900 hover:bg-slate-800 text-slate-300 font-medium border border-slate-700"
             }
             onClick={() => setCamadas((prev) => ({ ...prev, telhado: !prev.telhado }))}
-            title="Ligar ou desligar telhado para ver o interior"
+            disabled={dados.cobertura.ativa === false}
+            title={
+              dados.cobertura.ativa === false
+                ? "Este projeto está configurado sem cobertura"
+                : "Ligar ou desligar telhado para ver o interior"
+            }
           >
             {camadas.telhado ? (
               <Eye className="w-4 h-4 mr-1.5 text-emerald-400" />
             ) : (
               <EyeOff className="w-4 h-4 mr-1.5 text-slate-400" />
             )}
-            Telhado
+            {dados.cobertura.ativa === false ? "Sem cobertura" : "Telhado"}
           </Button>
 
           {/* Toggle de Móveis */}
@@ -1108,5 +1119,6 @@ export const Viewport3D = forwardRef<Viewport3DHandle, Viewport3DProps>(
     );
   }
 );
+
 
 
