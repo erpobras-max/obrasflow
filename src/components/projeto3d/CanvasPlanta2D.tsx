@@ -53,7 +53,7 @@ import {
   Palette,
   Bed,
 } from "lucide-react";
-import { extrairParedesDoDxf, exportarParaDxf } from "@/lib/dxf-parser";
+import { importarDxf, exportarParaDxf } from "@/lib/dxf-parser";
 import { toast } from "sonner";
 
 export type FerramentaAtiva =
@@ -1678,7 +1678,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                   reader.onload = (event) => {
                     try {
                       const text = event.target?.result as string;
-                      const novasParedes = extrairParedesDoDxf(text, espessuraAtiva, peDireitoAtivo);
+                      const { paredes: novasParedes, resumo } = importarDxf(text, espessuraAtiva, peDireitoAtivo);
                       if (novasParedes.length > 0) {
                         const paredesAtualizadas = [...dados.paredes, ...novasParedes];
                         registrarHistorico();
@@ -1687,7 +1687,13 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                           paredes: paredesAtualizadas,
                         });
                         requestAnimationFrame(() => enquadrarParedes(paredesAtualizadas));
-                        toast.success(`${novasParedes.length} paredes importadas do DXF!`);
+                        toast.success(
+                          `${novasParedes.length} segmentos importados de ${resumo.entidadesConvertidas} entidades ` +
+                          `(${resumo.layers.length} layers; unidade: ${resumo.unidade}).`
+                        );
+                        if (resumo.entidadesIgnoradas > 0) {
+                          toast.info(`${resumo.entidadesIgnoradas} entidades não suportadas ou vazias foram ignoradas.`);
+                        }
                       } else {
                         toast.error("Nenhuma linha compatível encontrada no DXF.");
                       }
@@ -2450,5 +2456,6 @@ function pontoDentroPoligono(ponto: Ponto2D, poligono: Ponto2D[]): boolean {
   }
   return inside;
 }
+
 
 
