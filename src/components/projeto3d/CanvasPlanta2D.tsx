@@ -7,6 +7,7 @@ import type {
   Ambiente,
   Movel,
   TipoMovel,
+  ReferenciaPontoCota,
 } from "@/types/projeto3d";
 import {
   calcularEnquadramentoPlanta,
@@ -87,6 +88,7 @@ import {
   removerCamadaCad,
   renomearCamadaCad,
 } from "@/lib/projeto3d-camadas";
+import { calcularCotaLinear, encontrarCotaLinearProxima } from "@/lib/projeto3d-cotas";
 import { toast } from "sonner";
 
 export type FerramentaAtiva =
@@ -105,6 +107,18 @@ interface SnapInfo {
   y: number;
   tipo: "endpoint" | "midpoint";
   paredeId?: string;
+  pontoParede?: "p1" | "p2";
+}
+
+function criarReferenciaCota(ponto: Ponto2D, snap: SnapInfo | null): ReferenciaPontoCota {
+  return snap?.tipo === "endpoint" && snap.paredeId && snap.pontoParede
+    ? {
+        tipo: "parede",
+        paredeId: snap.paredeId,
+        ponto: snap.pontoParede,
+        fallback: ponto,
+      }
+    : { tipo: "livre", ponto };
 }
 
 export const CATALOGO_MOVEIS: Record<
@@ -208,7 +222,10 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
   const dragOffsetMovel = useRef<Ponto2D>({ x: 0, y: 0 });
 
   // Ferramenta Medir (Régua CAD)
-  const [pontoMedirInicio, setPontoMedirInicio] = useState<Ponto2D | null>(null);
+  const [pontoMedirInicio, setPontoMedirInicio] = useState<{
+    ponto: Ponto2D;
+    referencia: ReferenciaPontoCota;
+  } | null>(null);
 
   // Modais de Criação Rápida e Edição de Ambientes
   const [modalComodoAberto, setModalComodoAberto] = useState(false);
@@ -318,11 +335,23 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
         if (!elementoCadVisivel(dados, p)) continue;
         const dist1 = Math.hypot(posMundo.x - p.p1.x, posMundo.y - p.p1.y);
         if (dist1 <= raioSnapMundo) {
-          return { x: p.p1.x, y: p.p1.y, tipo: "endpoint", paredeId: p.id };
+          return {
+            x: p.p1.x,
+            y: p.p1.y,
+            tipo: "endpoint",
+            paredeId: p.id,
+            pontoParede: "p1",
+          };
         }
         const dist2 = Math.hypot(posMundo.x - p.p2.x, posMundo.y - p.p2.y);
         if (dist2 <= raioSnapMundo) {
-          return { x: p.p2.x, y: p.p2.y, tipo: "endpoint", paredeId: p.id };
+          return {
+            x: p.p2.x,
+            y: p.p2.y,
+            tipo: "endpoint",
+            paredeId: p.id,
+            pontoParede: "p2",
+          };
         }
       }
 
@@ -1083,7 +1112,33 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.restore();
     });
 
-    // 6. Prévia de Parede Sendo Criada
+    // 6. Cotas persistentes
+    for (const cota of dados.cotas ?? []) {
+      if (!elementoCadVisivel(dados, cota)) continue;
+      const { inicio, fim, distancia } = calcularCotaLinear(dados, cota);
+      const p1 = worldToScreen(inicio.x, inicio.y);
+      const p2 = worldToScreen(fim.x, fim.y);
+
+      ctx.save();
+      ctx.strokeStyle = "#7c3aed";
+      ctx.fillStyle = "#6d28d9";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+      ctx.stroke();
+      for (const ponto of [p1, p2]) {
+        ctx.beginPath();
+        ctx.arc(ponto.x, ponto.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.font = "bold 12px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(`${distancia.toFixed(2)} m`, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 8);
+      ctx.restore();
+    }
+
+    // 7. Prévia de Parede Sendo Criada
     if (ferramenta === "parede" && pontoInicial && pontoCursor) {
       const p1 = worldToScreen(pontoInicial.x, pontoInicial.y);
       const p2 = worldToScreen(pontoCursor.x, pontoCursor.y);
@@ -1104,9 +1159,9 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.fillText(`${comp.toFixed(2)} m`, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 12);
     }
 
-    // 7. Ferramenta Régua (Medir)
+    // 8. Ferramenta Régua (Medir)
     if (ferramenta === "medir" && pontoMedirInicio && pontoCursor) {
-      const p1 = worldToScreen(pontoMedirInicio.x, pontoMedirInicio.y);
+      const p1 = worldToScreen(pontoMedirInicio.ponto.x, pontoMedirInicio.ponto.y);
       const p2 = worldToScreen(pontoCursor.x, pontoCursor.y);
 
       ctx.beginPath();
@@ -1118,14 +1173,14 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.stroke();
       ctx.setLineDash([]);
 
-      const dist = calcularComprimentoParede(pontoMedirInicio, pontoCursor);
+      const dist = calcularComprimentoParede(pontoMedirInicio.ponto, pontoCursor);
       ctx.fillStyle = "#7c3aed";
       ctx.font = "bold 12px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(`📏 ${dist.toFixed(2)} m`, (p1.x + p2.x) / 2, (p1.y + p2.y) / 2 - 8);
     }
 
-    // 8. Snap Visual (OSNAP Marker)
+    // 9. Snap Visual (OSNAP Marker)
     if (pontoSnapAtivo) {
       const pSnapScreen = worldToScreen(pontoSnapAtivo.x, pontoSnapAtivo.y);
       ctx.save();
@@ -1152,7 +1207,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
       ctx.restore();
     }
 
-    // 9. Janela de seleção CAD: azul contém, verde cruza.
+    // 10. Janela de seleção CAD: azul contém, verde cruza.
     if (inicioJanelaSelecao && fimJanelaSelecao) {
       const inicio = worldToScreen(inicioJanelaSelecao.x, inicioJanelaSelecao.y);
       const fim = worldToScreen(fimJanelaSelecao.x, fimJanelaSelecao.y);
@@ -1427,7 +1482,7 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     let worldPos = screenToWorld(screenX, screenY);
 
     if (
-      (ferramenta === "movel" || ferramenta === "parede") &&
+      (ferramenta === "movel" || ferramenta === "parede" || ferramenta === "medir") &&
       (!camadaAtivaCad.visivel || camadaAtivaCad.bloqueada)
     ) {
       toast.error("Mostre e desbloqueie o layer ativo antes de desenhar.");
@@ -1609,6 +1664,22 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
 
     // 5. FERRAMENTA APAGAR
     if (ferramenta === "apagar") {
+      const cotaAlvo = encontrarCotaLinearProxima(
+        dados,
+        (dados.cotas ?? []).filter((cota) => elementoCadEditavel(dados, cota)),
+        worldPos,
+        0.25
+      );
+      if (cotaAlvo) {
+        registrarHistorico();
+        onChangeDados({
+          ...dados,
+          cotas: (dados.cotas ?? []).filter((cota) => cota.id !== cotaAlvo.id),
+        });
+        toast.success("Cota removida.");
+        return;
+      }
+
       const movelAlvo = encontrarMovelMaisProximo(worldPos);
       if (movelAlvo) {
         handleApagarMovel(movelAlvo.id);
@@ -1640,12 +1711,32 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     // 6. FERRAMENTA MEDIR
     if (ferramenta === "medir") {
       if (!pontoMedirInicio) {
-        setPontoMedirInicio(worldPos);
-        toast.info("Clique no segundo ponto para medir a distância");
+        setPontoMedirInicio({
+          ponto: worldPos,
+          referencia: criarReferenciaCota(worldPos, pontoSnapAtivo),
+        });
+        toast.info("Clique no segundo ponto para criar a cota");
       } else {
-        const dist = calcularComprimentoParede(pontoMedirInicio, worldPos);
+        const dist = calcularComprimentoParede(pontoMedirInicio.ponto, worldPos);
+        if (dist < 0.01) {
+          toast.error("A cota precisa ter dois pontos diferentes.");
+          return;
+        }
+        registrarHistorico();
+        onChangeDados({
+          ...dados,
+          cotas: [
+            ...(dados.cotas ?? []),
+            {
+              id: `cota_${Date.now()}`,
+              inicio: pontoMedirInicio.referencia,
+              fim: criarReferenciaCota(worldPos, pontoSnapAtivo),
+              camadaId: camadaAtivaId,
+            },
+          ],
+        });
         setPontoMedirInicio(null);
-        toast.success(`Distância medida: ${dist.toFixed(2)} metros`);
+        toast.success(`Cota criada: ${dist.toFixed(2)} metros`);
       }
       return;
     }

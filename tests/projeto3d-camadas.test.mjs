@@ -99,9 +99,18 @@ test("camada oculta ou bloqueada impede edição de seus elementos", () => {
 test("excluir camada preserva os elementos movendo-os para Geral", () => {
   let dados = criarCamadaCad(projeto(), "acabamento", "Acabamento");
   dados = aplicarCamadaNaSelecao(dados, [{ tipo: "parede", id: "p1" }], "acabamento");
+  dados.cotas = [
+    {
+      id: "c1",
+      inicio: { tipo: "livre", ponto: { x: 0, y: 0 } },
+      fim: { tipo: "livre", ponto: { x: 1, y: 0 } },
+      camadaId: "acabamento",
+    },
+  ];
   dados = removerCamadaCad(dados, "acabamento");
 
   assert.equal(obterCamadaId(dados.paredes[0]), CAMADA_CAD_PADRAO_ID);
+  assert.equal(obterCamadaId(dados.cotas[0]), CAMADA_CAD_PADRAO_ID);
   assert.equal(dados.paredes[0].layer, undefined);
   assert.equal(listarCamadasCad(dados).some((camada) => camada.id === "acabamento"), false);
 });

@@ -70,6 +70,17 @@ export interface CamadaCad {
   bloqueada: boolean;
 }
 
+export type ReferenciaPontoCota =
+  | { tipo: "livre"; ponto: Ponto2D }
+  | { tipo: "parede"; paredeId: string; ponto: "p1" | "p2"; fallback: Ponto2D };
+
+export interface CotaLinear {
+  id: string;
+  inicio: ReferenciaPontoCota;
+  fim: ReferenciaPontoCota;
+  camadaId?: string;
+}
+
 export type TipoMovel =
   | "cama_casal"
   | "cama_solteiro"
@@ -111,6 +122,7 @@ export interface DadosProjetoBIM {
   cobertura: CoberturaConfig;
   layers: CamadasVisibilidade;
   camadasCad?: CamadaCad[];
+  cotas?: CotaLinear[];
   moveis?: Movel[];
 }
 

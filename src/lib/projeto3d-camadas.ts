@@ -154,5 +154,6 @@ export function removerCamadaCad(dados: DadosProjetoBIM, camadaId: string): Dado
     paredes: dados.paredes.map(moverParaPadrao) as Parede[],
     ambientes: dados.ambientes.map(moverParaPadrao),
     moveis: (dados.moveis ?? []).map(moverParaPadrao),
+    cotas: (dados.cotas ?? []).map(moverParaPadrao),
   };
 }
