@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFieldArray, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, ClipboardList, Image as ImageIcon, Upload, X, Users, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, ClipboardList, Image as ImageIcon, Upload, X, Users, Loader2, Printer, FileText } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,6 +13,7 @@ import { getDiarioMediaError } from "@/lib/diario-media";
 import {
   diarioSchema, type DiarioFormValues, CLIMAS, CLIMA_LABEL,
 } from "@/lib/diario.schema";
+import { RdoPdfDialog } from "@/components/diario/RdoPdfDialog";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,7 @@ function DiarioPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [obraFilter, setObraFilter] = useState<string>(searchParams.obraId ?? "all");
   const [photosTarget, setPhotosTarget] = useState<DiarioRow | null>(null);
+  const [rdoTarget, setRdoTarget] = useState<DiarioRow | null>(null);
 
   useEffect(() => {
     if (searchParams.obraId) setObraFilter(searchParams.obraId);
@@ -161,15 +163,16 @@ function DiarioPage() {
               <TableHead>Clima</TableHead>
               <TableHead>Efetivo</TableHead>
               <TableHead>Atividades</TableHead>
-              <TableHead className="w-44 text-right">Fotos/Vídeos</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-36 text-center">Fotos/Vídeos</TableHead>
+              <TableHead className="w-32 text-center">Relatório</TableHead>
+              <TableHead className="w-20" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={8}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
             ) : (diarios ?? []).length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+              <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">
                 <ClipboardList className="size-8 mx-auto mb-2 opacity-50" />
                 Nenhum registro encontrado
               </TableCell></TableRow>
@@ -193,7 +196,7 @@ function DiarioPage() {
                   <TableCell className="text-xs text-muted-foreground max-w-md truncate">
                     {d.atividades ?? "—"}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-center">
                     <Button 
                       size="sm" 
                       variant="outline" 
@@ -202,6 +205,18 @@ function DiarioPage() {
                     >
                       <ImageIcon className="size-3.5" />
                       <span>{midiasCount > 0 ? `${midiasCount} Mídias` : "Adicionar"}</span>
+                    </Button>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-xs font-semibold text-slate-800 border-slate-300 hover:bg-slate-100 hover:text-primary shadow-xs"
+                      onClick={() => setRdoTarget(d)}
+                      title="Gerar e Imprimir Relatório Diário de Obra (RDO) em PDF"
+                    >
+                      <Printer className="size-3.5 text-primary" />
+                      <span>RDO (PDF)</span>
                     </Button>
                   </TableCell>
                   <TableCell className="text-right">
@@ -243,6 +258,11 @@ function DiarioPage() {
         target={photosTarget}
         onClose={() => setPhotosTarget(null)}
         podeEditar={podeEditar}
+      />
+
+      <RdoPdfDialog
+        target={rdoTarget}
+        onClose={() => setRdoTarget(null)}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
