@@ -20,6 +20,8 @@ export interface TransformacaoCad {
   centroRotacao?: Ponto2D;
 }
 
+export type ReferenciaAlinhamentoCad = "min" | "centro" | "max";
+
 function limitesPontos(pontos: Ponto2D[]): Limites2D {
   return {
     minX: Math.min(...pontos.map((p) => p.x)),
@@ -40,6 +42,19 @@ function limitesMovel(movel: NonNullable<DadosProjetoBIM["moveis"]>[number]): Li
     maxX: movel.x + largura / 2,
     maxY: movel.y + comprimento / 2,
   };
+}
+
+function limitesElemento(dados: DadosProjetoBIM, item: SelecaoElementoCad): Limites2D | null {
+  if (item.tipo === "parede") {
+    const parede = dados.paredes.find((elemento) => elemento.id === item.id);
+    return parede ? limitesPontos([parede.p1, parede.p2]) : null;
+  }
+  if (item.tipo === "ambiente") {
+    const ambiente = dados.ambientes.find((elemento) => elemento.id === item.id);
+    return ambiente && ambiente.pontos.length > 0 ? limitesPontos(ambiente.pontos) : null;
+  }
+  const movel = (dados.moveis ?? []).find((elemento) => elemento.id === item.id);
+  return movel ? limitesMovel(movel) : null;
 }
 
 function contem(janela: Limites2D, elemento: Limites2D) {
@@ -200,6 +215,41 @@ export function transformarSelecao(
   };
 }
 
+export function alinharSelecao(
+  dados: DadosProjetoBIM,
+  selecao: SelecaoElementoCad[],
+  eixo: "x" | "y",
+  referencia: ReferenciaAlinhamentoCad
+): DadosProjetoBIM {
+  const elementos = selecao
+    .map((item) => ({ item, limites: limitesElemento(dados, item) }))
+    .filter((elemento): elemento is { item: SelecaoElementoCad; limites: Limites2D } => !!elemento.limites);
+  if (elementos.length < 2) return dados;
+
+  const minimo = Math.min(...elementos.map(({ limites }) => (eixo === "x" ? limites.minX : limites.minY)));
+  const maximo = Math.max(...elementos.map(({ limites }) => (eixo === "x" ? limites.maxX : limites.maxY)));
+  const alvo = referencia === "min" ? minimo : referencia === "max" ? maximo : (minimo + maximo) / 2;
+
+  return elementos.reduce((atual, { item, limites }) => {
+    const valorAtual =
+      referencia === "min"
+        ? eixo === "x"
+          ? limites.minX
+          : limites.minY
+        : referencia === "max"
+          ? eixo === "x"
+            ? limites.maxX
+            : limites.maxY
+          : eixo === "x"
+            ? (limites.minX + limites.maxX) / 2
+            : (limites.minY + limites.maxY) / 2;
+    const delta = alvo - valorAtual;
+    return transformarSelecao(atual, [item], {
+      deslocamento: eixo === "x" ? { x: delta, y: 0 } : { x: 0, y: delta },
+    });
+  }, dados);
+}
+
 export function duplicarSelecao(
   dados: DadosProjetoBIM,
   selecao: SelecaoElementoCad[],
@@ -247,4 +297,3 @@ export function duplicarSelecao(
     selecao: novaSelecao,
   };
 }
-

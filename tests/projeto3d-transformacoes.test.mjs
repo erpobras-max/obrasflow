@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  alinharSelecao,
   calcularCentroSelecao,
   duplicarSelecao,
   selecionarElementosNaJanela,
@@ -78,6 +79,33 @@ test("atualiza área e perímetro associativos do ambiente", () => {
   assert.equal(transformado.ambientes[0].perimetro, 12);
 });
 
+test("alinha elementos selecionados pelas bordas e centros", () => {
+  const dados = projeto();
+  const esquerda = alinharSelecao(
+    dados,
+    [
+      { tipo: "parede", id: "p1" },
+      { tipo: "movel", id: "m1" },
+    ],
+    "x",
+    "min"
+  );
+  const centroVertical = alinharSelecao(
+    dados,
+    [
+      { tipo: "parede", id: "p1" },
+      { tipo: "movel", id: "m1" },
+    ],
+    "y",
+    "centro"
+  );
+
+  assert.equal(esquerda.paredes[0].p1.x, esquerda.moveis[0].x - esquerda.moveis[0].largura / 2);
+  assert.equal(centroVertical.moveis[0].y, 1.5);
+  assert.equal(centroVertical.paredes[0].p1.y, 1.5);
+  assert.equal(centroVertical.paredes[1], dados.paredes[1]);
+});
+
 test("duplicação remapeia paredes e suas aberturas", () => {
   const dados = projeto();
   const resultado = duplicarSelecao(
@@ -93,4 +121,3 @@ test("duplicação remapeia paredes e suas aberturas", () => {
   assert.equal(resultado.dados.aberturas[1].paredeId, "parede_copia_p1");
   assert.deepEqual(resultado.selecao, [{ tipo: "parede", id: "parede_copia_p1" }]);
 });
-
