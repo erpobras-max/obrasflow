@@ -18,11 +18,20 @@ import {
   Filter,
   Check,
   RotateCcw,
+  Bell,
+  MailCheck,
+  Smartphone,
+  RefreshCw,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
+import {
+  solicitarPermissaoEInscreverPush,
+  dispararNotificacaoLocalTeste,
+  obterStatusPermissao,
+} from "@/lib/push-notifications";
 import {
   ordemServicoSchema,
   type OrdemServicoFormValues,
@@ -117,6 +126,67 @@ function OrdensServicoPage() {
   const [busca, setBusca] = useState(searchParams.busca || "");
   const [filtroObra, setFiltroObra] = useState<string>(searchParams.obraId || "todas");
   const [filtroPrioridade, setFiltroPrioridade] = useState<string>("todas");
+
+  const [isProcessandoCron, setIsProcessandoCron] = useState(false);
+  const [isInscrevendoPush, setIsInscrevendoPush] = useState(false);
+
+  // Ativar Push Notifications no Aparelho
+  const handleAtivarPush = async () => {
+    setIsInscrevendoPush(true);
+    try {
+      const res = await solicitarPermissaoEInscreverPush(session?.user?.id);
+      if (res.sucesso) {
+        toast.success(res.mensagem);
+      } else {
+        toast.error(res.mensagem);
+      }
+    } finally {
+      setIsInscrevendoPush(false);
+    }
+  };
+
+  // Testar Notificação no Celular
+  const handleTestarPush = async () => {
+    const ok = await dispararNotificacaoLocalTeste(
+      "ObrasFlow — Alerta de Teste",
+      "Seu aparelho está pronto para receber notificações de prazos de OS! 🔔"
+    );
+    if (ok) {
+      toast.success("Notificação enviada para o seu dispositivo!");
+    } else {
+      toast.error("Não foi possível disparar a notificação. Verifique se as permissões do navegador estão ativas.");
+    }
+  };
+
+  // Disparar Verificação de Prazos & E-mails
+  const handleVerificarPrazosEEmail = async () => {
+    setIsProcessandoCron(true);
+    try {
+      const res = await fetch("/api/cron-prazos", { method: "POST" });
+      const data = (await res.json()) as {
+        sucesso: boolean;
+        alertasProcessados?: number;
+        emailsDisparados?: number;
+        sinosNotificados?: number;
+        erro?: string;
+      };
+
+      if (!res.ok || !data.sucesso) {
+        toast.error(`Erro ao processar prazos: ${data.erro || "Falha na requisição"}`);
+        return;
+      }
+
+      toast.success(
+        `Prazos verificados! ${data.emailsDisparados || 0} e-mail(s) enviado(s) e ${data.sinosNotificados || 0} alerta(s) interno(s) gerados.`
+      );
+      queryClient.invalidateQueries({ queryKey: ["ordens_servico"] });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error(`Falha ao executar rotina: ${msg}`);
+    } finally {
+      setIsProcessandoCron(false);
+    }
+  };
 
   // Buscar Obras para o seletor
   const { data: obras = [] } = useQuery({
@@ -521,10 +591,50 @@ function OrdensServicoPage() {
           </p>
         </div>
 
-        <Button onClick={handleOpenCreate} className="gap-2 h-11 px-5 self-start sm:self-auto font-medium shadow-sm">
-          <Plus className="w-4 h-4" />
-          Nova Ordem de Serviço
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleAtivarPush}
+            disabled={isInscrevendoPush}
+            className="h-10 text-xs gap-1.5"
+            title="Ativar notificações push no celular ou navegador"
+          >
+            <Smartphone className="w-4 h-4 text-primary" />
+            {isInscrevendoPush ? "Ativando..." : "Ativar Push no Celular"}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleTestarPush}
+            className="h-10 text-xs gap-1.5"
+            title="Testar alerta no aparelho"
+          >
+            <Bell className="w-4 h-4 text-amber-600" />
+            Testar Alerta
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleVerificarPrazosEEmail}
+            disabled={isProcessandoCron}
+            className="h-10 text-xs gap-1.5"
+            title="Verificar prazos de todas as OSs e disparar e-mails para responsáveis"
+          >
+            <MailCheck className={cn("w-4 h-4 text-emerald-600", isProcessandoCron && "animate-spin")} />
+            {isProcessandoCron ? "Verificando..." : "Disparar E-mails"}
+          </Button>
+
+          <Button onClick={handleOpenCreate} className="gap-2 h-10 px-4 font-medium shadow-sm text-xs">
+            <Plus className="w-4 h-4" />
+            Nova OS
+          </Button>
+        </div>
       </div>
 
       {/* Cartões de Indicadores Estilo Trello */}

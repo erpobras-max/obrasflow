@@ -67,3 +67,47 @@ self.addEventListener('fetch', event => {
       })
   );
 });
+
+// Evento de recebimento de Notificação Push no PWA
+self.addEventListener('push', event => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch {
+      data = { body: event.data.text() };
+    }
+  }
+
+  const title = data.title || 'ObrasFlow — Alerta de Prazo';
+  const options = {
+    body: data.body || 'Você possui ordens de serviço pendentes.',
+    icon: '/icon-192x192.png',
+    badge: '/icon-192x192.png',
+    vibrate: [200, 100, 200],
+    data: {
+      url: data.url || '/ordens-servico',
+    },
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Evento de clique na notificação Push
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/ordens-servico';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url.includes('/ordens-servico') && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
