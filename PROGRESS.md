@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 19/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 26/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -238,6 +238,13 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
    - **Auto-Save / Backup Local (`localStorage`)**: rascunho salvo continuamente no navegador com restauração automática em caso de fechamento acidental.
    - **Aviso `beforeunload`**: alerta nativo se o usuário tentar sair da tela com alterações não salvas.
    - **Badge de Pendência**: indicador visual `● Alterações não salvas`.
+7. **Navegação, Seleção e Organização CAD**:
+   - Pan independente pelo modo **Arrastar planta**, zoom mantendo o ponto focal e **Zoom Total** para enquadrar plantas deslocadas.
+   - Seleção múltipla por janela, com seleção por contenção da esquerda para a direita e por cruzamento no sentido inverso.
+   - Transformações numéricas de deslocamento e rotação, duplicação de elementos e exclusão definitiva da seleção.
+   - Layers CAD editáveis com criação, renomeação, exclusão segura, associação de elementos, visibilidade e bloqueio compartilhados entre 2D e 3D.
+   - Seis comandos de alinhamento da seleção: esquerda, centro horizontal, direita, topo, meio vertical e base.
+   - Entregas publicadas pelas PRs #142, #143, #144, #145 e #146; a PR #146 encerrou a Issue #131.
 
 ## 20. Módulo de Ponto Eletrônico & Gestão de Canteiro (Perfil Mestre de Obras)
 
@@ -290,17 +297,21 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `fix(fluxo): integracao completa ponta a ponta de cliente, proposta, contrato, obras, cronograma, medicoes e diario`
-- **Branch**: `main` (enviado com sucesso para `origin/main`).
-- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 16.98s.
-- **Deploy**: Publicação automática em andamento via Cloudflare Worker `obrasflow`.
+- **Commit**: `478e2f6b9b00d42c5f249c6a5b4a6dc10296323e` — alinhamento de elementos CAD (PR #146).
+- **Branch**: `main`, após merge da branch `feat/131-alinhamento-cad`.
+- **Validação**: testes direcionados do CAD com 9/9 aprovações, `npm run build` concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
+- **Deploy**: bundle público do Cloudflare Worker `obrasflow` verificado contendo os comandos de alinhamento, layers CAD e a confirmação `Seleção alinhada`.
+- **Observação de CI**: o job `dependency-audit` continua falhando por vulnerabilidades preexistentes e deve ser tratado em uma Issue/PR própria.
 
 ---
 
 ## 23. Pendências prioritárias após esta atualização
 
 - Executar testes de aceitação visual com os usuários engenheiros desenhando plantas reais de casas no estúdio 2D.
-- Adicionar opção de salvar templates de cômodos frequentes (ex: banheiro padrão 1.5x2.5m).
+- Implementar cotas associativas, anotações, layouts A4/A3 e impressão em escala (Issue #132).
+- Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
+- Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
+
 
 
