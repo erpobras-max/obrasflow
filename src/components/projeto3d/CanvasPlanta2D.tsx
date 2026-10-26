@@ -68,6 +68,7 @@ import {
 } from "lucide-react";
 import { importarDxf, exportarParaDxf } from "@/lib/dxf-parser";
 import {
+  alinharSelecao,
   calcularCentroSelecao,
   duplicarSelecao,
   selecionarElementosNaJanela,
@@ -618,6 +619,17 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
     setElementoSelecionadoId(resultado.selecao.length === 1 ? resultado.selecao[0].id : null);
     toast.success(`${resultado.selecao.length} item(ns) duplicado(s).`);
   }, [dados, deslocamentoX, deslocamentoY, onChangeDados, registrarHistorico, selecaoMultipla]);
+
+  const handleAlinharSelecao = useCallback(
+    (eixo: "x" | "y", referencia: "min" | "centro" | "max") => {
+      const selecaoEditavel = filtrarSelecaoEditavel(dados, selecaoMultipla);
+      if (selecaoEditavel.length < 2) return;
+      registrarHistorico();
+      onChangeDados(alinharSelecao(dados, selecaoEditavel, eixo, referencia));
+      toast.success("Seleção alinhada.");
+    },
+    [dados, onChangeDados, registrarHistorico, selecaoMultipla]
+  );
 
   const handleApagarSelecao = useCallback(() => {
     const selecaoEditavel = filtrarSelecaoEditavel(dados, selecaoMultipla);
@@ -1904,6 +1916,28 @@ export function CanvasPlanta2D({ dados, onChangeDados, somenteLeitura = false }:
                       onClick={() => aplicarTransformacaoNaSelecao("rotacionar")}
                     >
                       <RotateCw className="w-3 h-3" /> Girar
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1" aria-label="Alinhamento horizontal">
+                    <Button size="sm" variant="outline" className="h-7 bg-white text-[10px]" onClick={() => handleAlinharSelecao("x", "min")} title="Alinhar à esquerda">
+                      ← Esq.
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 bg-white text-[10px]" onClick={() => handleAlinharSelecao("x", "centro")} title="Centralizar horizontalmente">
+                      ↔ Centro
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 bg-white text-[10px]" onClick={() => handleAlinharSelecao("x", "max")} title="Alinhar à direita">
+                      Dir. →
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1" aria-label="Alinhamento vertical">
+                    <Button size="sm" variant="outline" className="h-7 bg-white text-[10px]" onClick={() => handleAlinharSelecao("y", "min")} title="Alinhar ao topo">
+                      ↑ Topo
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 bg-white text-[10px]" onClick={() => handleAlinharSelecao("y", "centro")} title="Centralizar verticalmente">
+                      ↕ Meio
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 bg-white text-[10px]" onClick={() => handleAlinharSelecao("y", "max")} title="Alinhar à base">
+                      Base ↓
                     </Button>
                   </div>
                   <Button

@@ -12,6 +12,8 @@ test("canvas integra seleção CAD por janela e operações numéricas", async (
   assert.match(fonte, /e\.shiftKey && ferramenta !== "selecionar"/);
   assert.match(fonte, /transformarSelecao\(/);
   assert.match(fonte, /duplicarSelecao\(/);
+  assert.match(fonte, /alinharSelecao\(/);
+  assert.match(fonte, /Alinhamento horizontal/);
   assert.match(fonte, /Apagar seleção/);
 });
 
