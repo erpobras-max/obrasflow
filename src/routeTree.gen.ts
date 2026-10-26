@@ -31,6 +31,7 @@ import { Route as AppImobiliariaRouteImport } from './routes/_app/imobiliaria'
 import { Route as AppImportacoesRouteImport } from './routes/_app/importacoes'
 import { Route as AppMedicoesRouteImport } from './routes/_app/medicoes'
 import { Route as AppObrasRouteImport } from './routes/_app/obras'
+import { Route as AppOrdensServicoRouteImport } from './routes/_app/ordens-servico'
 import { Route as AppOrcamentosRouteImport } from './routes/_app/orcamentos'
 import { Route as AppPerfilRouteImport } from './routes/_app/perfil'
 import { Route as AppPrestadoresRouteImport } from './routes/_app/prestadores'
@@ -173,6 +174,11 @@ const AppMedicoesRoute = AppMedicoesRouteImport.update({
 const AppObrasRoute = AppObrasRouteImport.update({
   id: '/obras',
   path: '/obras',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrdensServicoRoute = AppOrdensServicoRouteImport.update({
+  id: '/ordens-servico',
+  path: '/ordens-servico',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOrcamentosRoute = AppOrcamentosRouteImport.update({
@@ -370,6 +376,7 @@ export interface FileRoutesByFullPath {
   '/importacoes': typeof AppImportacoesRoute
   '/medicoes': typeof AppMedicoesRoute
   '/obras': typeof AppObrasRoute
+  '/ordens-servico': typeof AppOrdensServicoRoute
   '/orcamentos': typeof AppOrcamentosRoute
   '/perfil': typeof AppPerfilRoute
   '/prestadores': typeof AppPrestadoresRoute
@@ -426,6 +433,7 @@ export interface FileRoutesByTo {
   '/importacoes': typeof AppImportacoesRoute
   '/medicoes': typeof AppMedicoesRoute
   '/obras': typeof AppObrasRoute
+  '/ordens-servico': typeof AppOrdensServicoRoute
   '/orcamentos': typeof AppOrcamentosRoute
   '/perfil': typeof AppPerfilRoute
   '/prestadores': typeof AppPrestadoresRoute
@@ -865,6 +873,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppObrasRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ordens-servico': {
+      id: '/_app/ordens-servico'
+      path: '/ordens-servico'
+      fullPath: '/ordens-servico'
+      preLoaderRoute: typeof AppOrdensServicoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/orcamentos': {
       id: '/_app/orcamentos'
       path: '/orcamentos'
@@ -1215,6 +1230,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppImportacoesRoute: AppImportacoesRoute,
   AppMedicoesRoute: AppMedicoesRoute,
   AppObrasRoute: AppObrasRoute,
+  AppOrdensServicoRoute: AppOrdensServicoRoute,
   AppOrcamentosRoute: AppOrcamentosRoute,
   AppPerfilRoute: AppPerfilRoute,
   AppPrestadoresRoute: AppPrestadoresRoute,
