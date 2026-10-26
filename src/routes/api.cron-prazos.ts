@@ -1,13 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client.custom";
-import { getSupabaseServiceRoleKey } from "@/integrations/supabase/client.server.custom";
 import { enviarEmailAvisoOS } from "@/lib/email-service.server";
 
 function getSupabaseClient() {
-  const serviceKey = getSupabaseServiceRoleKey();
-  const keyToUse = serviceKey || SUPABASE_ANON_KEY;
-  return createClient(SUPABASE_PROJECT_URL, keyToUse, {
+  const runtimeEnv = (globalThis as unknown as { __env__?: Record<string, string> }).__env__;
+  const serviceKey = (
+    runtimeEnv?.MY_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.MY_SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  )?.trim();
+
+  return createClient(SUPABASE_PROJECT_URL, serviceKey || SUPABASE_ANON_KEY, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -26,205 +30,71 @@ export const Route = createFileRoute("/api/cron-prazos")({
 
 async function processarPrazos() {
   const supabase = getSupabaseClient();
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const hojeIsoStr = hoje.toISOString().split("T")[0];
 
   try {
-    // 1. Buscar ordens de serviço pendentes
-    const { data: ordens, error } = await supabase
-      .from("ordens_servico")
-      .select(`
-        id,
-        numero,
-        titulo,
-        descricao,
-        data_previsao,
-        prioridade,
-        status,
-        responsavel_id,
-        responsavel_nome,
-        responsavel_telefone,
-        obra_id,
-        obras ( nome )
-      `)
-      .not("status", "in", '("concluida","cancelada")');
+    // Chama a função RPC com SECURITY DEFINER no PostgreSQL
+    const { data, error } = await supabase.rpc("processar_prazos_ordens_servico");
 
     if (error) {
-      console.error("[CronPrazos] Erro ao consultar ordens_servico:", error.message);
+      console.error("[CronPrazos] Erro na RPC:", error.message);
       return new Response(JSON.stringify({ sucesso: false, erro: error.message }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    const relatorio = {
-      dataExecucao: hojeIsoStr,
-      totalOSs: ordens?.length || 0,
-      alertasProcessados: 0,
-      emailsDisparados: 0,
-      sinosNotificados: 0,
-      detalhes: [] as Array<{
-        os: string;
-        tipo: string;
-        email?: string;
-        status: string;
-      }>,
+    const resultado = data as {
+      totalVerificadas?: number;
+      sinosCriados?: number;
+      emailsParaEnvio?: Array<{
+        osId: string;
+        numero: string;
+        titulo: string;
+        descricao?: string | null;
+        obraNome?: string | null;
+        dataPrevisao: string;
+        tipoAviso: "atrasada" | "vence_hoje" | "vence_amanha" | "vence_breve";
+        email: string;
+        responsavelNome?: string;
+      }>;
     };
 
-    if (!ordens || ordens.length === 0) {
-      return new Response(JSON.stringify({ ...relatorio, mensagem: "Nenhuma OS pendente encontrada." }), {
+    let emailsDisparados = 0;
+    const detalhes = [];
+
+    for (const item of resultado?.emailsParaEnvio || []) {
+      const emailResult = await enviarEmailAvisoOS({
+        destinatario: item.email,
+        destinatarioNome: item.responsavelNome || "Responsável",
+        osNumero: item.numero,
+        osTitulo: item.titulo,
+        osDescricao: item.descricao,
+        obraNome: item.obraNome,
+        dataPrevisao: item.dataPrevisao,
+        tipoAviso: item.tipoAviso,
+      });
+
+      if (emailResult.sucesso) {
+        emailsDisparados++;
+        detalhes.push({ os: item.numero, email: item.email, status: "enviado" });
+      } else {
+        detalhes.push({ os: item.numero, email: item.email, status: `erro: ${emailResult.erro}` });
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        sucesso: true,
+        totalOSs: resultado?.totalVerificadas || 0,
+        sinosNotificados: resultado?.sinosCriados || 0,
+        emailsDisparados,
+        detalhes,
+      }),
+      {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    // Buscar e-mails dos responsáveis em perfis_usuarios
-    const responsaveisIds = ordens
-      .map((o) => o.responsavel_id)
-      .filter((id): id is string => Boolean(id));
-
-    let emailMap: Record<string, string> = {};
-    if (responsaveisIds.length > 0) {
-      const { data: perfis } = await supabase
-        .from("perfis_usuarios")
-        .select("id, email")
-        .in("id", responsaveisIds);
-
-      if (perfis) {
-        emailMap = Object.fromEntries(
-          perfis.filter((p) => p.email).map((p) => [p.id, p.email as string])
-        );
       }
-    }
-
-    // 2. Iterar sobre cada OS e avaliar o prazo
-    for (const os of ordens) {
-      if (!os.data_previsao) continue;
-
-      const [ano, mes, dia] = os.data_previsao.split("-").map(Number);
-      const dataPrev = new Date(ano, mes - 1, dia);
-      const diffMs = dataPrev.getTime() - hoje.getTime();
-      const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-      let tipoAviso: "atrasada" | "vence_hoje" | "vence_amanha" | "vence_breve" | null = null;
-
-      if (diffDias < 0) {
-        tipoAviso = "atrasada";
-      } else if (diffDias === 0) {
-        tipoAviso = "vence_hoje";
-      } else if (diffDias === 1) {
-        tipoAviso = "vence_amanha";
-      } else if (diffDias <= 2) {
-        tipoAviso = "vence_breve";
-      }
-
-      // Se não atingiu o gatilho de aviso, ignora
-      if (!tipoAviso) continue;
-
-      relatorio.alertasProcessados++;
-
-      // Verificar se já enviamos notificação para esta OS hoje (Idempotência)
-      const { data: jaEnviado } = await supabase
-        .from("notificacoes_historico")
-        .select("id")
-        .eq("referencia_tipo", "ordens_servico")
-        .eq("referencia_id", os.id)
-        .eq("data_envio", hojeIsoStr)
-        .maybeSingle();
-
-      if (jaEnviado) {
-        relatorio.detalhes.push({
-          os: os.numero,
-          tipo: tipoAviso,
-          status: "ignorado_ja_enviado_hoje",
-        });
-        continue;
-      }
-
-      // A. Registrar no Sino do Sistema (notificacoes_usuario)
-      if (os.responsavel_id) {
-        let msgSino = `A Ordem de Serviço ${os.numero} (${os.titulo}) vence em breve.`;
-        if (tipoAviso === "atrasada") {
-          msgSino = `⚠️ ATENÇÃO: A OS ${os.numero} (${os.titulo}) está ATRASADA!`;
-        } else if (tipoAviso === "vence_hoje") {
-          msgSino = `⏰ A OS ${os.numero} (${os.titulo}) vence HOJE!`;
-        }
-
-        try {
-          await supabase.from("notificacoes_usuario").insert({
-            user_id: os.responsavel_id,
-            titulo: `Alerta de OS: ${os.numero}`,
-            mensagem: msgSino,
-            lida: false,
-          });
-          relatorio.sinosNotificados++;
-        } catch (e) {
-          console.warn("[CronPrazos] Falha ao gravar no sino:", e);
-        }
-      }
-
-      // B. Enviar E-mail via Resend se houver e-mail
-      const emailDestino = os.responsavel_id ? emailMap[os.responsavel_id] : null;
-
-      if (emailDestino) {
-        const obraNome = Array.isArray(os.obras) ? os.obras[0]?.nome : os.obras?.nome;
-
-        const emailResult = await enviarEmailAvisoOS({
-          destinatario: emailDestino,
-          destinatarioNome: os.responsavel_nome || "Responsável",
-          osNumero: os.numero,
-          osTitulo: os.titulo,
-          osDescricao: os.descricao,
-          obraNome,
-          dataPrevisao: os.data_previsao,
-          tipoAviso,
-        });
-
-        if (emailResult.sucesso) {
-          relatorio.emailsDisparados++;
-          relatorio.detalhes.push({
-            os: os.numero,
-            tipo: tipoAviso,
-            email: emailDestino,
-            status: "email_enviado",
-          });
-        } else {
-          relatorio.detalhes.push({
-            os: os.numero,
-            tipo: tipoAviso,
-            email: emailDestino,
-            status: `email_erro: ${emailResult.erro}`,
-          });
-        }
-      } else {
-        relatorio.detalhes.push({
-          os: os.numero,
-          tipo: tipoAviso,
-          status: "sem_email_cadastrado",
-        });
-      }
-
-      // C. Gravar no histórico para não repetir hoje
-      try {
-        await supabase.from("notificacoes_historico").insert({
-          tipo: emailDestino ? "email" : "sino",
-          referencia_tipo: "ordens_servico",
-          referencia_id: os.id,
-          destinatario: emailDestino || os.responsavel_nome || "responsavel",
-          data_envio: hojeIsoStr,
-          status: "sucesso",
-          detalhes: `Aviso ${tipoAviso} processado`,
-        });
-      } catch (histErr) {
-        console.warn("[CronPrazos] Falha ao gravar histórico:", histErr);
-      }
-    }
-
-    return new Response(JSON.stringify({ sucesso: true, ...relatorio }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[CronPrazos] Erro interno:", msg);
