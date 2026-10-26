@@ -34,12 +34,13 @@ export type ModuleKey =
   | "vendas"
   | "importacoes"
   | "ponto"
+  | "ordens_servico"
   | "usuarios";
 
 const ALL: ModuleKey[] = [
   "dashboard","obras","comercial","orcamentos","diario","medicoes","cronograma","compras","prestadores",
   "estoque","financeiro","financeiro_imobiliaria","fiscal","documentos","equipamentos","relatorios","rh","imobiliaria",
-  "produtos","vendas","importacoes",
+  "produtos","vendas","importacoes","ordens_servico",
 ];
 
 export const ROLE_MODULES: Record<string, string[]> = {
@@ -48,7 +49,7 @@ export const ROLE_MODULES: Record<string, string[]> = {
   financeiro_civil: ["dashboard","financeiro","fiscal","estoque","compras","prestadores","orcamentos","medicoes","relatorios","documentos","produtos","vendas","importacoes", "ponto"],
   financeiro_imobiliaria: ["dashboard","financeiro_imobiliaria","fiscal","imobiliaria","relatorios","documentos", "ponto"],
   compras: ["dashboard","compras","prestadores","estoque","orcamentos","documentos","produtos"],
-  engenharia: ["dashboard","obras","comercial","orcamentos","diario","medicoes","cronograma","prestadores","equipamentos","documentos","relatorios"],
+  engenharia: ["dashboard","obras","ordens_servico","comercial","orcamentos","diario","medicoes","cronograma","prestadores","equipamentos","documentos","relatorios"],
   almoxarifado: ["dashboard","estoque","compras","equipamentos","documentos","produtos"],
   rh: ["dashboard","rh","documentos","relatorios","ponto"],
   cliente: ["dashboard","obras","documentos"],

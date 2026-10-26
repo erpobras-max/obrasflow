@@ -4,6 +4,7 @@ import {
   HardHat,
   FileText,
   ClipboardList,
+  ClipboardCheck,
   ShoppingCart,
   Package,
   DollarSign,
@@ -59,6 +60,7 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
     title: "Obras",
     items: [
       { key: "obras", label: "Obras", icon: HardHat, to: "/obras" },
+      { key: "ordens_servico", label: "Ordens de Serviço", icon: ClipboardCheck, to: "/ordens-servico" },
       { key: "orcamentos", label: "Orçamentos", icon: Calculator, to: "/orcamentos" },
       { key: "diario", label: "Diário de Obra", icon: ClipboardList, to: "/diario" },
       { key: "medicoes", label: "Medições", icon: Ruler, to: "/medicoes" },

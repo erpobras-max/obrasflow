@@ -31,12 +31,14 @@ import { Route as AppImobiliariaRouteImport } from './routes/_app/imobiliaria'
 import { Route as AppImportacoesRouteImport } from './routes/_app/importacoes'
 import { Route as AppMedicoesRouteImport } from './routes/_app/medicoes'
 import { Route as AppObrasRouteImport } from './routes/_app/obras'
+import { Route as AppOrdensServicoRouteImport } from './routes/_app/ordens-servico'
 import { Route as AppOrcamentosRouteImport } from './routes/_app/orcamentos'
 import { Route as AppPerfilRouteImport } from './routes/_app/perfil'
 import { Route as AppPrestadoresRouteImport } from './routes/_app/prestadores'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppRhRouteImport } from './routes/_app/rh'
 import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
+import { Route as ApiCronPrazosRouteImport } from './routes/api.cron-prazos'
 import { Route as ApiDiarioMediaRouteImport } from './routes/api.diario-media'
 import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
 import { Route as CotacaoTokenRouteImport } from './routes/cotacao.$token'
@@ -175,6 +177,11 @@ const AppObrasRoute = AppObrasRouteImport.update({
   path: '/obras',
   getParentRoute: () => AppRoute,
 } as any)
+const AppOrdensServicoRoute = AppOrdensServicoRouteImport.update({
+  id: '/ordens-servico',
+  path: '/ordens-servico',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppOrcamentosRoute = AppOrcamentosRouteImport.update({
   id: '/orcamentos',
   path: '/orcamentos',
@@ -204,6 +211,11 @@ const AppUsuariosRoute = AppUsuariosRouteImport.update({
   id: '/usuarios',
   path: '/usuarios',
   getParentRoute: () => AppRoute,
+} as any)
+const ApiCronPrazosRoute = ApiCronPrazosRouteImport.update({
+  id: '/api/cron-prazos',
+  path: '/api/cron-prazos',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDiarioMediaRoute = ApiDiarioMediaRouteImport.update({
   id: '/api/diario-media',
@@ -370,12 +382,14 @@ export interface FileRoutesByFullPath {
   '/importacoes': typeof AppImportacoesRoute
   '/medicoes': typeof AppMedicoesRoute
   '/obras': typeof AppObrasRoute
+  '/ordens-servico': typeof AppOrdensServicoRoute
   '/orcamentos': typeof AppOrcamentosRoute
   '/perfil': typeof AppPerfilRoute
   '/prestadores': typeof AppPrestadoresRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
+  '/api/cron-prazos': typeof ApiCronPrazosRoute
   '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
@@ -426,12 +440,14 @@ export interface FileRoutesByTo {
   '/importacoes': typeof AppImportacoesRoute
   '/medicoes': typeof AppMedicoesRoute
   '/obras': typeof AppObrasRoute
+  '/ordens-servico': typeof AppOrdensServicoRoute
   '/orcamentos': typeof AppOrcamentosRoute
   '/perfil': typeof AppPerfilRoute
   '/prestadores': typeof AppPrestadoresRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
+  '/api/cron-prazos': typeof ApiCronPrazosRoute
   '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
@@ -865,6 +881,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppObrasRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ordens-servico': {
+      id: '/_app/ordens-servico'
+      path: '/ordens-servico'
+      fullPath: '/ordens-servico'
+      preLoaderRoute: typeof AppOrdensServicoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/orcamentos': {
       id: '/_app/orcamentos'
       path: '/orcamentos'
@@ -906,6 +929,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/usuarios'
       preLoaderRoute: typeof AppUsuariosRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/cron-prazos': {
+      id: '/api/cron-prazos'
+      path: '/api/cron-prazos'
+      fullPath: '/api/cron-prazos'
+      preLoaderRoute: typeof ApiCronPrazosRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/diario-media': {
       id: '/api/diario-media'
@@ -1215,6 +1245,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppImportacoesRoute: AppImportacoesRoute,
   AppMedicoesRoute: AppMedicoesRoute,
   AppObrasRoute: AppObrasRoute,
+  AppOrdensServicoRoute: AppOrdensServicoRoute,
   AppOrcamentosRoute: AppOrcamentosRoute,
   AppPerfilRoute: AppPerfilRoute,
   AppPrestadoresRoute: AppPrestadoresRoute,
@@ -1258,6 +1289,7 @@ const rootRouteChildren: RootRouteChildren = {
   PontoRoute: PontoRoute,
   PortalRoute: PortalRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
+  ApiCronPrazosRoute: ApiCronPrazosRoute,
   ApiDiarioMediaRoute: ApiDiarioMediaRoute,
   AssinarTokenRoute: AssinarTokenRoute,
   CotacaoTokenRoute: CotacaoTokenRoute,

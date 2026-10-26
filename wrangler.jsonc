@@ -13,5 +13,8 @@
   "assets": {
     "directory": "dist/client",
     "binding": "ASSETS"
+  },
+  "triggers": {
+    "crons": ["0 10 * * *"]
   }
 }
