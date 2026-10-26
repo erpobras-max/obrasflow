@@ -8,6 +8,7 @@ export default defineConfig({
       rollupOptions: {
         // Módulo resolvido exclusivamente pelo runtime do Cloudflare Worker.
         external: ["cloudflare:workers"],
+        maxParallelFileOps: 16,
       },
     },
   },
