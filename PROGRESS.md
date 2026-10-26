@@ -103,6 +103,7 @@ Não há Edge Functions versionadas em `supabase/functions` neste checkout. A ap
 - O service worker foi ajustado para ignorar requisições de extensões do navegador e não tentar gravá-las no cache.
 - A tabela `notificacoes_usuario` foi criada no Supabase publicado. Os alertas de estoque agora consultam `produto_estoque`, em vez do estoque legado por obra.
 - O ambiente local pode mostrar avisos de versão do Node e vulnerabilidades do `npm audit`; devem ser tratados separadamente para não misturar atualização de dependências com regras de negócio.
+- A publicação das cotas associativas do CAD foi confirmada em 26/10/2026 no Cloudflare Worker `obrasflow`, versão `d1574cad`, com 100% do tráfego.
 - A migration `20261013000004_cotacoes_compra.sql` foi aplicada no projeto Supabase publicado pelo SQL Editor em 13/10/2026, com retorno `Success. No rows returned`.
 - Consultas antigas de estoque/financeiro ainda exigem atenção se forem reintroduzidas: o schema publicado usa `produto_estoque` como fonte do saldo atual.
 - Verificação direta no Supabase em 14/10/2026 encontrou inicialmente as tabelas-base, mas faltavam `estoque_prateleiras`, a RPC e o trigger. A migration `20261013000006_almoxarifado_qr.sql` foi aplicada pelo SQL Editor com sucesso; consulta posterior confirmou todos esses objetos. O teste como `authenticated` registrou saldo 10 dentro de transação e o `ROLLBACK` deixou o banco sem a posição criada. A migration foi aplicada manualmente e ainda não consta em `supabase_migrations.schema_migrations`, assim como a recuperação da base; reconciliar o histórico do CLI antes de depender de `supabase db push`.
@@ -244,7 +245,8 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
    - Transformações numéricas de deslocamento e rotação, duplicação de elementos e exclusão definitiva da seleção.
    - Layers CAD editáveis com criação, renomeação, exclusão segura, associação de elementos, visibilidade e bloqueio compartilhados entre 2D e 3D.
    - Seis comandos de alinhamento da seleção: esquerda, centro horizontal, direita, topo, meio vertical e base.
-   - Entregas publicadas pelas PRs #142, #143, #144, #145 e #146; a PR #146 encerrou a Issue #131.
+   - Cotas lineares persistentes, vinculadas aos extremos das paredes para atualização automática, com exclusão, histórico e suporte a layers.
+   - Entregas publicadas pelas PRs #142, #143, #144, #145, #146 e #149; a PR #149 encerrou a Issue #148 e iniciou a execução separada da Issue #132.
 
 ## 20. Módulo de Ponto Eletrônico & Gestão de Canteiro (Perfil Mestre de Obras)
 
@@ -297,10 +299,10 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `478e2f6b9b00d42c5f249c6a5b4a6dc10296323e` — alinhamento de elementos CAD (PR #146).
-- **Branch**: `main`, após merge da branch `feat/131-alinhamento-cad`.
-- **Validação**: testes direcionados do CAD com 9/9 aprovações, `npm run build` concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
-- **Deploy**: bundle público do Cloudflare Worker `obrasflow` verificado contendo os comandos de alinhamento, layers CAD e a confirmação `Seleção alinhada`.
+- **Commit**: `57e37b7b93b4cc9905c62fd4136d7b2aa65447b2` — cotas associativas no CAD (PR #149).
+- **Branch**: `main`, após merge da branch `feat/148-cotas-associativas`.
+- **Validação**: 26 testes direcionados do CAD aprovados, `npm run build` concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
+- **Deploy**: versão `d1574cad` promovida para 100% do tráfego; bundle público `projeto3d._id-CP6oZQtX.js` verificado com criação e remoção de cotas.
 - **Observação de CI**: o job `dependency-audit` continua falhando por vulnerabilidades preexistentes e deve ser tratado em uma Issue/PR própria.
 
 ---
@@ -308,7 +310,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 ## 23. Pendências prioritárias após esta atualização
 
 - Executar testes de aceitação visual com os usuários engenheiros desenhando plantas reais de casas no estúdio 2D.
-- Implementar cotas associativas, anotações, layouts A4/A3 e impressão em escala (Issue #132).
+- Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
 - Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
 - Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
