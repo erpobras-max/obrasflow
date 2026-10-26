@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ResumoDiarioCard } from "@/components/dashboard/ResumoDiarioCard";
 
 export const Route = createFileRoute("/_app/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — ERP Obras" }] }),
@@ -286,6 +287,9 @@ function DashboardPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Boletim Executivo Matinal */}
+      <ResumoDiarioCard />
+
       {alertas.length > 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 shadow-sm animate-pulse">
           <div className="flex items-center gap-2 font-semibold text-amber-800"><Bell className="size-5" /> Alertas de atraso</div>

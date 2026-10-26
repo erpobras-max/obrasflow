@@ -31,14 +31,15 @@ import { Route as AppImobiliariaRouteImport } from './routes/_app/imobiliaria'
 import { Route as AppImportacoesRouteImport } from './routes/_app/importacoes'
 import { Route as AppMedicoesRouteImport } from './routes/_app/medicoes'
 import { Route as AppObrasRouteImport } from './routes/_app/obras'
-import { Route as AppOrdensServicoRouteImport } from './routes/_app/ordens-servico'
 import { Route as AppOrcamentosRouteImport } from './routes/_app/orcamentos'
+import { Route as AppOrdensServicoRouteImport } from './routes/_app/ordens-servico'
 import { Route as AppPerfilRouteImport } from './routes/_app/perfil'
 import { Route as AppPrestadoresRouteImport } from './routes/_app/prestadores'
 import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
 import { Route as AppRhRouteImport } from './routes/_app/rh'
 import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
 import { Route as ApiCronPrazosRouteImport } from './routes/api.cron-prazos'
+import { Route as ApiCronResumoDiarioRouteImport } from './routes/api.cron-resumo-diario'
 import { Route as ApiDiarioMediaRouteImport } from './routes/api.diario-media'
 import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
 import { Route as CotacaoTokenRouteImport } from './routes/cotacao.$token'
@@ -177,14 +178,14 @@ const AppObrasRoute = AppObrasRouteImport.update({
   path: '/obras',
   getParentRoute: () => AppRoute,
 } as any)
-const AppOrdensServicoRoute = AppOrdensServicoRouteImport.update({
-  id: '/ordens-servico',
-  path: '/ordens-servico',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppOrcamentosRoute = AppOrcamentosRouteImport.update({
   id: '/orcamentos',
   path: '/orcamentos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrdensServicoRoute = AppOrdensServicoRouteImport.update({
+  id: '/ordens-servico',
+  path: '/ordens-servico',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPerfilRoute = AppPerfilRouteImport.update({
@@ -215,6 +216,11 @@ const AppUsuariosRoute = AppUsuariosRouteImport.update({
 const ApiCronPrazosRoute = ApiCronPrazosRouteImport.update({
   id: '/api/cron-prazos',
   path: '/api/cron-prazos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronResumoDiarioRoute = ApiCronResumoDiarioRouteImport.update({
+  id: '/api/cron-resumo-diario',
+  path: '/api/cron-resumo-diario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDiarioMediaRoute = ApiDiarioMediaRouteImport.update({
@@ -382,14 +388,15 @@ export interface FileRoutesByFullPath {
   '/importacoes': typeof AppImportacoesRoute
   '/medicoes': typeof AppMedicoesRoute
   '/obras': typeof AppObrasRoute
-  '/ordens-servico': typeof AppOrdensServicoRoute
   '/orcamentos': typeof AppOrcamentosRoute
+  '/ordens-servico': typeof AppOrdensServicoRoute
   '/perfil': typeof AppPerfilRoute
   '/prestadores': typeof AppPrestadoresRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
   '/api/cron-prazos': typeof ApiCronPrazosRoute
+  '/api/cron-resumo-diario': typeof ApiCronResumoDiarioRoute
   '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
@@ -440,14 +447,15 @@ export interface FileRoutesByTo {
   '/importacoes': typeof AppImportacoesRoute
   '/medicoes': typeof AppMedicoesRoute
   '/obras': typeof AppObrasRoute
-  '/ordens-servico': typeof AppOrdensServicoRoute
   '/orcamentos': typeof AppOrcamentosRoute
+  '/ordens-servico': typeof AppOrdensServicoRoute
   '/perfil': typeof AppPerfilRoute
   '/prestadores': typeof AppPrestadoresRoute
   '/relatorios': typeof AppRelatoriosRoute
   '/rh': typeof AppRhRoute
   '/usuarios': typeof AppUsuariosRoute
   '/api/cron-prazos': typeof ApiCronPrazosRoute
+  '/api/cron-resumo-diario': typeof ApiCronResumoDiarioRoute
   '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
@@ -502,11 +510,14 @@ export interface FileRoutesById {
   '/_app/medicoes': typeof AppMedicoesRoute
   '/_app/obras': typeof AppObrasRoute
   '/_app/orcamentos': typeof AppOrcamentosRoute
+  '/_app/ordens-servico': typeof AppOrdensServicoRoute
   '/_app/perfil': typeof AppPerfilRoute
   '/_app/prestadores': typeof AppPrestadoresRoute
   '/_app/relatorios': typeof AppRelatoriosRoute
   '/_app/rh': typeof AppRhRoute
   '/_app/usuarios': typeof AppUsuariosRoute
+  '/api/cron-prazos': typeof ApiCronPrazosRoute
+  '/api/cron-resumo-diario': typeof ApiCronResumoDiarioRoute
   '/api/diario-media': typeof ApiDiarioMediaRoute
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
@@ -561,11 +572,14 @@ export interface FileRouteTypes {
     | '/medicoes'
     | '/obras'
     | '/orcamentos'
+    | '/ordens-servico'
     | '/perfil'
     | '/prestadores'
     | '/relatorios'
     | '/rh'
     | '/usuarios'
+    | '/api/cron-prazos'
+    | '/api/cron-resumo-diario'
     | '/api/diario-media'
     | '/assinar/$token'
     | '/cotacao/$token'
@@ -617,11 +631,14 @@ export interface FileRouteTypes {
     | '/medicoes'
     | '/obras'
     | '/orcamentos'
+    | '/ordens-servico'
     | '/perfil'
     | '/prestadores'
     | '/relatorios'
     | '/rh'
     | '/usuarios'
+    | '/api/cron-prazos'
+    | '/api/cron-resumo-diario'
     | '/api/diario-media'
     | '/assinar/$token'
     | '/cotacao/$token'
@@ -675,11 +692,14 @@ export interface FileRouteTypes {
     | '/_app/medicoes'
     | '/_app/obras'
     | '/_app/orcamentos'
+    | '/_app/ordens-servico'
     | '/_app/perfil'
     | '/_app/prestadores'
     | '/_app/relatorios'
     | '/_app/rh'
     | '/_app/usuarios'
+    | '/api/cron-prazos'
+    | '/api/cron-resumo-diario'
     | '/api/diario-media'
     | '/assinar/$token'
     | '/cotacao/$token'
@@ -718,6 +738,8 @@ export interface RootRouteChildren {
   PontoRoute: typeof PontoRoute
   PortalRoute: typeof PortalRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
+  ApiCronPrazosRoute: typeof ApiCronPrazosRoute
+  ApiCronResumoDiarioRoute: typeof ApiCronResumoDiarioRoute
   ApiDiarioMediaRoute: typeof ApiDiarioMediaRoute
   AssinarTokenRoute: typeof AssinarTokenRoute
   CotacaoTokenRoute: typeof CotacaoTokenRoute
@@ -881,18 +903,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppObrasRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/ordens-servico': {
-      id: '/_app/ordens-servico'
-      path: '/ordens-servico'
-      fullPath: '/ordens-servico'
-      preLoaderRoute: typeof AppOrdensServicoRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/orcamentos': {
       id: '/_app/orcamentos'
       path: '/orcamentos'
       fullPath: '/orcamentos'
       preLoaderRoute: typeof AppOrcamentosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ordens-servico': {
+      id: '/_app/ordens-servico'
+      path: '/ordens-servico'
+      fullPath: '/ordens-servico'
+      preLoaderRoute: typeof AppOrdensServicoRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/perfil': {
@@ -935,6 +957,13 @@ declare module '@tanstack/react-router' {
       path: '/api/cron-prazos'
       fullPath: '/api/cron-prazos'
       preLoaderRoute: typeof ApiCronPrazosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron-resumo-diario': {
+      id: '/api/cron-resumo-diario'
+      path: '/api/cron-resumo-diario'
+      fullPath: '/api/cron-resumo-diario'
+      preLoaderRoute: typeof ApiCronResumoDiarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/diario-media': {
@@ -1218,6 +1247,7 @@ interface AppRouteChildren {
   AppMedicoesRoute: typeof AppMedicoesRoute
   AppObrasRoute: typeof AppObrasRoute
   AppOrcamentosRoute: typeof AppOrcamentosRoute
+  AppOrdensServicoRoute: typeof AppOrdensServicoRoute
   AppPerfilRoute: typeof AppPerfilRoute
   AppPrestadoresRoute: typeof AppPrestadoresRoute
   AppRelatoriosRoute: typeof AppRelatoriosRoute
@@ -1245,8 +1275,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppImportacoesRoute: AppImportacoesRoute,
   AppMedicoesRoute: AppMedicoesRoute,
   AppObrasRoute: AppObrasRoute,
-  AppOrdensServicoRoute: AppOrdensServicoRoute,
   AppOrcamentosRoute: AppOrcamentosRoute,
+  AppOrdensServicoRoute: AppOrdensServicoRoute,
   AppPerfilRoute: AppPerfilRoute,
   AppPrestadoresRoute: AppPrestadoresRoute,
   AppRelatoriosRoute: AppRelatoriosRoute,
@@ -1290,6 +1320,7 @@ const rootRouteChildren: RootRouteChildren = {
   PortalRoute: PortalRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
   ApiCronPrazosRoute: ApiCronPrazosRoute,
+  ApiCronResumoDiarioRoute: ApiCronResumoDiarioRoute,
   ApiDiarioMediaRoute: ApiDiarioMediaRoute,
   AssinarTokenRoute: AssinarTokenRoute,
   CotacaoTokenRoute: CotacaoTokenRoute,
