@@ -1,6 +1,19 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { createClient } from "@supabase/supabase-js";
+import { SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client.custom";
+import { getSupabaseServiceRoleKey } from "@/integrations/supabase/client.server.custom";
 import { enviarEmailAvisoOS } from "@/lib/email-service.server";
+
+function getSupabaseClient() {
+  const serviceKey = getSupabaseServiceRoleKey();
+  const keyToUse = serviceKey || SUPABASE_ANON_KEY;
+  return createClient(SUPABASE_PROJECT_URL, keyToUse, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
 export const Route = createFileRoute("/api/cron-prazos")({
   server: {
@@ -12,13 +25,14 @@ export const Route = createFileRoute("/api/cron-prazos")({
 });
 
 async function processarPrazos() {
+  const supabase = getSupabaseClient();
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const hojeIsoStr = hoje.toISOString().split("T")[0];
 
   try {
     // 1. Buscar ordens de serviço pendentes
-    const { data: ordens, error } = await supabaseAdmin
+    const { data: ordens, error } = await supabase
       .from("ordens_servico")
       .select(`
         id,
@@ -72,7 +86,7 @@ async function processarPrazos() {
 
     let emailMap: Record<string, string> = {};
     if (responsaveisIds.length > 0) {
-      const { data: perfis } = await supabaseAdmin
+      const { data: perfis } = await supabase
         .from("perfis_usuarios")
         .select("id, email")
         .in("id", responsaveisIds);
@@ -111,7 +125,7 @@ async function processarPrazos() {
       relatorio.alertasProcessados++;
 
       // Verificar se já enviamos notificação para esta OS hoje (Idempotência)
-      const { data: jaEnviado } = await supabaseAdmin
+      const { data: jaEnviado } = await supabase
         .from("notificacoes_historico")
         .select("id")
         .eq("referencia_tipo", "ordens_servico")
@@ -138,7 +152,7 @@ async function processarPrazos() {
         }
 
         try {
-          await supabaseAdmin.from("notificacoes_usuario").insert({
+          await supabase.from("notificacoes_usuario").insert({
             user_id: os.responsavel_id,
             titulo: `Alerta de OS: ${os.numero}`,
             mensagem: msgSino,
@@ -193,7 +207,7 @@ async function processarPrazos() {
 
       // C. Gravar no histórico para não repetir hoje
       try {
-        await supabaseAdmin.from("notificacoes_historico").insert({
+        await supabase.from("notificacoes_historico").insert({
           tipo: emailDestino ? "email" : "sino",
           referencia_tipo: "ordens_servico",
           referencia_id: os.id,
