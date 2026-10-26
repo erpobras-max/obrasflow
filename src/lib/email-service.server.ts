@@ -177,6 +177,7 @@ export async function enviarEmailAvisoOS(dados: DadosEmailOS): Promise<{
       sucesso: false,
       erro: msg,
     };
+  }
 }
 
 /**
