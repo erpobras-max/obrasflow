@@ -37,7 +37,7 @@ async function enviarMensagem(canal: "push" | "email" | "sms", payload: Record<s
       body: JSON.stringify({ app_id: appId, ...payload }),
     });
     const data = await response.json() as { id?: string; errors?: unknown };
-    if (!response.ok || !data.id) {
+    if (!response.ok || !data.id || data.errors) {
       return { sucesso: false, erro: `OneSignal HTTP ${response.status}: ${JSON.stringify(data.errors || data)}` };
     }
     return { sucesso: true, id: data.id };

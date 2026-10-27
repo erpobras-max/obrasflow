@@ -27,3 +27,53 @@ test("ativação de push informa quando o navegador não oferece suporte", async
     else delete globalThis.navigator;
   }
 });
+
+test("ativação só informa sucesso após obter opt-in, id e token do OneSignal", async () => {
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const navigatorDescriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  const inscricao = {
+    id: null,
+    token: null,
+    optedIn: false,
+    optIn: async () => {
+      inscricao.id = "subscription-1";
+      inscricao.token = "push-token-1";
+      inscricao.optedIn = true;
+    },
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  const oneSignal = {
+    Notifications: {
+      permission: true,
+      permissionNative: "granted",
+      isPushSupported: () => true,
+      requestPermission: async () => {},
+    },
+    User: { PushSubscription: inscricao },
+    login: async () => {},
+    logout: async () => {},
+  };
+
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { Notification: {}, OneSignal: oneSignal, setTimeout, clearTimeout },
+  });
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { serviceWorker: {} },
+  });
+
+  try {
+    const resultado = await solicitarPermissaoEInscreverPush("usuario-1");
+    assert.equal(resultado.sucesso, true);
+    assert.equal(inscricao.optedIn, true);
+    assert.ok(inscricao.id);
+    assert.ok(inscricao.token);
+  } finally {
+    if (windowDescriptor) Object.defineProperty(globalThis, "window", windowDescriptor);
+    else delete globalThis.window;
+    if (navigatorDescriptor) Object.defineProperty(globalThis, "navigator", navigatorDescriptor);
+    else delete globalThis.navigator;
+  }
+});

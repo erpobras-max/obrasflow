@@ -40,3 +40,31 @@ test("OneSignal envia cada canal com destinatário individual", async () => {
     globalThis.__env__ = originalEnv;
   }
 });
+
+test("OneSignal não informa sucesso quando a API rejeita o único destinatário", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = globalThis.__env__;
+  globalThis.__env__ = { ONESIGNAL_REST_KEY: "chave-de-teste" };
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({ id: "msg-1", errors: { invalid_external_user_ids: ["user-1"] } }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      },
+    );
+
+  try {
+    const resultado = await enviarPushOneSignal(
+      "user-1",
+      "Prazo",
+      "Mensagem",
+      "https://example.com/os",
+    );
+    assert.equal(resultado.sucesso, false);
+    assert.match(resultado.erro, /invalid_external_user_ids/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.__env__ = originalEnv;
+  }
+});
