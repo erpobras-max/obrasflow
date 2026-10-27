@@ -117,12 +117,6 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <meta name="google" content="notranslate" />
         <HeadContent />
-        {/* PushAlert — Notificações Push para todos os dispositivos */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];g.src="https://cdn.pushalert.co/unified_c4c9bbfe77c5785f5aacac30dea8f31b.js";s.parentNode.insertBefore(g,s)}(document,"script"));`,
-          }}
-        />
       </head>
       <body>
         {children}
@@ -138,6 +132,17 @@ function RootComponent() {
 
   useEffect(() => {
     void initializeBrowserMonitoring();
+  }, []);
+
+  // Carrega o script do PushAlert no client-side (evita interferência no SSR/HeadContent)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const existing = document.querySelector('script[src*="pushalert.co"]');
+    if (existing) return;
+    const g = document.createElement("script");
+    g.src = "https://cdn.pushalert.co/unified_c4c9bbfe77c5785f5aacac30dea8f31b.js";
+    g.async = true;
+    document.head.appendChild(g);
   }, []);
 
   useEffect(() => {
