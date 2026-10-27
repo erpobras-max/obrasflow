@@ -62,7 +62,7 @@ As entregas mais recentes são:
 - `20261013000004_cotacoes_compra.sql`: cria o módulo completo de cotações, convites por fornecedor, respostas públicas por token, anexos, comparação, seleção vencedora, pedidos, recebimentos, integração com contas a pagar, notificações e RLS.
 - `20261014000001_almoxarifado_base_recuperacao.sql`: recria de forma aditiva as tabelas-base `depositos`, `produto_estoque` e `movimentacoes_estoque` quando ausentes, configura leitura/RLS e semeia o depósito geral; foi aplicada no projeto de produção para corrigir o erro de cadastro.
 - `20261019120000_create_obra_projetos_cad.sql`: cria a tabela `obra_projetos_cad` para armazenar o projeto CAD/BIM paramétrico, imagem de capa 3D, quantitativos e configurações de BDI por obra, com índices e políticas de RLS completas para equipe interna e clientes no portal.
-- `20261027000001_onesignal_omnichannel.sql`: prepara o histórico de notificações por canal para push, e-mail e SMS e restringe o processamento agendado ao `service_role`; ainda precisa ser aplicada no Supabase de produção.
+- `20261027000001_onesignal_omnichannel.sql`: prepara o histórico de notificações por canal para push, e-mail e SMS e restringe o processamento agendado ao `service_role`; aplicada no Supabase de produção em 27/10/2026.
 
 As melhorias de nome, inclusão, exclusão individual e ordenação das etapas não exigem nova migration; usam `obra_cronograma.ordem` e as colunas já existentes.
 
@@ -304,7 +304,8 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - **Branch**: `main`, após merge da branch `feat/180-onesignal-omnichannel`.
 - **Validação**: 8 testes direcionados aprovados, build local concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
 - **Deploy**: workflow `Deploy to Cloudflare Workers` #40499839466 concluído com sucesso em 27/10/2026.
-- **Ativação pendente**: aplicar a migration `20261027000001_onesignal_omnichannel.sql`, cadastrar `ONESIGNAL_REST_KEY` e `CRON_SECRET` no Worker, rotacionar a chave OneSignal exposta anteriormente e configurar domínio remetente/Twilio no OneSignal.
+- **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
+- **Canais pendentes**: o remetente `notificacoes@erpobras.com` foi preparado no OneSignal, mas `erpobras.com` ainda não existe no DNS público e não pode ser autenticado; o Twilio exige concluir o MFA e selecionar ou cadastrar um remetente SMS.
 - **Observação de CI**: o job `dependency-audit` continua falhando por vulnerabilidades preexistentes e deve ser tratado em uma Issue/PR própria.
 
 ---
@@ -315,7 +316,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
 - Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
 - Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
-- Concluir a ativação externa do OneSignal: migration, secrets do Worker, domínio de e-mail e provedor de SMS.
+- Concluir os canais do OneSignal: autenticar um domínio de e-mail válido, concluir o MFA/remetente do Twilio e executar testes reais de push, e-mail e SMS.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
 
 
