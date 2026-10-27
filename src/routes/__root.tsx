@@ -117,6 +117,12 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <meta name="google" content="notranslate" />
         <HeadContent />
+        {/* PushAlert — Notificações Push para todos os dispositivos */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(d,t){var g=d.createElement(t),s=d.getElementsByTagName(t)[0];g.src="https://cdn.pushalert.co/unified_c4c9bbfe77c5785f5aacac30dea8f31b.js";s.parentNode.insertBefore(g,s)}(document,"script"));`,
+          }}
+        />
       </head>
       <body>
         {children}
@@ -125,6 +131,7 @@ function RootShell({ children }: { children: ReactNode }) {
     </html>
   );
 }
+
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();

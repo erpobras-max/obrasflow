@@ -19,6 +19,49 @@ function getSupabaseClient() {
   });
 }
 
+function getPushAlertKey(): string | undefined {
+  const runtimeEnv = (globalThis as unknown as { __env__?: Record<string, string> }).__env__;
+  return (
+    runtimeEnv?.PUSHALERT_API_KEY ||
+    process.env.PUSHALERT_API_KEY
+  )?.trim();
+}
+
+/**
+ * Envia uma notificação push para TODOS os assinantes via PushAlert REST API.
+ */
+async function enviarPushAlertBroadcast(titulo: string, mensagem: string, url = "/ordens-servico") {
+  const apiKey = getPushAlertKey();
+  if (!apiKey) {
+    console.warn("[PushAlert] PUSHALERT_API_KEY não configurada. Pulando push.");
+    return { sucesso: false, erro: "PUSHALERT_API_KEY ausente" };
+  }
+
+  try {
+    const res = await fetch("https://api.pushalert.co/rest/v1/send", {
+      method: "POST",
+      headers: {
+        "Authorization": `api_key=${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ title: titulo, message: mensagem, url }),
+    });
+
+    const json = await res.json() as { success?: boolean; error?: string; sent?: number };
+    if (!res.ok || !json.success) {
+      console.error("[PushAlert] Erro ao enviar broadcast:", json);
+      return { sucesso: false, erro: json.error || `HTTP ${res.status}` };
+    }
+
+    console.log(`[PushAlert] Push enviado para ${json.sent ?? "?"} assinantes.`);
+    return { sucesso: true, enviados: json.sent };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[PushAlert] Falha na chamada REST:", msg);
+    return { sucesso: false, erro: msg };
+  }
+}
+
 export const Route = createFileRoute("/api/cron-prazos")({
   server: {
     handlers: {
@@ -32,7 +75,6 @@ async function processarPrazos() {
   const supabase = getSupabaseClient();
 
   try {
-    // Chama a função RPC com SECURITY DEFINER no PostgreSQL
     const { data, error } = await supabase.rpc("processar_prazos_ordens_servico");
 
     if (error) {
@@ -60,7 +102,7 @@ async function processarPrazos() {
     };
 
     let emailsDisparados = 0;
-    const detalhes = [];
+    const detalhes: Array<{ os: string; email: string; status: string }> = [];
 
     for (const item of resultado?.emailsParaEnvio || []) {
       const emailResult = await enviarEmailAvisoOS({
@@ -82,14 +124,35 @@ async function processarPrazos() {
       }
     }
 
+    // Disparar Push para todos os assinantes se houver OSs com alertas
+    let pushResult: { sucesso: boolean; enviados?: number; erro?: string } = { sucesso: false };
+    const totalAlertas = resultado?.emailsParaEnvio?.length || 0;
+
+    if (totalAlertas > 0) {
+      const titulosPush = resultado!.emailsParaEnvio!.map(i => {
+        const emoji = i.tipoAviso === "atrasada" ? "⚠️" : "⏰";
+        return `${emoji} ${i.numero} — ${i.titulo}`;
+      });
+      const mensagemPush =
+        totalAlertas === 1
+          ? titulosPush[0]
+          : `${totalAlertas} Ordens de Serviço precisam de atenção!\n${titulosPush.slice(0, 3).join("\n")}`;
+
+      pushResult = await enviarPushAlertBroadcast(
+        "ObrasFlow — Alerta de Prazos",
+        mensagemPush,
+        "/ordens-servico"
+      );
+    }
+
     return new Response(
       JSON.stringify({
         sucesso: true,
         totalOSs: resultado?.totalVerificadas || 0,
         sinosNotificados: resultado?.sinosCriados || 0,
         emailsDisparados,
+        pushDisparado: pushResult.sucesso,
         detalhes,
-        debugRpc: resultado,
       }),
       {
         status: 200,

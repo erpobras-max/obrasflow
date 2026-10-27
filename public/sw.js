@@ -1,4 +1,8 @@
-const CACHE_NAME = 'erp-obras-cache-v1';
+// Importa o Service Worker oficial do PushAlert (responsável pela inscrição e entrega de push)
+importScripts('https://cdn.pushalert.co/unified_c4c9bbfe77c5785f5aacac30dea8f31b.js');
+
+// ─── Cache PWA (ObrasFlow) ───────────────────────────────────────────────────
+const CACHE_NAME = 'erp-obras-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
@@ -6,47 +10,38 @@ const ASSETS_TO_CACHE = [
   '/icon-512x512.png'
 ];
 
-// Install event
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => {
-        console.log('Caching PWA app shell assets...');
-        return cache.addAll(ASSETS_TO_CACHE);
-      })
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(ASSETS_TO_CACHE).catch(() => {
+        // Ignora falhas em assets individuais
+      });
+    })
   );
 });
 
-// Skip waiting message listener
-self.addEventListener('message', event => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
-
-// Activate event
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
+    caches.keys().then(keys =>
+      Promise.all(
         keys.map(key => {
           if (key !== CACHE_NAME) {
-            console.log('Removing old cache:', key);
             return caches.delete(key);
           }
         })
-      );
-    }).then(() => self.clients.claim())
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-// Fetch event with Network-First strategy
+// Network-First: ignora chamadas de API e Supabase
 self.addEventListener('fetch', event => {
-  // Skip non-GET, API calls, and Supabase connections to ensure live data is loaded
   if (
-    event.request.method !== 'GET' || 
-    event.request.url.includes('/api/') || 
-    event.request.url.includes('supabase.co')
+    event.request.method !== 'GET' ||
+    event.request.url.includes('/api/') ||
+    event.request.url.includes('supabase.co') ||
+    event.request.url.includes('pushalert')
   ) {
     return;
   }
@@ -55,45 +50,16 @@ self.addEventListener('fetch', event => {
     fetch(event.request)
       .then(response => {
         if (response.status === 200 && response.type === 'basic') {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
-          });
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
         return response;
       })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(event.request))
   );
 });
 
-// Evento de recebimento de Notificação Push no PWA
-self.addEventListener('push', event => {
-  let data = {};
-  if (event.data) {
-    try {
-      data = event.data.json();
-    } catch {
-      data = { body: event.data.text() };
-    }
-  }
-
-  const title = data.title || 'ObrasFlow — Alerta de Prazo';
-  const options = {
-    body: data.body || 'Você possui ordens de serviço pendentes.',
-    icon: '/icon-192x192.png',
-    badge: '/icon-192x192.png',
-    vibrate: [200, 100, 200],
-    data: {
-      url: data.url || '/ordens-servico',
-    },
-  };
-
-  event.waitUntil(self.registration.showNotification(title, options));
-});
-
-// Evento de clique na notificação Push
+// Clique na notificação push → abre a página de OS
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const targetUrl = (event.notification.data && event.notification.data.url) || '/ordens-servico';
