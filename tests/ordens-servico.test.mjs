@@ -75,3 +75,44 @@ test('ordemServicoSchema valida campos mínimos obrigatórios', () => {
   });
   assert.equal(semData.success, false);
 });
+
+test('ordemServicoSchema valida e aceita email_notificacao e horario_lembrete customizados', () => {
+  // Com email e horário válidos
+  const comEmail = ordemServicoSchema.safeParse({
+    titulo: 'Vistoria Predial',
+    data_previsao: '2026-11-20',
+    email_notificacao: 'engenheiro@empresa.com.br',
+    horario_lembrete: '09:30',
+  });
+  assert.ok(comEmail.success);
+  if (comEmail.success) {
+    assert.equal(comEmail.data.email_notificacao, 'engenheiro@empresa.com.br');
+    assert.equal(comEmail.data.horario_lembrete, '09:30');
+  }
+
+  // Sem email informado usa padrão 08:00
+  const padrao = ordemServicoSchema.safeParse({
+    titulo: 'Vistoria Hidráulica',
+    data_previsao: '2026-11-20',
+  });
+  assert.ok(padrao.success);
+  if (padrao.success) {
+    assert.equal(padrao.data.horario_lembrete, '08:00');
+  }
+
+  // Email em formato inválido
+  const emailInvalido = ordemServicoSchema.safeParse({
+    titulo: 'Vistoria Geral',
+    data_previsao: '2026-11-20',
+    email_notificacao: 'email-invalido-sem-arroba',
+  });
+  assert.equal(emailInvalido.success, false);
+
+  // Horário em formato inválido
+  const horarioInvalido = ordemServicoSchema.safeParse({
+    titulo: 'Vistoria Geral',
+    data_previsao: '2026-11-20',
+    horario_lembrete: '99:99',
+  });
+  assert.equal(horarioInvalido.success, false);
+});

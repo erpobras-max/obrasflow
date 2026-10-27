@@ -11,11 +11,12 @@ import {
   Users,
   Camera,
   CheckCircle2,
-  X,
   Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client.custom";
-import { getDiarioMediaUrl } from "@/lib/r2";
+import { getDiarioMediaUrl, getSecureR2Url } from "@/lib/r2";
+import { companyLogoKey } from "@/lib/empresa-logo";
+import { formatCpfCnpj } from "@/lib/validacao-documento";
 import {
   formatarDataRdo,
   gerarCodigoRdo,
@@ -77,6 +78,7 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
   const [imprimindo, setImprimindo] = useState(false);
   const [fotosComUrls, setFotosComUrls] = useState<FotoRdo[]>([]);
   const [carregandoFotos, setCarregandoFotos] = useState(false);
+  const [logoResolvida, setLogoResolvida] = useState<string | null>(null);
 
   // 1. Dados da Obra
   const { data: obra } = useQuery({
@@ -108,6 +110,36 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
     },
     enabled: open,
   });
+
+  // Carregar e resolver logo da empresa via R2 ou URL externa
+  useEffect(() => {
+    let cancelado = false;
+    const rawLogo = empresa?.logo_url;
+    if (!rawLogo) {
+      setLogoResolvida(null);
+      return;
+    }
+
+    const key = companyLogoKey(rawLogo);
+    if (key) {
+      getSecureR2Url(key)
+        .then((url) => {
+          if (!cancelado) setLogoResolvida(url);
+        })
+        .catch((err) => {
+          console.warn("[RdoPdfDialog] Falha ao carregar logo do R2:", err);
+          if (!cancelado) setLogoResolvida(null);
+        });
+    } else if (/^https?:\/\//i.test(rawLogo) || rawLogo.startsWith("data:")) {
+      setLogoResolvida(rawLogo);
+    } else {
+      setLogoResolvida(null);
+    }
+
+    return () => {
+      cancelado = true;
+    };
+  }, [empresa?.logo_url]);
 
   // 3. Cliente da Obra
   const { data: cliente } = useQuery({
@@ -443,7 +475,7 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
               Documento formatado segundo normas ABNT para fiscalização, assinatura e arquivo legal.
             </DialogDescription>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 pr-8">
             <Button
               size="sm"
               onClick={executarImpressao}
@@ -452,9 +484,6 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
             >
               {imprimindo ? <Loader2 className="size-3.5 animate-spin" /> : <Printer className="size-3.5" />}
               Imprimir / Salvar PDF
-            </Button>
-            <Button size="icon" variant="ghost" className="size-8" onClick={onClose}>
-              <X className="size-4" />
             </Button>
           </div>
         </DialogHeader>
@@ -469,15 +498,16 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
             {/* Cabeçalho do RDO */}
             <div className="header-box border-2 border-slate-900 rounded p-4 mb-4 flex items-center justify-between bg-slate-50">
               <div className="flex items-center gap-3">
-                {empresa?.logo_url ? (
+                {logoResolvida ? (
                   <img
-                    src={empresa.logo_url}
+                    src={logoResolvida}
                     alt={empresa?.nome_fantasia || "Logo Construtora"}
-                    className="h-12 w-auto max-w-[120px] object-contain"
+                    className="h-12 w-auto max-w-[130px] object-contain"
+                    onError={() => setLogoResolvida(null)}
                   />
                 ) : (
                   <div className="size-12 rounded bg-slate-900 text-white flex items-center justify-center font-bold text-lg">
-                    {empresa?.nome_fantasia?.slice(0, 2).toUpperCase() || "OF"}
+                    {empresa?.nome_fantasia?.slice(0, 2).toUpperCase() || empresa?.razao_social?.slice(0, 2).toUpperCase() || "OF"}
                   </div>
                 )}
                 <div>
@@ -485,7 +515,7 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
                     {empresa?.razao_social || empresa?.nome_fantasia || "CONSTRUTORA & ENGENHARIA"}
                   </div>
                   {empresa?.cnpj && (
-                    <div className="text-[10px] text-slate-600 font-medium">CNPJ: {empresa.cnpj}</div>
+                    <div className="text-[10px] text-slate-600 font-medium">CNPJ: {formatCpfCnpj(empresa.cnpj)}</div>
                   )}
                   <div className="text-[10px] text-slate-500">ObrasFlow ERP • Gestão Técnica de Obras</div>
                 </div>
@@ -525,12 +555,12 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
 
                 <div>
                   <div className="info-row">
-                    <span className="info-label text-[10px] uppercase font-bold text-slate-500 block">Cliente / Contratante</span>
+                    <span className="info-label text-[10px] uppercase font-bold text-slate-500 block">Proprietário da Obra</span>
                     <span className="info-value font-semibold text-slate-900">
-                      {cliente?.nome || "Cliente direto / Incorporação própria"}
+                      {cliente?.nome || "Proprietário da Obra"}
                     </span>
                     {cliente?.cpf_cnpj && (
-                      <span className="text-[10px] text-slate-500 block">Doc: {cliente.cpf_cnpj}</span>
+                      <span className="text-[10px] text-slate-500 block">Doc: {formatCpfCnpj(cliente.cpf_cnpj)}</span>
                     )}
                   </div>
                   <div className="info-row mt-2">
@@ -709,9 +739,9 @@ export function RdoPdfDialog({ target, onClose }: RdoPdfDialogProps) {
 
               <div className="signature-box border-t-2 border-slate-900 pt-2 text-center">
                 <div className="font-bold text-xs text-slate-900">
-                  {cliente?.nome || "Fiscalização / Contratante"}
+                  {cliente?.nome || "Proprietário da Obra"}
                 </div>
-                <div className="text-[11px] text-slate-600 font-medium">Fiscal da Obra / Gestor do Contrato</div>
+                <div className="text-[11px] text-slate-600 font-medium">Proprietário da Obra</div>
                 <div className="text-[10px] text-slate-500">Visto e De Acordo</div>
               </div>
             </div>

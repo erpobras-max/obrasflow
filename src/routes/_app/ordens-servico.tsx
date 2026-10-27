@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Bell,
   MailCheck,
+  Mail,
   Smartphone,
   RefreshCw,
 } from "lucide-react";
@@ -68,6 +69,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -106,6 +108,8 @@ const DEFAULT_FORM_VALUES: OrdemServicoFormValues = {
   responsavel_id: "",
   responsavel_nome: "",
   responsavel_telefone: "",
+  email_notificacao: "",
+  horario_lembrete: "08:00",
   data_previsao: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
   prioridade: "media",
   status: "aberta",
@@ -221,6 +225,8 @@ function OrdensServicoPage() {
           responsavel_id,
           responsavel_nome,
           responsavel_telefone,
+          email_notificacao,
+          horario_lembrete,
           data_abertura,
           data_previsao,
           data_conclusao,
@@ -265,6 +271,8 @@ function OrdensServicoPage() {
       responsavel_id: os.responsavel_id || "",
       responsavel_nome: os.responsavel_nome || "",
       responsavel_telefone: os.responsavel_telefone || "",
+      email_notificacao: os.email_notificacao || "",
+      horario_lembrete: os.horario_lembrete ? os.horario_lembrete.slice(0, 5) : "08:00",
       data_previsao: os.data_previsao,
       prioridade: os.prioridade,
       status: os.status,
@@ -284,6 +292,8 @@ function OrdensServicoPage() {
         responsavel_id: values.responsavel_id ? values.responsavel_id : null,
         responsavel_nome: values.responsavel_nome || null,
         responsavel_telefone: values.responsavel_telefone || null,
+        email_notificacao: values.email_notificacao?.trim() ? values.email_notificacao.trim() : null,
+        horario_lembrete: values.horario_lembrete ? values.horario_lembrete : "08:00",
         data_previsao: values.data_previsao,
         prioridade: values.prioridade,
         status: values.status,
@@ -538,19 +548,33 @@ function OrdensServicoPage() {
         });
 
         return (
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">{row.responsavel_nome || "Não atribuído"}</span>
-            {waLink && (
-              <a
-                href={waLink}
-                target="_blank"
-                rel="noreferrer"
-                title={`Avisar ${row.responsavel_nome || "responsável"} no WhatsApp`}
-                aria-label={`Avisar ${row.responsavel_nome || "responsável"} via WhatsApp sobre ${row.numero}`}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white transition-transform hover:scale-105 shadow-sm"
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">{row.responsavel_nome || "Não atribuído"}</span>
+              {waLink && (
+                <a
+                  href={waLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`Avisar ${row.responsavel_nome || "responsável"} no WhatsApp`}
+                  aria-label={`Avisar ${row.responsavel_nome || "responsável"} via WhatsApp sobre ${row.numero}`}
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white transition-transform hover:scale-105 shadow-sm"
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                </a>
+              )}
+            </div>
+            {row.email_notificacao && (
+              <div
+                className="flex items-center gap-1 text-[11px] text-muted-foreground"
+                title={`Lembrete por e-mail para ${row.email_notificacao} às ${row.horario_lembrete ? row.horario_lembrete.slice(0, 5) : "08:00"}`}
               >
-                <MessageCircle className="w-4 h-4" />
-              </a>
+                <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                <span className="truncate max-w-[130px]">{row.email_notificacao}</span>
+                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1 py-0.5 rounded font-mono shrink-0">
+                  {row.horario_lembrete ? row.horario_lembrete.slice(0, 5) : "08:00"}
+                </span>
+              </div>
             )}
           </div>
         );
@@ -966,6 +990,53 @@ function OrdensServicoPage() {
                           value={field.value || ""}
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="email_notificacao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>E-mail para Lembrete (Opcional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          id="os-email-notificacao"
+                          type="email"
+                          placeholder="Ex: gestor@obra.com.br"
+                          {...field}
+                          value={field.value || ""}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-[11px] text-muted-foreground">
+                        Endereço para envio do comunicado de prazo desta OS.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="horario_lembrete"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Horário do Lembrete</FormLabel>
+                      <FormControl>
+                        <Input
+                          id="os-horario-lembrete"
+                          type="time"
+                          {...field}
+                          value={field.value || "08:00"}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-[11px] text-muted-foreground">
+                        Horário de disparo do alerta do dia (padrão: 08:00).
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

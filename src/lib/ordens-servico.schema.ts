@@ -29,6 +29,8 @@ export const ordemServicoSchema = z.object({
   responsavel_id: z.string().uuid("Responsável inválido").optional().nullable().or(z.literal("")),
   responsavel_nome: z.string().trim().optional().or(z.literal("")),
   responsavel_telefone: z.string().trim().optional().or(z.literal("")),
+  email_notificacao: z.string().trim().email("E-mail inválido").optional().nullable().or(z.literal("")),
+  horario_lembrete: z.string().trim().regex(/^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/, "Horário inválido (use HH:mm)").default("08:00"),
   data_previsao: z.string().min(1, "A data prevista é obrigatória"),
   prioridade: z.enum(PRIORIDADES_OS).default("media"),
   status: z.enum(STATUS_OS).default("aberta"),
@@ -47,6 +49,8 @@ export interface OrdemServicoRow {
   responsavel_id: string | null;
   responsavel_nome: string | null;
   responsavel_telefone: string | null;
+  email_notificacao: string | null;
+  horario_lembrete: string | null;
   data_abertura: string;
   data_previsao: string;
   data_conclusao: string | null;
