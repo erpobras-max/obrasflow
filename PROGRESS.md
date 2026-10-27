@@ -300,10 +300,11 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `a2a3e815c59cb71e0ebc08c9381c8d0d76f7d716` — integração OneSignal para push, e-mail e SMS (PR #181, Issue #180).
-- **Branch**: `main`, após merge da branch `feat/180-onesignal-omnichannel`.
-- **Validação**: 8 testes direcionados aprovados, build local concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
-- **Deploy**: workflow `Deploy to Cloudflare Workers` #40499839466 concluído com sucesso em 27/10/2026.
+- **Commit**: `7b8c687fe0cf0268a11021529b8bcdd4982c9ec7` — correção da ativação de Web Push do OneSignal (PR #184, Issue #178).
+- **Branch**: `main`, após merge da branch `fix/178-corrigir-ativacao-push`.
+- **Validação**: 66 testes aprovados, build local concluído e jobs `build`, `repository-hygiene` e `Workers Builds: obrasflow` aprovados.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40593630497 concluído com sucesso em 27/10/2026.
+- **Push**: corrigido o caminho absoluto do service worker do OneSignal; a ativação agora informa navegador incompatível, permissão bloqueada e falha de carregamento do SDK sem permanecer indefinidamente em `Ativando...`.
 - **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
 - **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
 - **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
@@ -317,7 +318,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
 - Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
 - Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
-- Concluir os canais do OneSignal: atender à revisão solicitada por e-mail, cadastrar um remetente pago no Twilio e executar testes reais de push, e-mail e SMS.
+- Validar a permissão e o recebimento de Web Push em navegador real; e-mail e SMS permanecem adiados por decisão de escopo.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
 
 
