@@ -1,3 +1,5 @@
+importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');
+
 // ─── Cache PWA (ObrasFlow) ───────────────────────────────────────────────────
 const CACHE_NAME = 'erp-obras-cache-v2';
 const ASSETS_TO_CACHE = [
@@ -53,24 +55,5 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => caches.match(event.request))
-  );
-});
-
-// Clique na notificação push → abre a página de OS
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  const targetUrl = (event.notification.data && event.notification.data.url) || '/ordens-servico';
-
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url.includes('/ordens-servico') && 'focus' in client) {
-          return client.focus();
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-    })
   );
 });

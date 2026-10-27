@@ -31,6 +31,7 @@ function isStaticAssetRequest(request: Request) {
   return (
     path.startsWith("/assets/") ||
     path.startsWith("/push/onesignal/") ||
+    path === "/OneSignalSDKWorker.js" ||
     path === "/sw.js" ||
     path === "/manifest.json" ||
     path === "/favicon.ico" ||

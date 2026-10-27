@@ -154,8 +154,8 @@ function RootComponent() {
       await oneSignal.init({
         appId: "ad9a6dc0-2948-4aad-80ee-7dd30e073d0d",
         allowLocalhostAsSecureOrigin: true,
-        serviceWorkerPath: "/push/onesignal/OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/push/onesignal/" },
+        serviceWorkerPath: "/OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/" },
       });
     });
 
@@ -169,7 +169,7 @@ function RootComponent() {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       window.addEventListener("load", () => {
         navigator.serviceWorker
-          .register("/sw.js")
+          .register("/OneSignalSDKWorker.js")
           .then((reg) => {
             console.log("PWA Service Worker registrado:", reg.scope);
 
