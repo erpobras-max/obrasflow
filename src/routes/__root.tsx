@@ -134,15 +134,24 @@ function RootComponent() {
     void initializeBrowserMonitoring();
   }, []);
 
-  // Carrega o script do PushAlert no client-side (evita interferência no SSR/HeadContent)
+  // Inicializa o OneSignal no client-side
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const existing = document.querySelector('script[src*="pushalert.co"]');
+    const existing = document.querySelector('script[src*="OneSignalSDK"]');
     if (existing) return;
-    const g = document.createElement("script");
-    g.src = "https://cdn.pushalert.co/unified_c4c9bbfe77c5785f5aacac30dea8f31b.js";
-    g.async = true;
-    document.head.appendChild(g);
+
+    const win = window as unknown as { OneSignalDeferred?: Array<(OneSignal: any) => Promise<void>> };
+    win.OneSignalDeferred = win.OneSignalDeferred || [];
+    win.OneSignalDeferred.push(async function (OneSignal: any) {
+      await OneSignal.init({
+        appId: "ad9a6dc0-2948-4aad-80ee-7dd30e073d0d",
+      });
+    });
+
+    const script = document.createElement("script");
+    script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+    script.defer = true;
+    document.head.appendChild(script);
   }, []);
 
   useEffect(() => {
