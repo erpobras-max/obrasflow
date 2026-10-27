@@ -3,6 +3,9 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  nitro: {
+    plugins: ["plugins/cron.ts"],
+  } as never,
   vite: {
     build: {
       rollupOptions: {
