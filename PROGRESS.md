@@ -300,11 +300,11 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `d75bc34ac6afbcffc9b4328a0c3f459a8cd024fa` — conclusão da inscrição de Web Push do OneSignal (PR #185, Issue #178).
-- **Branch**: `main`, após merge da branch `fix/178-concluir-inscricao-push`.
+- **Commit**: `c83bd4c1da412f99bab0bc16d24c078ed7db2a9f` — unificação do service worker do OneSignal e PWA (PR #186, Issue #178).
+- **Branch**: `main`, após merge da branch `fix/178-unificar-worker-onesignal`.
 - **Validação**: 6 testes focados aprovados, build local concluído e jobs `build`, `repository-hygiene` e `Workers Builds: obrasflow` aprovados.
-- **Deploy**: workflow `Deploy to Cloudflare Workers` #40598089366 concluído com sucesso em 27/10/2026; site e `/push/onesignal/OneSignalSDKWorker.js` responderam `200` após a publicação.
-- **Push**: a ativação solicita o opt-in e só informa sucesso depois que o OneSignal fornece opt-in, ID e token; respostas da API com erros de destinatário não são mais tratadas como envio bem-sucedido.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40601133648 concluído com sucesso em 27/10/2026; `/OneSignalSDKWorker.js` e `/sw.js` responderam `200` após a publicação.
+- **Push/PWA**: OneSignal e PWA agora usam um único worker no escopo raiz, preservando cache/instalação do PWA e habilitando a inscrição push sem disputa entre registros; a ativação só informa sucesso após receber opt-in, ID e token.
 - **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
 - **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
 - **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
