@@ -1,5 +1,5 @@
-// Importa o Service Worker oficial do PushAlert (responsável pela inscrição e entrega de push)
-importScripts('https://cdn.pushalert.co/unified_c4c9bbfe77c5785f5aacac30dea8f31b.js');
+// Importa o Service Worker oficial do PushAlert (responsável pela entrega e tratamento do push)
+importScripts('https://cdn.pushalert.co/sw.js');
 
 // ─── Cache PWA (ObrasFlow) ───────────────────────────────────────────────────
 const CACHE_NAME = 'erp-obras-cache-v2';
