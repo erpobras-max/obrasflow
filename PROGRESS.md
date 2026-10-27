@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 26/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 27/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -62,6 +62,7 @@ As entregas mais recentes são:
 - `20261013000004_cotacoes_compra.sql`: cria o módulo completo de cotações, convites por fornecedor, respostas públicas por token, anexos, comparação, seleção vencedora, pedidos, recebimentos, integração com contas a pagar, notificações e RLS.
 - `20261014000001_almoxarifado_base_recuperacao.sql`: recria de forma aditiva as tabelas-base `depositos`, `produto_estoque` e `movimentacoes_estoque` quando ausentes, configura leitura/RLS e semeia o depósito geral; foi aplicada no projeto de produção para corrigir o erro de cadastro.
 - `20261019120000_create_obra_projetos_cad.sql`: cria a tabela `obra_projetos_cad` para armazenar o projeto CAD/BIM paramétrico, imagem de capa 3D, quantitativos e configurações de BDI por obra, com índices e políticas de RLS completas para equipe interna e clientes no portal.
+- `20261027000001_onesignal_omnichannel.sql`: prepara o histórico de notificações por canal para push, e-mail e SMS e restringe o processamento agendado ao `service_role`; ainda precisa ser aplicada no Supabase de produção.
 
 As melhorias de nome, inclusão, exclusão individual e ordenação das etapas não exigem nova migration; usam `obra_cronograma.ordem` e as colunas já existentes.
 
@@ -299,10 +300,11 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `57e37b7b93b4cc9905c62fd4136d7b2aa65447b2` — cotas associativas no CAD (PR #149).
-- **Branch**: `main`, após merge da branch `feat/148-cotas-associativas`.
-- **Validação**: 26 testes direcionados do CAD aprovados, `npm run build` concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
-- **Deploy**: versão `d1574cad` promovida para 100% do tráfego; bundle público `projeto3d._id-CP6oZQtX.js` verificado com criação e remoção de cotas.
+- **Commit**: `a2a3e815c59cb71e0ebc08c9381c8d0d76f7d716` — integração OneSignal para push, e-mail e SMS (PR #181, Issue #180).
+- **Branch**: `main`, após merge da branch `feat/180-onesignal-omnichannel`.
+- **Validação**: 8 testes direcionados aprovados, build local concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40499839466 concluído com sucesso em 27/10/2026.
+- **Ativação pendente**: aplicar a migration `20261027000001_onesignal_omnichannel.sql`, cadastrar `ONESIGNAL_REST_KEY` e `CRON_SECRET` no Worker, rotacionar a chave OneSignal exposta anteriormente e configurar domínio remetente/Twilio no OneSignal.
 - **Observação de CI**: o job `dependency-audit` continua falhando por vulnerabilidades preexistentes e deve ser tratado em uma Issue/PR própria.
 
 ---
@@ -313,6 +315,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
 - Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
 - Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
+- Concluir a ativação externa do OneSignal: migration, secrets do Worker, domínio de e-mail e provedor de SMS.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
 
 
