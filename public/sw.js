@@ -1,6 +1,3 @@
-// Importa o Service Worker oficial do PushAlert (responsável pela entrega e tratamento do push)
-importScripts('https://cdn.pushalert.co/sw.js');
-
 // ─── Cache PWA (ObrasFlow) ───────────────────────────────────────────────────
 const CACHE_NAME = 'erp-obras-cache-v2';
 const ASSETS_TO_CACHE = [
@@ -35,13 +32,13 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Network-First: ignora chamadas de API e Supabase
+// Network-First: ignora chamadas de API, Supabase e OneSignal
 self.addEventListener('fetch', event => {
   if (
     event.request.method !== 'GET' ||
     event.request.url.includes('/api/') ||
     event.request.url.includes('supabase.co') ||
-    event.request.url.includes('pushalert')
+    event.request.url.includes('onesignal')
   ) {
     return;
   }
