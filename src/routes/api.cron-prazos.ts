@@ -89,6 +89,7 @@ async function processarPrazos() {
         sinosNotificados: resultado?.sinosCriados || 0,
         emailsDisparados,
         detalhes,
+        debugRpc: resultado,
       }),
       {
         status: 200,
