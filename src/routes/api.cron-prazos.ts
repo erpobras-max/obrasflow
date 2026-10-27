@@ -29,7 +29,7 @@ function getPushAlertKey(): string | undefined {
 }
 
 /**
- * Envia uma notificação push para TODOS os assinantes via PushAlert REST API.
+ * Envia uma notificação push para TODOS os assinantes via PushAlert REST API v2.
  */
 async function enviarPushAlertBroadcast(titulo: string, mensagem: string, url = "/ordens-servico") {
   const apiKey = getPushAlertKey();
@@ -39,23 +39,28 @@ async function enviarPushAlertBroadcast(titulo: string, mensagem: string, url = 
   }
 
   try {
-    const res = await fetch("https://api.pushalert.co/rest/v1/send", {
+    const params = new URLSearchParams();
+    params.set("title", titulo.slice(0, 64));
+    params.set("message", mensagem.slice(0, 192));
+    params.set("url", url.startsWith("http") ? url : `https://obrasflow.erpobras.workers.dev${url}`);
+
+    const res = await fetch("https://api.pushalert.co/rest/v2/web-push/send", {
       method: "POST",
       headers: {
         "Authorization": `api_key=${apiKey}`,
-        "Content-Type": "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: JSON.stringify({ title: titulo, message: mensagem, url }),
+      body: params.toString(),
     });
 
-    const json = await res.json() as { success?: boolean; error?: string; sent?: number };
+    const json = await res.json() as { success?: boolean; id?: number; msg?: string };
     if (!res.ok || !json.success) {
-      console.error("[PushAlert] Erro ao enviar broadcast:", json);
-      return { sucesso: false, erro: json.error || `HTTP ${res.status}` };
+      console.error("[PushAlert] Erro ao enviar broadcast v2:", json);
+      return { sucesso: false, erro: json.msg || `HTTP ${res.status}` };
     }
 
-    console.log(`[PushAlert] Push enviado para ${json.sent ?? "?"} assinantes.`);
-    return { sucesso: true, enviados: json.sent };
+    console.log(`[PushAlert] Push enviado com sucesso via v2. ID: ${json.id}`);
+    return { sucesso: true, id: json.id };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[PushAlert] Falha na chamada REST:", msg);
@@ -66,14 +71,16 @@ async function enviarPushAlertBroadcast(titulo: string, mensagem: string, url = 
 export const Route = createFileRoute("/api/cron-prazos")({
   server: {
     handlers: {
-      GET: async () => processarPrazos(),
-      POST: async () => processarPrazos(),
+      GET: async ({ request }) => processarPrazos(request),
+      POST: async ({ request }) => processarPrazos(request),
     },
   },
 });
 
-async function processarPrazos() {
+async function processarPrazos(request: Request) {
   const supabase = getSupabaseClient();
+  const urlObj = new URL(request.url);
+  const isTestePush = urlObj.searchParams.get("teste_push") === "1";
 
   try {
     const { data, error } = await supabase.rpc("processar_prazos_ordens_servico");
@@ -125,11 +132,17 @@ async function processarPrazos() {
       }
     }
 
-    // Disparar Push para todos os assinantes se houver OSs com alertas
-    let pushResult: { sucesso: boolean; enviados?: number; erro?: string } = { sucesso: false };
+    // Disparar Push para todos os assinantes se houver OSs com alertas ou se for teste explícito
+    let pushResult: { sucesso: boolean; id?: number; erro?: string } = { sucesso: false };
     const totalAlertas = resultado?.emailsParaEnvio?.length || 0;
 
-    if (totalAlertas > 0) {
+    if (isTestePush) {
+      pushResult = await enviarPushAlertBroadcast(
+        "ObrasFlow — Teste de Notificação",
+        "Esta é uma notificação de teste disparada pelo sistema ObrasFlow!",
+        "/ordens-servico"
+      );
+    } else if (totalAlertas > 0) {
       const titulosPush = resultado!.emailsParaEnvio!.map(i => {
         const emoji = i.tipoAviso === "atrasada" ? "⚠️" : "⏰";
         return `${emoji} ${i.numero} — ${i.titulo}`;
@@ -153,6 +166,7 @@ async function processarPrazos() {
         sinosNotificados: resultado?.sinosCriados || 0,
         emailsDisparados,
         pushDisparado: pushResult.sucesso,
+        pushResult,
         detalhes,
       }),
       {
