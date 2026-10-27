@@ -1,17 +1,46 @@
-import { supabase } from "@/integrations/supabase/client.custom";
+type OneSignalWeb = {
+  Notifications: {
+    permission: boolean;
+    requestPermission: () => Promise<void>;
+  };
+  login: (externalId: string) => Promise<void>;
+  logout: () => Promise<void>;
+};
 
-/**
- * Converte base64 para Uint8Array para uso com applicationServerKey VAPID
- */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = window.atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
+function executarComOneSignal(acao: (oneSignal: OneSignalWeb) => Promise<void>): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const win = window as unknown as {
+      OneSignal?: OneSignalWeb;
+      OneSignalDeferred?: Array<(oneSignal: OneSignalWeb) => Promise<void>>;
+    };
+    let concluido = false;
+    const timeout = window.setTimeout(() => {
+      if (!concluido) reject(new Error("O SDK do OneSignal não carregou."));
+    }, 10_000);
+    const executar = async (oneSignal: OneSignalWeb) => {
+      try {
+        await acao(oneSignal);
+        concluido = true;
+        window.clearTimeout(timeout);
+        resolve();
+      } catch (error) {
+        concluido = true;
+        window.clearTimeout(timeout);
+        reject(error);
+      }
+    };
+
+    if (win.OneSignal) void executar(win.OneSignal);
+    else {
+      win.OneSignalDeferred = win.OneSignalDeferred || [];
+      win.OneSignalDeferred.push(executar);
+    }
+  });
+}
+
+export async function identificarUsuarioOneSignal(userId: string | null): Promise<void> {
+  if (typeof window === "undefined") return;
+  await executarComOneSignal(oneSignal => userId ? oneSignal.login(userId) : oneSignal.logout());
 }
 
 /**
@@ -40,53 +69,25 @@ export async function solicitarPermissaoEInscreverPush(userId?: string): Promise
     return { sucesso: false, mensagem: "Ambiente não suportado." };
   }
 
-  const win = window as any;
-  if (win.OneSignal) {
-    try {
-      await win.OneSignal.Notifications.requestPermission();
-      if (userId) {
-        await win.OneSignal.login(userId);
-      }
+  try {
+    let autorizado = false;
+    await executarComOneSignal(async oneSignal => {
+      if (userId) await oneSignal.login(userId);
+      await oneSignal.Notifications.requestPermission();
+      autorizado = oneSignal.Notifications.permission;
+    });
+    if (autorizado) {
       return {
         sucesso: true,
         mensagem: "Notificações Push do OneSignal ativadas com sucesso neste aparelho! 🔔",
       };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error("[OneSignal] Erro ao ativar:", msg);
-      return {
-        sucesso: false,
-        mensagem: `Falha ao ativar notificações: ${msg}`,
-      };
     }
+    return { sucesso: false, mensagem: "Permissão de notificação não foi concedida pelo usuário." };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[OneSignal] Erro ao ativar:", msg);
+    return { sucesso: false, mensagem: `Falha ao ativar notificações: ${msg}` };
   }
-
-  // Se OneSignalDeferred ainda não concluiu ou fallback nativo:
-  if ("Notification" in window) {
-    try {
-      const perm = await Notification.requestPermission();
-      if (perm === "granted") {
-        return {
-          sucesso: true,
-          mensagem: "Permissão concedida no navegador!",
-        };
-      }
-      return {
-        sucesso: false,
-        mensagem: "Permissão de notificação não foi concedida pelo usuário.",
-      };
-    } catch (e: unknown) {
-      return {
-        sucesso: false,
-        mensagem: "Não foi possível solicitar permissão no navegador.",
-      };
-    }
-  }
-
-  return {
-    sucesso: false,
-    mensagem: "Este navegador ou aparelho não possui suporte a notificações Push.",
-  };
 }
 
 /**

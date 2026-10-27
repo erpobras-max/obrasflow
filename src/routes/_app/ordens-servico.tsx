@@ -152,7 +152,9 @@ function OrdensServicoPage() {
   // Testar Notificação no Celular
   const handleTestarPush = async () => {
     try {
-      const res = await fetch("/api/cron-prazos?teste_push=1");
+      const res = await fetch("/api/cron-prazos?teste_push=1", {
+        headers: { Authorization: `Bearer ${session?.access_token || ""}` },
+      });
       const data = (await res.json()) as { sucesso: boolean; pushDisparado: boolean };
       if (data.sucesso && data.pushDisparado) {
         toast.success("Notificação de teste enviada via OneSignal!");
@@ -177,11 +179,16 @@ function OrdensServicoPage() {
   const handleVerificarPrazosEEmail = async () => {
     setIsProcessandoCron(true);
     try {
-      const res = await fetch("/api/cron-prazos", { method: "POST" });
+      const res = await fetch("/api/cron-prazos", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session?.access_token || ""}` },
+      });
       const data = (await res.json()) as {
         sucesso: boolean;
         alertasProcessados?: number;
         emailsDisparados?: number;
+        smsDisparados?: number;
+        pushDisparados?: number;
         sinosNotificados?: number;
         erro?: string;
       };
@@ -192,7 +199,7 @@ function OrdensServicoPage() {
       }
 
       toast.success(
-        `Prazos verificados! ${data.emailsDisparados || 0} e-mail(s) enviado(s) e ${data.sinosNotificados || 0} alerta(s) interno(s) gerados.`
+        `Prazos verificados: ${data.emailsDisparados || 0} e-mail(s), ${data.smsDisparados || 0} SMS e ${data.pushDisparados || 0} push enviado(s).`
       );
       queryClient.invalidateQueries({ queryKey: ["ordens_servico"] });
     } catch (e: unknown) {
@@ -622,7 +629,7 @@ function OrdensServicoPage() {
             Ordens de Serviço
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Gerenciamento de chamados, prazos de execução e avisos automáticos via WhatsApp e E-mail.
+            Gerenciamento de chamados, prazos e avisos automáticos por push, e-mail e SMS.
           </p>
         </div>
 
@@ -659,10 +666,10 @@ function OrdensServicoPage() {
             onClick={handleVerificarPrazosEEmail}
             disabled={isProcessandoCron}
             className="h-10 text-xs gap-1.5"
-            title="Verificar prazos de todas as OSs e disparar e-mails para responsáveis"
+            title="Verificar prazos e disparar notificações aos responsáveis"
           >
             <MailCheck className={cn("w-4 h-4 text-emerald-600", isProcessandoCron && "animate-spin")} />
-            {isProcessandoCron ? "Verificando..." : "Disparar E-mails"}
+            {isProcessandoCron ? "Verificando..." : "Disparar Alertas"}
           </Button>
 
           <Button onClick={handleOpenCreate} className="gap-2 h-10 px-4 font-medium shadow-sm text-xs">
