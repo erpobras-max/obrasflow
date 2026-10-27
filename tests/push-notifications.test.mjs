@@ -4,9 +4,18 @@ import { readFile } from "node:fs/promises";
 
 import { solicitarPermissaoEInscreverPush } from "../src/lib/push-notifications.ts";
 
-test("OneSignal usa caminho absoluto para o service worker", async () => {
+test("OneSignal e PWA usam o mesmo service worker na raiz", async () => {
   const root = await readFile(new URL("../src/routes/__root.tsx", import.meta.url), "utf8");
-  assert.match(root, /serviceWorkerPath: "\/push\/onesignal\/OneSignalSDKWorker\.js"/);
+  const server = await readFile(new URL("../src/server.ts", import.meta.url), "utf8");
+  const worker = await readFile(new URL("../public/OneSignalSDKWorker.js", import.meta.url), "utf8");
+  const pwa = await readFile(new URL("../public/sw.js", import.meta.url), "utf8");
+
+  assert.match(root, /serviceWorkerPath: "\/OneSignalSDKWorker\.js"/);
+  assert.match(root, /serviceWorkerParam: \{ scope: "\/" \}/);
+  assert.match(root, /register\("\/OneSignalSDKWorker\.js"\)/);
+  assert.match(server, /path === "\/OneSignalSDKWorker\.js"/);
+  assert.match(worker, /importScripts\('\/sw\.js'\)/);
+  assert.match(pwa, /https:\/\/cdn\.onesignal\.com\/sdks\/web\/v16\/OneSignalSDK\.sw\.js/);
 });
 
 test("ativação de push informa quando o navegador não oferece suporte", async () => {
