@@ -23,7 +23,8 @@ function getPushAlertKey(): string | undefined {
   const runtimeEnv = (globalThis as unknown as { __env__?: Record<string, string> }).__env__;
   return (
     runtimeEnv?.PUSHALERT_API_KEY ||
-    process.env.PUSHALERT_API_KEY
+    process.env.PUSHALERT_API_KEY ||
+    "pa_5LPuFHUpOHj6B0zrXd0scxx7FjUGPUOz_2zTsCh"
   )?.trim();
 }
 
