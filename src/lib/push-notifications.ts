@@ -5,9 +5,58 @@ type OneSignalWeb = {
     isPushSupported: () => boolean;
     requestPermission: () => Promise<void>;
   };
+  User: {
+    PushSubscription: {
+      id: string | null;
+      token: string | null;
+      optedIn: boolean;
+      optIn: () => Promise<void>;
+      addEventListener: (
+        event: "change",
+        listener: (event: {
+          current: { id: string | null; token: string | null; optedIn: boolean };
+        }) => void,
+      ) => void;
+      removeEventListener: (
+        event: "change",
+        listener: (event: {
+          current: { id: string | null; token: string | null; optedIn: boolean };
+        }) => void,
+      ) => void;
+    };
+  };
   login: (externalId: string) => Promise<void>;
   logout: () => Promise<void>;
 };
+
+function inscricaoPushAtiva(inscricao: {
+  id: string | null;
+  token: string | null;
+  optedIn: boolean;
+}): boolean {
+  return inscricao.optedIn && Boolean(inscricao.id) && Boolean(inscricao.token);
+}
+
+function aguardarInscricaoPushAtiva(
+  inscricao: OneSignalWeb["User"]["PushSubscription"],
+): Promise<boolean> {
+  if (inscricaoPushAtiva(inscricao)) return Promise.resolve(true);
+
+  return new Promise((resolve) => {
+    const finalizar = (ativa: boolean) => {
+      window.clearTimeout(timeout);
+      inscricao.removeEventListener("change", aoAlterar);
+      resolve(ativa);
+    };
+    const aoAlterar = (event: {
+      current: { id: string | null; token: string | null; optedIn: boolean };
+    }) => {
+      if (inscricaoPushAtiva(event.current)) finalizar(true);
+    };
+    const timeout = window.setTimeout(() => finalizar(inscricaoPushAtiva(inscricao)), 10_000);
+    inscricao.addEventListener("change", aoAlterar);
+  });
+}
 
 function executarComOneSignal(acao: (oneSignal: OneSignalWeb) => Promise<void>): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -88,9 +137,17 @@ export async function solicitarPermissaoEInscreverPush(userId?: string): Promise
           "As notificações estão bloqueadas. Libere-as nas configurações do navegador e tente novamente.",
         );
       }
-      if (userId) await oneSignal.login(userId);
       await oneSignal.Notifications.requestPermission();
-      autorizado = oneSignal.Notifications.permission;
+      if (!oneSignal.Notifications.permission) return;
+
+      await oneSignal.User.PushSubscription.optIn();
+      autorizado = await aguardarInscricaoPushAtiva(oneSignal.User.PushSubscription);
+      if (!autorizado) {
+        throw new Error(
+          "O OneSignal não concluiu a inscrição deste aparelho. Verifique a permissão de notificações do site e tente novamente.",
+        );
+      }
+      if (userId) await oneSignal.login(userId);
     });
     if (autorizado) {
       return {
