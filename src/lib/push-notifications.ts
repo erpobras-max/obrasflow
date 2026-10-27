@@ -30,83 +30,63 @@ export function obterStatusPermissao(): NotificationPermission | "unsupported" {
 }
 
 /**
- * Solicita permissão ao usuário e grava a inscrição de Push no banco do Supabase
+ * Solicita permissão ao usuário e grava a inscrição de Push no OneSignal
  */
 export async function solicitarPermissaoEInscreverPush(userId?: string): Promise<{
   sucesso: boolean;
   mensagem: string;
 }> {
-  if (!verificarSuportePush()) {
-    return {
-      sucesso: false,
-      mensagem: "Este navegador ou aparelho não possui suporte a notificações Push.",
-    };
+  if (typeof window === "undefined") {
+    return { sucesso: false, mensagem: "Ambiente não suportado." };
   }
 
-  try {
-    const permissao = await Notification.requestPermission();
-    if (permissao !== "granted") {
+  const win = window as any;
+  if (win.OneSignal) {
+    try {
+      await win.OneSignal.Notifications.requestPermission();
+      if (userId) {
+        await win.OneSignal.login(userId);
+      }
+      return {
+        sucesso: true,
+        mensagem: "Notificações Push do OneSignal ativadas com sucesso neste aparelho! 🔔",
+      };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[OneSignal] Erro ao ativar:", msg);
+      return {
+        sucesso: false,
+        mensagem: `Falha ao ativar notificações: ${msg}`,
+      };
+    }
+  }
+
+  // Se OneSignalDeferred ainda não concluiu ou fallback nativo:
+  if ("Notification" in window) {
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        return {
+          sucesso: true,
+          mensagem: "Permissão concedida no navegador!",
+        };
+      }
       return {
         sucesso: false,
         mensagem: "Permissão de notificação não foi concedida pelo usuário.",
       };
-    }
-
-    const registration = await navigator.serviceWorker.ready;
-    let subscription = await registration.pushManager.getSubscription();
-
-    // Se ainda não estiver inscrito, tenta inscrever
-    if (!subscription) {
-      // Chave pública VAPID padrão de demonstração / fallback
-      const vapidPublicKey =
-        import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-        "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkRXZJjSgSnfckjBJuBkr3qBUYIHBQFLXY5ceE1L-U";
-
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-      });
-    }
-
-    const subJson = subscription.toJSON();
-    if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
+    } catch (e: unknown) {
       return {
-        sucesso: true,
-        mensagem: "Notificações ativadas no navegador! (Inscrição local pronta)",
+        sucesso: false,
+        mensagem: "Não foi possível solicitar permissão no navegador.",
       };
     }
-
-    // Salvar no Supabase
-    if (userId) {
-      const { error } = await supabase.from("push_subscriptions").upsert(
-        {
-          user_id: userId,
-          endpoint: subJson.endpoint,
-          p256dh: subJson.keys.p256dh,
-          auth: subJson.keys.auth,
-          user_agent: navigator.userAgent,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "endpoint" }
-      );
-
-      if (error) {
-        console.warn("Aviso ao salvar inscrição no Supabase:", error.message);
-      }
-    }
-
-    return {
-      sucesso: true,
-      mensagem: "Notificações Push ativadas com sucesso neste aparelho! 🔔",
-    };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("Erro ao configurar push:", msg);
-    return {
-      sucesso: false,
-      mensagem: `Falha ao ativar notificações: ${msg}`,
-    };
   }
+
+  return {
+    sucesso: false,
+    mensagem: "Este navegador ou aparelho não possui suporte a notificações Push.",
+  };
 }
 
 /**
