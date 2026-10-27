@@ -10,10 +10,18 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
+
+type OneSignalInitializer = {
+  init: (options: {
+    appId: string;
+    allowLocalhostAsSecureOrigin: boolean;
+    serviceWorkerPath: string;
+    serviceWorkerParam: { scope: string };
+  }) => Promise<void>;
+};
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { initializeBrowserMonitoring, reportBrowserError } from "@/lib/observability/browser";
-
 
 function NotFoundComponent() {
   return (
@@ -44,7 +52,6 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     console.error("[RootError]", error);
     reportBrowserError(error, "root-error-boundary");
   }, [error]);
-
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
@@ -126,7 +133,6 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
-
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -140,13 +146,15 @@ function RootComponent() {
     const existing = document.querySelector('script[src*="OneSignalSDK"]');
     if (existing) return;
 
-    const win = window as unknown as { OneSignalDeferred?: Array<(OneSignal: any) => Promise<void>> };
+    const win = window as unknown as {
+      OneSignalDeferred?: Array<(oneSignal: OneSignalInitializer) => Promise<void>>;
+    };
     win.OneSignalDeferred = win.OneSignalDeferred || [];
-    win.OneSignalDeferred.push(async function (OneSignal: any) {
-      await OneSignal.init({
+    win.OneSignalDeferred.push(async function (oneSignal) {
+      await oneSignal.init({
         appId: "ad9a6dc0-2948-4aad-80ee-7dd30e073d0d",
         allowLocalhostAsSecureOrigin: true,
-        serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
+        serviceWorkerPath: "/push/onesignal/OneSignalSDKWorker.js",
         serviceWorkerParam: { scope: "/push/onesignal/" },
       });
     });
@@ -160,10 +168,11 @@ function RootComponent() {
   useEffect(() => {
     if (typeof window !== "undefined" && "serviceWorker" in navigator) {
       window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/sw.js")
-          .then(reg => {
+        navigator.serviceWorker
+          .register("/sw.js")
+          .then((reg) => {
             console.log("PWA Service Worker registrado:", reg.scope);
-            
+
             reg.addEventListener("updatefound", () => {
               const newWorker = reg.installing;
               if (newWorker) {
@@ -184,7 +193,7 @@ function RootComponent() {
               }
             });
           })
-          .catch(err => console.error("PWA Service Worker falhou:", err));
+          .catch((err) => console.error("PWA Service Worker falhou:", err));
       });
     }
   }, []);

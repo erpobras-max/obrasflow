@@ -1,6 +1,8 @@
 type OneSignalWeb = {
   Notifications: {
     permission: boolean;
+    permissionNative: NotificationPermission;
+    isPushSupported: () => boolean;
     requestPermission: () => Promise<void>;
   };
   login: (externalId: string) => Promise<void>;
@@ -15,9 +17,13 @@ function executarComOneSignal(acao: (oneSignal: OneSignalWeb) => Promise<void>):
     };
     let concluido = false;
     const timeout = window.setTimeout(() => {
-      if (!concluido) reject(new Error("O SDK do OneSignal não carregou."));
+      if (!concluido) {
+        concluido = true;
+        reject(new Error("O SDK do OneSignal não respondeu. Atualize a página e tente novamente."));
+      }
     }, 10_000);
     const executar = async (oneSignal: OneSignalWeb) => {
+      if (concluido) return;
       try {
         await acao(oneSignal);
         concluido = true;
@@ -40,7 +46,9 @@ function executarComOneSignal(acao: (oneSignal: OneSignalWeb) => Promise<void>):
 
 export async function identificarUsuarioOneSignal(userId: string | null): Promise<void> {
   if (typeof window === "undefined") return;
-  await executarComOneSignal(oneSignal => userId ? oneSignal.login(userId) : oneSignal.logout());
+  await executarComOneSignal((oneSignal) =>
+    userId ? oneSignal.login(userId) : oneSignal.logout(),
+  );
 }
 
 /**
@@ -65,13 +73,21 @@ export async function solicitarPermissaoEInscreverPush(userId?: string): Promise
   sucesso: boolean;
   mensagem: string;
 }> {
-  if (typeof window === "undefined") {
-    return { sucesso: false, mensagem: "Ambiente não suportado." };
+  if (!verificarSuportePush()) {
+    return { sucesso: false, mensagem: "Este navegador não oferece suporte a notificações push." };
   }
 
   try {
     let autorizado = false;
-    await executarComOneSignal(async oneSignal => {
+    await executarComOneSignal(async (oneSignal) => {
+      if (!oneSignal.Notifications.isPushSupported()) {
+        throw new Error("Este navegador não oferece suporte ao Web Push do OneSignal.");
+      }
+      if (oneSignal.Notifications.permissionNative === "denied") {
+        throw new Error(
+          "As notificações estão bloqueadas. Libere-as nas configurações do navegador e tente novamente.",
+        );
+      }
       if (userId) await oneSignal.login(userId);
       await oneSignal.Notifications.requestPermission();
       autorizado = oneSignal.Notifications.permission;
@@ -95,7 +111,7 @@ export async function solicitarPermissaoEInscreverPush(userId?: string): Promise
  */
 export async function dispararNotificacaoLocalTeste(
   titulo = "ObrasFlow — Alerta de Teste",
-  corpo = "Notificações do PWA estão funcionando perfeitamente no seu dispositivo! 🚀"
+  corpo = "Notificações do PWA estão funcionando perfeitamente no seu dispositivo! 🚀",
 ): Promise<boolean> {
   if (!verificarSuportePush()) return false;
 
