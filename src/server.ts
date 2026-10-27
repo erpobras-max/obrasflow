@@ -30,6 +30,7 @@ function isStaticAssetRequest(request: Request) {
   const path = new URL(request.url).pathname;
   return (
     path.startsWith("/assets/") ||
+    path.startsWith("/push/onesignal/") ||
     path === "/sw.js" ||
     path === "/manifest.json" ||
     path === "/favicon.ico" ||

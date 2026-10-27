@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client.custom";
 import { enviarEmailResumoMatinal } from "@/lib/email-service.server";
 import type { DadosResumoExecutivo } from "@/lib/resumo-diario.types";
+import { autorizarNotificacoes } from "@/lib/notificacoes-auth.server";
 
 function getSupabaseClient() {
   const runtimeEnv = (globalThis as unknown as { __env__?: Record<string, string> }).__env__;
@@ -31,6 +32,10 @@ export const Route = createFileRoute("/api/cron-resumo-diario")({
 
 async function processarResumoDiario(request: Request) {
   const supabase = getSupabaseClient();
+  const auth = await autorizarNotificacoes(request, supabase);
+  if (!auth.autorizado) {
+    return Response.json({ sucesso: false, erro: "Não autorizado." }, { status: 401 });
+  }
   const url = new URL(request.url);
   const emailTeste = url.searchParams.get("email_teste") || undefined;
 

@@ -146,20 +146,9 @@ function RootComponent() {
       await OneSignal.init({
         appId: "ad9a6dc0-2948-4aad-80ee-7dd30e073d0d",
         allowLocalhostAsSecureOrigin: true,
+        serviceWorkerPath: "push/onesignal/OneSignalSDKWorker.js",
+        serviceWorkerParam: { scope: "/push/onesignal/" },
       });
-
-      // Dispara o prompt de notificação push se ainda não estiver autorizado
-      try {
-        if (!OneSignal.Notifications?.permission) {
-          if (typeof OneSignal.Slidedown?.promptPush === "function") {
-            await OneSignal.Slidedown.promptPush();
-          } else if (typeof OneSignal.Notifications?.requestPermission === "function") {
-            await OneSignal.Notifications.requestPermission();
-          }
-        }
-      } catch (e) {
-        console.warn("[OneSignal] Prompt inicial:", e);
-      }
     });
 
     const script = document.createElement("script");

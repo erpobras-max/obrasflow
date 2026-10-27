@@ -24,12 +24,17 @@ export async function dispararResumoMatinalManual(emailTeste?: string): Promise<
   mensagem?: string;
 }> {
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      return { sucesso: false, mensagem: "Sessão expirada. Entre novamente no sistema." };
+    }
     const url = emailTeste
       ? `/api/cron-resumo-diario?email_teste=${encodeURIComponent(emailTeste)}`
       : `/api/cron-resumo-diario`;
 
     const res = await fetch(url, {
       method: "POST",
+      headers: { Authorization: `Bearer ${session.access_token}` },
     });
 
     const data = await res.json();

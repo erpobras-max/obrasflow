@@ -1,4 +1,4 @@
-import process from "node:process";
+import { enviarEmailOneSignal } from "./onesignal.server.ts";
 
 export interface DadosEmailOS {
   destinatario: string;
@@ -12,39 +12,14 @@ export interface DadosEmailOS {
   sistemaUrl?: string;
 }
 
-function getResendConfig() {
-  const runtimeEnv = (globalThis as unknown as { __env__?: Record<string, string> }).__env__;
-  const apiKey = (
-    runtimeEnv?.RESEND_API_KEY ||
-    process.env.RESEND_API_KEY
-  )?.trim();
-  const fromEmail = (
-    runtimeEnv?.RESEND_FROM_EMAIL ||
-    process.env.RESEND_FROM_EMAIL ||
-    "ObrasFlow <onboarding@resend.dev>"
-  )?.trim();
-
-  return { apiKey, fromEmail };
-}
-
 /**
- * Envia e-mail formatado de aviso de prazo de Ordem de Serviço via Resend API
+ * Envia e-mail formatado de aviso de prazo de Ordem de Serviço via OneSignal
  */
 export async function enviarEmailAvisoOS(dados: DadosEmailOS): Promise<{
   sucesso: boolean;
   id?: string;
   erro?: string;
 }> {
-  const { apiKey, fromEmail } = getResendConfig();
-
-  if (!apiKey) {
-    console.warn("[EmailService] RESEND_API_KEY não configurada no ambiente.");
-    return {
-      sucesso: false,
-      erro: "Chave RESEND_API_KEY não configurada nas variáveis do servidor.",
-    };
-  }
-
   const {
     destinatario,
     destinatarioNome = "Responsável",
@@ -156,43 +131,7 @@ export async function enviarEmailAvisoOS(dados: DadosEmailOS): Promise<{
 </html>
   `;
 
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [destinatario],
-        subject,
-        html,
-      }),
-    });
-
-    const json = (await res.json()) as { id?: string; message?: string };
-
-    if (!res.ok) {
-      console.error("[EmailService] Erro retornado pela API do Resend:", json);
-      return {
-        sucesso: false,
-        erro: json.message || `Erro HTTP ${res.status}`,
-      };
-    }
-
-    return {
-      sucesso: true,
-      id: json.id,
-    };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EmailService] Falha ao enviar requisição para o Resend:", msg);
-    return {
-      sucesso: false,
-      erro: msg,
-    };
-  }
+  return enviarEmailOneSignal(destinatario, subject, html);
 }
 
 /**
@@ -381,7 +320,7 @@ export function gerarHtmlResumoMatinal(
 }
 
 /**
- * Envia o resumo executivo matinal via Resend API
+ * Envia o resumo executivo matinal via OneSignal
  */
 export async function enviarEmailResumoMatinal(
   dados: import("./resumo-diario.types").DadosResumoExecutivo,
@@ -392,54 +331,8 @@ export async function enviarEmailResumoMatinal(
   id?: string;
   erro?: string;
 }> {
-  const { apiKey, fromEmail } = getResendConfig();
-
-  if (!apiKey) {
-    return {
-      sucesso: false,
-      erro: "Chave RESEND_API_KEY não configurada no servidor.",
-    };
-  }
-
   const subject = `☀️ [ObrasFlow] Resumo do Dia: ${dados.empresa_nome} — ${dados.data_formatada}`;
   const html = gerarHtmlResumoMatinal(dados, destinatarioNome);
-
-  try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: fromEmail,
-        to: [destinatarioEmail],
-        subject,
-        html,
-      }),
-    });
-
-    const json = (await res.json()) as { id?: string; message?: string };
-
-    if (!res.ok) {
-      console.error("[EmailService] Erro ao enviar resumo matinal via Resend:", json);
-      return {
-        sucesso: false,
-        erro: json.message || `Erro HTTP ${res.status}`,
-      };
-    }
-
-    return {
-      sucesso: true,
-      id: json.id,
-    };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[EmailService] Falha na chamada Resend:", msg);
-    return {
-      sucesso: false,
-      erro: msg,
-    };
-  }
+  return enviarEmailOneSignal(destinatarioEmail, subject, html);
 }
 

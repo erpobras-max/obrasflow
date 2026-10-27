@@ -5,6 +5,8 @@ import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { supabase } from "@/integrations/supabase/client.custom";
+import { identificarUsuarioOneSignal } from "@/lib/push-notifications";
 
 export const Route = createFileRoute("/_app")({
   component: AppLayout,
@@ -14,6 +16,13 @@ function AppLayout() {
   const navigate = useNavigate();
   const currentHref = useRouterState({ select: (state) => state.location.href });
   const { loading, user, perfil, roles } = useAuth();
+
+  useEffect(() => {
+    if (loading) return;
+    void identificarUsuarioOneSignal(user?.id ?? null).catch(error => {
+      console.warn("[OneSignal] Não foi possível sincronizar o usuário:", error);
+    });
+  }, [loading, user?.id]);
 
   useEffect(() => {
     if (!loading && !user) {

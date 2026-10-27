@@ -15,6 +15,6 @@
     "binding": "ASSETS"
   },
   "triggers": {
-    "crons": ["0 10 * * *"]
+    "crons": ["0 10 * * *", "*/15 11-23 * * *"]
   }
 }
