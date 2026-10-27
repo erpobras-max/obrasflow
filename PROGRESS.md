@@ -305,7 +305,8 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - **Validação**: 8 testes direcionados aprovados, build local concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
 - **Deploy**: workflow `Deploy to Cloudflare Workers` #40499839466 concluído com sucesso em 27/10/2026.
 - **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
-- **Canais pendentes**: o remetente `notificacoes@erpobras.com` foi preparado no OneSignal, mas `erpobras.com` ainda não existe no DNS público e não pode ser autenticado; o Twilio exige concluir o MFA e selecionar ou cadastrar um remetente SMS.
+- **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
+- **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
 - **Observação de CI**: o job `dependency-audit` continua falhando por vulnerabilidades preexistentes e deve ser tratado em uma Issue/PR própria.
 
 ---
@@ -316,7 +317,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
 - Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
 - Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
-- Concluir os canais do OneSignal: autenticar um domínio de e-mail válido, concluir o MFA/remetente do Twilio e executar testes reais de push, e-mail e SMS.
+- Concluir os canais do OneSignal: atender à revisão solicitada por e-mail, cadastrar um remetente pago no Twilio e executar testes reais de push, e-mail e SMS.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
 
 
