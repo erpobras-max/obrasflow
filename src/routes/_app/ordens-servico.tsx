@@ -151,6 +151,17 @@ function OrdensServicoPage() {
 
   // Testar Notificação no Celular
   const handleTestarPush = async () => {
+    try {
+      const res = await fetch("/api/cron-prazos?teste_push=1");
+      const data = (await res.json()) as { sucesso: boolean; pushDisparado: boolean };
+      if (data.sucesso && data.pushDisparado) {
+        toast.success("Notificação de teste enviada via OneSignal!");
+        return;
+      }
+    } catch (e) {
+      console.warn("Falha no teste remoto de push:", e);
+    }
+
     const ok = await dispararNotificacaoLocalTeste(
       "ObrasFlow — Alerta de Teste",
       "Seu aparelho está pronto para receber notificações de prazos de OS! 🔔"
