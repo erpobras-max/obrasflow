@@ -300,11 +300,11 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `12934378faecadbda715e213dcae2bffcf32b332` — teste push exclusivo do aparelho atual (PR #188, Issue #178).
-- **Branch**: `main`, após merge da branch `fix/178-teste-push-aparelho`.
-- **Validação**: 8 testes focados aprovados, build local e CI concluídos; lint sem formatação encontrou apenas o `any` preexistente na rota de cron.
-- **Deploy**: workflow `Deploy to Cloudflare Workers` #40670206406 concluído com sucesso em 28/10/2026; chunk publicado responde `200` e contém `subscription_id` e mensagem de aceitação sem afirmar recebimento.
-- **Push/PWA**: o teste valida no servidor se a inscrição pertence ao usuário e está ativa com token, envia somente para esse aparelho e mostra erros reais. Consulta ao OneSignal encontrou inscrições Android e Windows inativas/sem token; a causa da divergência com a ativação verde e o recebimento nesses aparelhos ainda precisam de validação. O teste anterior enviava para o usuário inteiro e podia alcançar apenas outra inscrição ativa.
+- **Commit**: `8383fcfb3cd43652bec0bf095fed84a59a358df3` — correção da CSP que bloqueava registro do worker no Chrome e Android (PR #189, Issue #178).
+- **Branch**: `main`, após merge da branch `fix/178-csp-worker-onesignal`.
+- **Validação**: 9 testes focados aprovados; build, higiene e preview Cloudflare aprovados.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40672118577 concluído com sucesso em 28/10/2026; os workers raiz e PWA respondem `200` com CSP permitindo o CDN e a API oficiais do OneSignal.
+- **Push/PWA**: erro real do console identificou bloqueio de `importScripts` pela CSP. Foram adicionados apenas `https://cdn.onesignal.com` a `script-src` e `https://api.onesignal.com` a `connect-src`, preservando as demais restrições. A confirmação do recebimento nos aparelhos depende de repetir ativação após recarregar. O teste por aparelho da PR #188 continua ativo.
 - **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
 - **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
 - **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
