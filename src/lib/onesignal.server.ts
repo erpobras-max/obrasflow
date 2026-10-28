@@ -56,6 +56,34 @@ export function enviarPushOneSignal(externalId: string, titulo: string, mensagem
   });
 }
 
+export async function enviarTestePushOneSignal(externalId: string, subscriptionId: string, url: string): Promise<ResultadoOneSignal> {
+  if (!/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i.test(subscriptionId)) {
+    return { sucesso: false, erro: "Inscrição deste aparelho inválida ou ausente. Ative o Push antes de testar." };
+  }
+  const { appId, apiKey } = getConfig();
+  if (!apiKey) return { sucesso: false, erro: "ONESIGNAL_REST_KEY não configurada no servidor." };
+  try {
+    const response = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(externalId)}`, {
+      headers: { Authorization: `Key ${apiKey}` },
+    });
+    if (!response.ok) return { sucesso: false, erro: `Não foi possível consultar a inscrição no OneSignal (HTTP ${response.status}).` };
+    const data = await response.json() as { subscriptions?: Array<{ id: string; enabled: boolean; token?: string; type: string }> };
+    const inscricao = data.subscriptions?.find(item => item.id === subscriptionId);
+    if (!inscricao || !inscricao.enabled || !inscricao.token || !inscricao.type.endsWith("Push")) {
+      return { sucesso: false, erro: "Este aparelho não está inscrito e ativo no OneSignal para seu usuário. Ative o Push novamente neste aparelho." };
+    }
+    return enviarMensagem("push", {
+      target_channel: "push",
+      include_subscription_ids: [subscriptionId],
+      headings: { en: "ObrasFlow — Teste neste aparelho", pt: "ObrasFlow — Teste neste aparelho" },
+      contents: { en: "Teste de recebimento neste aparelho do ObrasFlow.", pt: "Teste de recebimento neste aparelho do ObrasFlow." },
+      web_url: url,
+    });
+  } catch (error) {
+    return { sucesso: false, erro: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export function enviarEmailOneSignal(destinatario: string, assunto: string, html: string): Promise<ResultadoOneSignal> {
   return enviarMensagem("email", {
     target_channel: "email",

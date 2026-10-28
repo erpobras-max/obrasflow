@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   enviarEmailOneSignal,
   enviarPushOneSignal,
+  enviarTestePushOneSignal,
   enviarSmsOneSignal,
   normalizarTelefoneE164,
 } from "../src/lib/onesignal.server.ts";
@@ -11,6 +12,36 @@ test("normalizarTelefoneE164 aceita celular brasileiro e rejeita número incompl
   assert.equal(normalizarTelefoneE164("(11) 98765-4321"), "+5511987654321");
   assert.equal(normalizarTelefoneE164("+55 11 98765-4321"), "+5511987654321");
   assert.equal(normalizarTelefoneE164("12345"), null);
+});
+
+test("teste push exige inscrição ativa do usuário e envia apenas ao aparelho escolhido", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnv = globalThis.__env__;
+  const id = "11111111-1111-4111-8111-111111111111";
+  const calls = [];
+  let subscriptions = [];
+  globalThis.__env__ = { ONESIGNAL_REST_KEY: "teste" };
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), body: init.body ? JSON.parse(init.body) : null });
+    return Response.json(init.method === "POST" ? { id: "message-1" } : { subscriptions });
+  };
+  try {
+    assert.equal((await enviarTestePushOneSignal("user-1", "", "https://example.com")).sucesso, false);
+    assert.equal(calls.length, 0);
+    assert.equal((await enviarTestePushOneSignal("user-1", id, "https://example.com")).sucesso, false);
+    assert.equal(calls.filter(call => call.body).length, 0);
+    subscriptions = [{ id, enabled: false, token: "token", type: "ChromePush" }];
+    assert.equal((await enviarTestePushOneSignal("user-1", id, "https://example.com")).sucesso, false);
+    subscriptions[0].enabled = true;
+    assert.equal((await enviarTestePushOneSignal("user-1", id, "https://example.com")).sucesso, true);
+    const payload = calls.at(-1).body;
+    assert.deepEqual(payload.include_subscription_ids, [id]);
+    assert.equal(payload.include_aliases, undefined);
+    assert.match(calls[0].url, /users\/by\/external_id\/user-1$/);
+  } finally {
+    globalThis.fetch = originalFetch;
+    globalThis.__env__ = originalEnv;
+  }
 });
 
 test("OneSignal envia cada canal com destinatário individual", async () => {
