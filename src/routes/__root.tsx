@@ -15,6 +15,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { initializeBrowserMonitoring, reportBrowserError } from "@/lib/observability/browser";
 import { inicializarOneSignal } from "@/lib/push-notifications";
+import { iniciarAtualizacaoPwa } from "@/lib/pwa-update";
 
 function NotFoundComponent() {
   return (
@@ -141,36 +142,13 @@ function RootComponent() {
   }, []);
 
   useEffect(() => {
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker
-          .register("/OneSignalSDKWorker.js")
-          .then((reg) => {
-            console.log("PWA Service Worker registrado:", reg.scope);
-
-            reg.addEventListener("updatefound", () => {
-              const newWorker = reg.installing;
-              if (newWorker) {
-                newWorker.addEventListener("statechange", () => {
-                  if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-                    toast.info("Nova versão disponível!", {
-                      action: {
-                        label: "Atualizar",
-                        onClick: () => {
-                          newWorker.postMessage({ type: "SKIP_WAITING" });
-                          window.location.reload();
-                        },
-                      },
-                      duration: Infinity,
-                    });
-                  }
-                });
-              }
-            });
-          })
-          .catch((err) => console.error("PWA Service Worker falhou:", err));
+    return iniciarAtualizacaoPwa((atualizar) => {
+      toast.info("Nova versão disponível. Salve sua edição antes de atualizar.", {
+        id: "pwa-atualizacao",
+        action: { label: "Atualizar", onClick: atualizar },
+        duration: Infinity,
       });
-    }
+    });
   }, []);
 
   return (
