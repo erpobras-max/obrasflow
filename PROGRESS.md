@@ -300,11 +300,12 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `8383fcfb3cd43652bec0bf095fed84a59a358df3` — correção da CSP que bloqueava registro do worker no Chrome e Android (PR #189, Issue #178).
-- **Branch**: `main`, após merge da branch `fix/178-csp-worker-onesignal`.
-- **Validação**: 9 testes focados aprovados; build, higiene e preview Cloudflare aprovados.
-- **Deploy**: workflow `Deploy to Cloudflare Workers` #40672118577 concluído com sucesso em 28/10/2026; os workers raiz e PWA respondem `200` com CSP permitindo o CDN e a API oficiais do OneSignal.
-- **Push/PWA**: erro real do console identificou bloqueio de `importScripts` pela CSP. Foram adicionados apenas `https://cdn.onesignal.com` a `script-src` e `https://api.onesignal.com` a `connect-src`, preservando as demais restrições. A confirmação do recebimento nos aparelhos depende de repetir ativação após recarregar. O teste por aparelho da PR #188 continua ativo.
+- **Commit**: `053a7f48eae79f535b14e9f8b2c67e40f7d65c41` — atualização do PWA ao abrir ou retomar (PR #191, Issue #190).
+- **Branch**: `main`, após merge da branch `fix/190-atualizacao-pwa`.
+- **Validação**: 10 testes focados e lint dos novos arquivos aprovados, build local e preview Cloudflare aprovados. O job de build do GitHub demorou na instalação de dependências; o preview validou o build completo antes do merge.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40672831201 concluído com sucesso em 28/10/2026; worker raiz publicado com identificador de build, CSP corrigida e bundle com eventos de atualização automática verificados.
+- **Atualização PWA**: registro imediato, verificação ao voltar para o app, recuperar conexão ou foco, e identificador de worker derivado dos assets a cada build. Versão nova provoca uma recarga; primeira instalação não. Formulários, diálogos e editor CAD apresentam opção de atualizar para permitir salvar antes. Instalações antigas devem fechar/reabrir uma vez para carregar esta rotina.
+- **Push**: a PR #189 corrigiu o bloqueio CSP de `importScripts`, permitindo o CDN e a API oficiais do OneSignal. Deploy #40672118577 concluído; recebimento do alerta no Chrome confirmado pelo usuário. A validação final do Android segue pendente. O teste por aparelho da PR #188 permanece ativo.
 - **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
 - **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
 - **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
@@ -318,7 +319,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
 - Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
 - Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
-- Validar a permissão e o recebimento de Web Push em navegador real; e-mail e SMS permanecem adiados por decisão de escopo.
+- Confirmar o recebimento de Web Push no Android após reabrir o PWA; no Chrome o usuário confirmou recebimento. E-mail e SMS permanecem adiados por decisão de escopo.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
 
 
