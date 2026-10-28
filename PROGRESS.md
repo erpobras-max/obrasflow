@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 26/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 28/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -62,6 +62,7 @@ As entregas mais recentes são:
 - `20261013000004_cotacoes_compra.sql`: cria o módulo completo de cotações, convites por fornecedor, respostas públicas por token, anexos, comparação, seleção vencedora, pedidos, recebimentos, integração com contas a pagar, notificações e RLS.
 - `20261014000001_almoxarifado_base_recuperacao.sql`: recria de forma aditiva as tabelas-base `depositos`, `produto_estoque` e `movimentacoes_estoque` quando ausentes, configura leitura/RLS e semeia o depósito geral; foi aplicada no projeto de produção para corrigir o erro de cadastro.
 - `20261019120000_create_obra_projetos_cad.sql`: cria a tabela `obra_projetos_cad` para armazenar o projeto CAD/BIM paramétrico, imagem de capa 3D, quantitativos e configurações de BDI por obra, com índices e políticas de RLS completas para equipe interna e clientes no portal.
+- `20261027000001_onesignal_omnichannel.sql`: prepara o histórico de notificações por canal para push, e-mail e SMS e restringe o processamento agendado ao `service_role`; aplicada no Supabase de produção em 27/10/2026.
 
 As melhorias de nome, inclusão, exclusão individual e ordenação das etapas não exigem nova migration; usam `obra_cronograma.ordem` e as colunas já existentes.
 
@@ -299,10 +300,15 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `57e37b7b93b4cc9905c62fd4136d7b2aa65447b2` — cotas associativas no CAD (PR #149).
-- **Branch**: `main`, após merge da branch `feat/148-cotas-associativas`.
-- **Validação**: 26 testes direcionados do CAD aprovados, `npm run build` concluído e jobs `build` e `repository-hygiene` aprovados no GitHub Actions.
-- **Deploy**: versão `d1574cad` promovida para 100% do tráfego; bundle público `projeto3d._id-CP6oZQtX.js` verificado com criação e remoção de cotas.
+- **Commit**: `053a7f48eae79f535b14e9f8b2c67e40f7d65c41` — atualização do PWA ao abrir ou retomar (PR #191, Issue #190).
+- **Branch**: `main`, após merge da branch `fix/190-atualizacao-pwa`.
+- **Validação**: 10 testes focados e lint dos novos arquivos aprovados, build local e preview Cloudflare aprovados. O job de build do GitHub demorou na instalação de dependências; o preview validou o build completo antes do merge.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40672831201 concluído com sucesso em 28/10/2026; worker raiz publicado com identificador de build, CSP corrigida e bundle com eventos de atualização automática verificados.
+- **Atualização PWA**: registro imediato, verificação ao voltar para o app, recuperar conexão ou foco, e identificador de worker derivado dos assets a cada build. Versão nova provoca uma recarga; primeira instalação não. Formulários, diálogos e editor CAD apresentam opção de atualizar para permitir salvar antes. Instalações antigas devem fechar/reabrir uma vez para carregar esta rotina.
+- **Push**: a PR #189 corrigiu o bloqueio CSP de `importScripts`, permitindo o CDN e a API oficiais do OneSignal. Deploy #40672118577 concluído; recebimento do alerta no Chrome confirmado pelo usuário. A validação final do Android segue pendente. O teste por aparelho da PR #188 permanece ativo.
+- **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
+- **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
+- **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
 - **Observação de CI**: o job `dependency-audit` continua falhando por vulnerabilidades preexistentes e deve ser tratado em uma Issue/PR própria.
 
 ---
@@ -313,6 +319,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
 - Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
 - Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
+- Confirmar o recebimento de Web Push no Android após reabrir o PWA; no Chrome o usuário confirmou recebimento. E-mail e SMS permanecem adiados por decisão de escopo.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
 
 
