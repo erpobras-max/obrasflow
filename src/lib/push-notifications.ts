@@ -1,4 +1,10 @@
 type OneSignalWeb = {
+  init: (options: {
+    appId: string;
+    allowLocalhostAsSecureOrigin: boolean;
+    serviceWorkerPath: string;
+    serviceWorkerParam: { scope: string };
+  }) => Promise<void>;
   Notifications: {
     permission: boolean;
     permissionNative: NotificationPermission;
@@ -29,6 +35,75 @@ type OneSignalWeb = {
   logout: () => Promise<void>;
 };
 
+const ONESIGNAL_APP_ID = "ad9a6dc0-2948-4aad-80ee-7dd30e073d0d";
+const ONESIGNAL_SCRIPT = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
+
+type OneSignalWindow = Window & {
+  OneSignal?: OneSignalWeb;
+  OneSignalDeferred?: Array<(oneSignal: OneSignalWeb) => Promise<void>>;
+  __oneSignalReady?: Promise<OneSignalWeb>;
+};
+
+export function inicializarOneSignal(): Promise<OneSignalWeb> {
+  const win = window as OneSignalWindow;
+  if (win.__oneSignalReady) return win.__oneSignalReady;
+
+  const ready = new Promise<OneSignalWeb>((resolve, reject) => {
+    let concluido = false;
+    const finalizar = (acao: () => void) => {
+      if (concluido) return;
+      concluido = true;
+      window.clearTimeout(timeout);
+      acao();
+    };
+    const iniciar = async (oneSignal: OneSignalWeb) => {
+      window.clearTimeout(timeout);
+      try {
+        await oneSignal.init({
+          appId: ONESIGNAL_APP_ID,
+          allowLocalhostAsSecureOrigin: true,
+          serviceWorkerPath: "/OneSignalSDKWorker.js",
+          serviceWorkerParam: { scope: "/" },
+        });
+        finalizar(() => resolve(oneSignal));
+      } catch (error) {
+        finalizar(() => reject(error));
+      }
+    };
+    const timeout = window.setTimeout(
+      () => finalizar(() => reject(new Error("O SDK do OneSignal não carregou em 30 segundos."))),
+      30_000,
+    );
+
+    if (win.OneSignal) {
+      void iniciar(win.OneSignal);
+      return;
+    }
+
+    win.OneSignalDeferred = win.OneSignalDeferred || [];
+    win.OneSignalDeferred.push(iniciar);
+
+    const existente = document.querySelector<HTMLScriptElement>(
+      `script[src="${ONESIGNAL_SCRIPT}"]`,
+    );
+    if (existente) return;
+
+    const script = document.createElement("script");
+    script.src = ONESIGNAL_SCRIPT;
+    script.defer = true;
+    script.onerror = () =>
+      finalizar(() => reject(new Error("Não foi possível carregar o SDK do OneSignal.")));
+    document.head.appendChild(script);
+  });
+
+  win.__oneSignalReady = ready.catch((error) => {
+    delete win.__oneSignalReady;
+    document.querySelector<HTMLScriptElement>(`script[src="${ONESIGNAL_SCRIPT}"]`)?.remove();
+    throw error;
+  });
+  return win.__oneSignalReady;
+}
+
 function inscricaoPushAtiva(inscricao: {
   id: string | null;
   token: string | null;
@@ -58,39 +133,10 @@ function aguardarInscricaoPushAtiva(
   });
 }
 
-function executarComOneSignal(acao: (oneSignal: OneSignalWeb) => Promise<void>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const win = window as unknown as {
-      OneSignal?: OneSignalWeb;
-      OneSignalDeferred?: Array<(oneSignal: OneSignalWeb) => Promise<void>>;
-    };
-    let concluido = false;
-    const timeout = window.setTimeout(() => {
-      if (!concluido) {
-        concluido = true;
-        reject(new Error("O SDK do OneSignal não respondeu. Atualize a página e tente novamente."));
-      }
-    }, 10_000);
-    const executar = async (oneSignal: OneSignalWeb) => {
-      if (concluido) return;
-      try {
-        await acao(oneSignal);
-        concluido = true;
-        window.clearTimeout(timeout);
-        resolve();
-      } catch (error) {
-        concluido = true;
-        window.clearTimeout(timeout);
-        reject(error);
-      }
-    };
-
-    if (win.OneSignal) void executar(win.OneSignal);
-    else {
-      win.OneSignalDeferred = win.OneSignalDeferred || [];
-      win.OneSignalDeferred.push(executar);
-    }
-  });
+async function executarComOneSignal(
+  acao: (oneSignal: OneSignalWeb) => Promise<void>,
+): Promise<void> {
+  await acao(await inicializarOneSignal());
 }
 
 export async function identificarUsuarioOneSignal(userId: string | null): Promise<void> {
