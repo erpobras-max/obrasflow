@@ -11,17 +11,10 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 
-type OneSignalInitializer = {
-  init: (options: {
-    appId: string;
-    allowLocalhostAsSecureOrigin: boolean;
-    serviceWorkerPath: string;
-    serviceWorkerParam: { scope: string };
-  }) => Promise<void>;
-};
 import { Toaster } from "@/components/ui/sonner";
 import { toast } from "sonner";
 import { initializeBrowserMonitoring, reportBrowserError } from "@/lib/observability/browser";
+import { inicializarOneSignal } from "@/lib/push-notifications";
 
 function NotFoundComponent() {
   return (
@@ -142,27 +135,9 @@ function RootComponent() {
 
   // Inicializa o OneSignal no client-side
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const existing = document.querySelector('script[src*="OneSignalSDK"]');
-    if (existing) return;
-
-    const win = window as unknown as {
-      OneSignalDeferred?: Array<(oneSignal: OneSignalInitializer) => Promise<void>>;
-    };
-    win.OneSignalDeferred = win.OneSignalDeferred || [];
-    win.OneSignalDeferred.push(async function (oneSignal) {
-      await oneSignal.init({
-        appId: "ad9a6dc0-2948-4aad-80ee-7dd30e073d0d",
-        allowLocalhostAsSecureOrigin: true,
-        serviceWorkerPath: "/OneSignalSDKWorker.js",
-        serviceWorkerParam: { scope: "/" },
-      });
-    });
-
-    const script = document.createElement("script");
-    script.src = "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js";
-    script.defer = true;
-    document.head.appendChild(script);
+    void inicializarOneSignal().catch((error) =>
+      console.error("[OneSignal] Falha na inicialização:", error),
+    );
   }, []);
 
   useEffect(() => {
