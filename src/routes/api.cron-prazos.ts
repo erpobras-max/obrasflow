@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_PROJECT_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client.custom";
 import { enviarEmailAvisoOS } from "@/lib/email-service.server";
 import { autorizarNotificacoes } from "@/lib/notificacoes-auth.server";
-import { enviarPushOneSignal, enviarSmsOneSignal } from "@/lib/onesignal.server";
+import { enviarPushOneSignal, enviarSmsOneSignal, enviarTestePushOneSignal } from "@/lib/onesignal.server";
 
 function getSupabaseClient() {
   const runtimeEnv = (globalThis as unknown as { __env__?: Record<string, string> }).__env__;
@@ -61,10 +61,9 @@ async function processarPrazos(request: Request) {
     if (!auth.userId) {
       return Response.json({ sucesso: false, erro: "O teste exige um usuário autenticado." }, { status: 401 });
     }
-    const pushResult = await enviarPushOneSignal(
+    const pushResult = await enviarTestePushOneSignal(
       auth.userId,
-      "ObrasFlow — Teste de Notificação",
-      "Seu navegador está pronto para receber alertas do ObrasFlow.",
+      urlObj.searchParams.get("subscription_id") || "",
       `${urlObj.origin}/ordens-servico`,
     );
     return Response.json(

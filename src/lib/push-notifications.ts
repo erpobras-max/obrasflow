@@ -146,6 +146,16 @@ export async function identificarUsuarioOneSignal(userId: string | null): Promis
   );
 }
 
+export async function obterInscricaoPushAtual(userId: string): Promise<string> {
+  const oneSignal = await inicializarOneSignal();
+  await oneSignal.login(userId);
+  const inscricao = oneSignal.User.PushSubscription;
+  if (!inscricaoPushAtiva(inscricao)) {
+    throw new Error("Este aparelho não possui uma inscrição push ativa. Clique em Ativar Push neste aparelho.");
+  }
+  return inscricao.id!;
+}
+
 /**
  * Verifica se o navegador atual suporta Service Worker e Push Notifications
  */

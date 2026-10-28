@@ -30,7 +30,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import {
   solicitarPermissaoEInscreverPush,
-  dispararNotificacaoLocalTeste,
+  obterInscricaoPushAtual,
   obterStatusPermissao,
 } from "@/lib/push-notifications";
 import {
@@ -152,26 +152,18 @@ function OrdensServicoPage() {
   // Testar Notificação no Celular
   const handleTestarPush = async () => {
     try {
-      const res = await fetch("/api/cron-prazos?teste_push=1", {
+      if (!session?.user.id) throw new Error("Entre no sistema antes de testar.");
+      const subscriptionId = await obterInscricaoPushAtual(session.user.id);
+      const res = await fetch(`/api/cron-prazos?teste_push=1&subscription_id=${encodeURIComponent(subscriptionId)}`, {
         headers: { Authorization: `Bearer ${session?.access_token || ""}` },
       });
-      const data = (await res.json()) as { sucesso: boolean; pushDisparado: boolean };
-      if (data.sucesso && data.pushDisparado) {
-        toast.success("Notificação de teste enviada via OneSignal!");
-        return;
+      const data = (await res.json()) as { sucesso: boolean; pushDisparado: boolean; pushResult?: { erro?: string }; erro?: string };
+      if (!res.ok || !data.sucesso || !data.pushDisparado) {
+        throw new Error(data.pushResult?.erro || data.erro || "O OneSignal recusou o teste deste aparelho.");
       }
+      toast.info("Teste aceito pelo OneSignal para este aparelho. Confira a central de notificações; o recebimento ainda não foi confirmado.");
     } catch (e) {
-      console.warn("Falha no teste remoto de push:", e);
-    }
-
-    const ok = await dispararNotificacaoLocalTeste(
-      "ObrasFlow — Alerta de Teste",
-      "Seu aparelho está pronto para receber notificações de prazos de OS! 🔔"
-    );
-    if (ok) {
-      toast.success("Notificação enviada para o seu dispositivo!");
-    } else {
-      toast.error("Não foi possível disparar a notificação. Verifique se as permissões do navegador estão ativas.");
+      toast.error(e instanceof Error ? e.message : "Falha ao testar push neste aparelho.");
     }
   };
 
