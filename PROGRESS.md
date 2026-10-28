@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 27/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 28/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -300,11 +300,11 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `d5ea9eba1cd9d801c87eebdd7cd7e5ff09cad558` — estabilização da inicialização do OneSignal no Chrome e PWA (PR #187, Issue #178).
-- **Branch**: `main`, após merge da branch `fix/178-inicializacao-sdk-onesignal`.
-- **Validação**: 7 testes focados aprovados, lint do módulo sem erros, build local concluído e jobs `build`, `repository-hygiene` e `Workers Builds: obrasflow` aprovados.
-- **Deploy**: workflow `Deploy to Cloudflare Workers` #40667881888 concluído com sucesso em 28/10/2026; bundle publicado contém a inicialização compartilhada e `/OneSignalSDKWorker.js` responde `200`.
-- **Push/PWA**: carregamento, identificação e ativação agora compartilham uma única inicialização do SDK; o prazo de carregamento não continua contando durante o prompt de permissão e uma falha real do CDN permite nova tentativa.
+- **Commit**: `12934378faecadbda715e213dcae2bffcf32b332` — teste push exclusivo do aparelho atual (PR #188, Issue #178).
+- **Branch**: `main`, após merge da branch `fix/178-teste-push-aparelho`.
+- **Validação**: 8 testes focados aprovados, build local e CI concluídos; lint sem formatação encontrou apenas o `any` preexistente na rota de cron.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40670206406 concluído com sucesso em 28/10/2026; chunk publicado responde `200` e contém `subscription_id` e mensagem de aceitação sem afirmar recebimento.
+- **Push/PWA**: o teste valida no servidor se a inscrição pertence ao usuário e está ativa com token, envia somente para esse aparelho e mostra erros reais. Consulta ao OneSignal encontrou inscrições Android e Windows inativas/sem token; a causa da divergência com a ativação verde e o recebimento nesses aparelhos ainda precisam de validação. O teste anterior enviava para o usuário inteiro e podia alcançar apenas outra inscrição ativa.
 - **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
 - **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
 - **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
