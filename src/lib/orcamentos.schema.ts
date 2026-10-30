@@ -49,7 +49,26 @@ export interface OrcamentoRow {
   total_estimado: number; // in centavos
   created_at: string;
   updated_at: string;
+  nome?: string | null;
+  uf?: string | null;
+  competencia?: string | null;
+  regime?: string | null;
+  bdi_geral?: number;
+  analitico_ativo?: boolean;
 }
+
+export const memorialCalculoSchema = z.object({
+  descricao: z.string().trim().min(1, "Descrição é obrigatória"),
+  formula: z.string().trim().min(1, "Fórmula é obrigatória"),
+  resultado: z.coerce.number().min(0),
+});
+
+export const atividadeAnaliticaSchema = z.object({
+  descricao: z.string().trim().min(2),
+  unidade: z.string().trim().min(1).max(10),
+  quantidade: z.coerce.number().min(0),
+  bdi_percentual: z.coerce.number().min(0).max(1000).nullable().optional(),
+});
 
 export interface OrcamentoItemRow {
   id: string;
@@ -69,3 +88,4 @@ export interface OrcamentoItemRow {
   created_at: string;
   updated_at: string;
 }
+

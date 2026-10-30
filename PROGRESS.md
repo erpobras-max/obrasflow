@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 28/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 30/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -324,3 +324,14 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 
 
+
+
+## Atualização 30/10/2026 — orçamento analítico e proposta integrada (Issue #197)
+
+- Backup recuperável anterior à implementação: `backups/issue-197/pre-implementation-2026-10-29.zip` (SHA-256 `61F9CE3ED20E4515A65EBE941D1105FE27B35BE23D15A7A2463BB77343E2410E`).
+- Migração `20261030000000_orcamento_analitico.sql` aplicada no Supabase de produção e verificada: etapas, atividades, insumos/consumos, memoriais, revisões, auditoria e colunas de BDI/ativação analítica presentes.
+- `/orcamentos` passa a usar a grade analítica persistente: edição de nome, quantidade e BDI; memorial em linhas; composição por insumos; custo derivado; totais e detalhamento por categoria.
+- Orçamentos legados são adaptados para a estrutura analítica ao primeiro carregamento, preservando o fluxo existente.
+- Proposta comercial possui configuração versionada e fotografia ligada à revisão, com dados internos ocultos por padrão.
+- A preparação da importação SINAPI permanece em staging; o cron de produção não foi ativado até validação administrativa da primeira competência e definição do segredo operacional.
+- Validação: 28 testes automatizados aprovados e build de produção aprovado.

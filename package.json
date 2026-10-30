@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "node --max-old-space-size=4096 ./node_modules/vite/bin/vite.js build && node scripts/versionar-pwa.mjs && node scripts/patch-nitro-cloudflare-env.mjs",
+    "build": "vite build && node scripts/patch-nitro-cloudflare-env.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "test:e2e": "playwright test",
@@ -80,6 +80,7 @@
     "fflate": "0.8.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.13",
     "@eslint/js": "^9.32.0",
     "@lovable.dev/vite-tanstack-config": "2.13.1",
     "@playwright/test": "^1.63.0",
@@ -102,3 +103,4 @@
     "vite": "^7.3.1"
   }
 }
+
