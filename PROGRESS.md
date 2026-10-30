@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 30/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.nhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 30/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
