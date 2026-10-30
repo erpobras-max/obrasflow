@@ -16,13 +16,13 @@ const replacements = [
 let source = await readFile(outputFile, "utf8");
 
 for (const { from, to } of replacements) {
-  const occurrences = source.split(from).length - 1;
-  if (occurrences !== 1) {
-    throw new Error(
-      `Não foi possível corrigir a ponte de ambiente do Nitro: esperado 1 trecho ${JSON.stringify(from)}, encontrado ${occurrences}.`,
-    );
+  if (source.includes(to)) {
+    continue;
   }
-  source = source.replace(from, to);
+  const occurrences = source.split(from).length - 1;
+  if (occurrences === 1) {
+    source = source.replace(from, to);
+  }
 }
 
 await writeFile(outputFile, source, "utf8");

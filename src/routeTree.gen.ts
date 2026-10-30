@@ -9,88 +9,70 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AppRouteImport } from './routes/_app'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as PontoRouteImport } from './routes/ponto'
-import { Route as PortalRouteImport } from './routes/portal'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
-import { Route as AppComercialRouteImport } from './routes/_app/comercial'
-import { Route as AppComprasRouteImport } from './routes/_app/compras'
-import { Route as AppCronogramaRouteImport } from './routes/_app/cronograma'
-import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
-import { Route as AppDiarioRouteImport } from './routes/_app/diario'
-import { Route as AppDocumentosRouteImport } from './routes/_app/documentos'
-import { Route as AppEmpresaRouteImport } from './routes/_app/empresa'
-import { Route as AppEquipamentosRouteImport } from './routes/_app/equipamentos'
-import { Route as AppEstoqueRouteImport } from './routes/_app/estoque'
-import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
-import { Route as AppFiscalRouteImport } from './routes/_app/fiscal'
-import { Route as AppImobiliariaRouteImport } from './routes/_app/imobiliaria'
-import { Route as AppImportacoesRouteImport } from './routes/_app/importacoes'
-import { Route as AppMedicoesRouteImport } from './routes/_app/medicoes'
-import { Route as AppObrasRouteImport } from './routes/_app/obras'
-import { Route as AppOrcamentosRouteImport } from './routes/_app/orcamentos'
-import { Route as AppOrdensServicoRouteImport } from './routes/_app/ordens-servico'
-import { Route as AppPerfilRouteImport } from './routes/_app/perfil'
-import { Route as AppPrestadoresRouteImport } from './routes/_app/prestadores'
-import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
-import { Route as AppRhRouteImport } from './routes/_app/rh'
-import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
-import { Route as ApiCronPrazosRouteImport } from './routes/api.cron-prazos'
-import { Route as ApiCronResumoDiarioRouteImport } from './routes/api.cron-resumo-diario'
-import { Route as ApiDiarioMediaRouteImport } from './routes/api.diario-media'
-import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
-import { Route as CotacaoTokenRouteImport } from './routes/cotacao.$token'
-import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
+import { Route as PortalRouteImport } from './routes/portal'
+import { Route as PontoRouteImport } from './routes/ponto'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalIndexRouteImport } from './routes/portal/index'
-import { Route as PortalContratosRouteImport } from './routes/portal/contratos'
-import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
-import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro'
-import { Route as PortalFotosRouteImport } from './routes/portal/fotos'
-import { Route as PortalProjetoRouteImport } from './routes/portal/projeto'
 import { Route as ReservarTokenRouteImport } from './routes/reservar.$token'
-import { Route as AppComercialClientesRouteImport } from './routes/_app/comercial.clientes'
-import { Route as AppComercialContratosRouteImport } from './routes/_app/comercial.contratos'
-import { Route as AppComercialLicitacoesRouteImport } from './routes/_app/comercial.licitacoes'
-import { Route as AppComercialPropostasRouteImport } from './routes/_app/comercial.propostas'
+import { Route as PortalProjetoRouteImport } from './routes/portal/projeto'
+import { Route as PortalFotosRouteImport } from './routes/portal/fotos'
+import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro'
+import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
+import { Route as PortalContratosRouteImport } from './routes/portal/contratos'
+import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
+import { Route as CotacaoTokenRouteImport } from './routes/cotacao.$token'
+import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
+import { Route as ApiDiarioMediaRouteImport } from './routes/api.diario-media'
+import { Route as ApiCronResumoDiarioRouteImport } from './routes/api.cron-resumo-diario'
+import { Route as ApiCronPrazosRouteImport } from './routes/api.cron-prazos'
+import { Route as AppUsuariosRouteImport } from './routes/_app/usuarios'
+import { Route as AppRhRouteImport } from './routes/_app/rh'
+import { Route as AppRelatoriosRouteImport } from './routes/_app/relatorios'
+import { Route as AppPrestadoresRouteImport } from './routes/_app/prestadores'
+import { Route as AppPerfilRouteImport } from './routes/_app/perfil'
+import { Route as AppOrdensServicoRouteImport } from './routes/_app/ordens-servico'
+import { Route as AppOrcamentosRouteImport } from './routes/_app/orcamentos'
+import { Route as AppObrasRouteImport } from './routes/_app/obras'
+import { Route as AppMedicoesRouteImport } from './routes/_app/medicoes'
+import { Route as AppImportacoesRouteImport } from './routes/_app/importacoes'
+import { Route as AppImobiliariaRouteImport } from './routes/_app/imobiliaria'
+import { Route as AppFiscalRouteImport } from './routes/_app/fiscal'
+import { Route as AppFinanceiroRouteImport } from './routes/_app/financeiro'
+import { Route as AppEstoqueRouteImport } from './routes/_app/estoque'
+import { Route as AppEquipamentosRouteImport } from './routes/_app/equipamentos'
+import { Route as AppEmpresaRouteImport } from './routes/_app/empresa'
+import { Route as AppDocumentosRouteImport } from './routes/_app/documentos'
+import { Route as AppDiarioRouteImport } from './routes/_app/diario'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
+import { Route as AppCronogramaRouteImport } from './routes/_app/cronograma'
+import { Route as AppComprasRouteImport } from './routes/_app/compras'
+import { Route as AppComercialRouteImport } from './routes/_app/comercial'
 import { Route as AppCotacoesIndexRouteImport } from './routes/_app/cotacoes/index'
-import { Route as AppCotacoesCotacaoIdRouteImport } from './routes/_app/cotacoes/$cotacaoId'
-import { Route as AppEstoqueMovimentacaoRouteImport } from './routes/_app/estoque.movimentacao'
-import { Route as AppImobiliariaClientesRouteImport } from './routes/_app/imobiliaria.clientes'
-import { Route as AppImobiliariaDashboardRouteImport } from './routes/_app/imobiliaria.dashboard'
-import { Route as AppImobiliariaEspacosRouteImport } from './routes/_app/imobiliaria.espacos'
-import { Route as AppImobiliariaFiadoresRouteImport } from './routes/_app/imobiliaria/fiadores'
-import { Route as AppImobiliariaFinanceiroRouteImport } from './routes/_app/imobiliaria.financeiro'
-import { Route as AppImobiliariaImoveisRouteImport } from './routes/_app/imobiliaria.imoveis'
-import { Route as AppImobiliariaLocacoesRouteImport } from './routes/_app/imobiliaria.locacoes'
-import { Route as AppProjeto3dIdRouteImport } from './routes/_app/projeto3d.$id'
+import { Route as ApiSinapiCronRouteImport } from './routes/api.sinapi.cron'
 import { Route as AppVendasPedidosRouteImport } from './routes/_app/vendas.pedidos'
+import { Route as AppProjeto3dIdRouteImport } from './routes/_app/projeto3d.$id'
+import { Route as AppImobiliariaLocacoesRouteImport } from './routes/_app/imobiliaria.locacoes'
+import { Route as AppImobiliariaImoveisRouteImport } from './routes/_app/imobiliaria.imoveis'
+import { Route as AppImobiliariaFinanceiroRouteImport } from './routes/_app/imobiliaria.financeiro'
+import { Route as AppImobiliariaFiadoresRouteImport } from './routes/_app/imobiliaria/fiadores'
+import { Route as AppImobiliariaEspacosRouteImport } from './routes/_app/imobiliaria.espacos'
+import { Route as AppImobiliariaDashboardRouteImport } from './routes/_app/imobiliaria.dashboard'
+import { Route as AppImobiliariaClientesRouteImport } from './routes/_app/imobiliaria.clientes'
+import { Route as AppEstoqueMovimentacaoRouteImport } from './routes/_app/estoque.movimentacao'
+import { Route as AppCotacoesCotacaoIdRouteImport } from './routes/_app/cotacoes/$cotacaoId'
+import { Route as AppComercialPropostasRouteImport } from './routes/_app/comercial.propostas'
+import { Route as AppComercialLicitacoesRouteImport } from './routes/_app/comercial.licitacoes'
+import { Route as AppComercialContratosRouteImport } from './routes/_app/comercial.contratos'
+import { Route as AppComercialClientesRouteImport } from './routes/_app/comercial.clientes'
 import { Route as AppCotacoesCotacaoIdComparativoRouteImport } from './routes/_app/cotacoes/$cotacaoId.comparativo'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AppRoute = AppRouteImport.update({
-  id: '/_app',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PontoRoute = PontoRouteImport.update({
-  id: '/ponto',
-  path: '/ponto',
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortalRoute = PortalRouteImport.update({
@@ -98,149 +80,28 @@ const PortalRoute = PortalRouteImport.update({
   path: '/portal',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
+const PontoRoute = PontoRouteImport.update({
+  id: '/ponto',
+  path: '/ponto',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppComercialRoute = AppComercialRouteImport.update({
-  id: '/comercial',
-  path: '/comercial',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppComprasRoute = AppComprasRouteImport.update({
-  id: '/compras',
-  path: '/compras',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppCronogramaRoute = AppCronogramaRouteImport.update({
-  id: '/cronograma',
-  path: '/cronograma',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDashboardRoute = AppDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDiarioRoute = AppDiarioRouteImport.update({
-  id: '/diario',
-  path: '/diario',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppDocumentosRoute = AppDocumentosRouteImport.update({
-  id: '/documentos',
-  path: '/documentos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppEmpresaRoute = AppEmpresaRouteImport.update({
-  id: '/empresa',
-  path: '/empresa',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppEquipamentosRoute = AppEquipamentosRouteImport.update({
-  id: '/equipamentos',
-  path: '/equipamentos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppEstoqueRoute = AppEstoqueRouteImport.update({
-  id: '/estoque',
-  path: '/estoque',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppFiscalRoute = AppFiscalRouteImport.update({
-  id: '/fiscal',
-  path: '/fiscal',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppImobiliariaRoute = AppImobiliariaRouteImport.update({
-  id: '/imobiliaria',
-  path: '/imobiliaria',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppImportacoesRoute = AppImportacoesRouteImport.update({
-  id: '/importacoes',
-  path: '/importacoes',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppMedicoesRoute = AppMedicoesRouteImport.update({
-  id: '/medicoes',
-  path: '/medicoes',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppObrasRoute = AppObrasRouteImport.update({
-  id: '/obras',
-  path: '/obras',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppOrcamentosRoute = AppOrcamentosRouteImport.update({
-  id: '/orcamentos',
-  path: '/orcamentos',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppOrdensServicoRoute = AppOrdensServicoRouteImport.update({
-  id: '/ordens-servico',
-  path: '/ordens-servico',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPerfilRoute = AppPerfilRouteImport.update({
-  id: '/perfil',
-  path: '/perfil',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppPrestadoresRoute = AppPrestadoresRouteImport.update({
-  id: '/prestadores',
-  path: '/prestadores',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
-  id: '/relatorios',
-  path: '/relatorios',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppRhRoute = AppRhRouteImport.update({
-  id: '/rh',
-  path: '/rh',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppUsuariosRoute = AppUsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
-  getParentRoute: () => AppRoute,
-} as any)
-const ApiCronPrazosRoute = ApiCronPrazosRouteImport.update({
-  id: '/api/cron-prazos',
-  path: '/api/cron-prazos',
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiCronResumoDiarioRoute = ApiCronResumoDiarioRouteImport.update({
-  id: '/api/cron-resumo-diario',
-  path: '/api/cron-resumo-diario',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDiarioMediaRoute = ApiDiarioMediaRouteImport.update({
-  id: '/api/diario-media',
-  path: '/api/diario-media',
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AssinarTokenRoute = AssinarTokenRouteImport.update({
-  id: '/assinar/$token',
-  path: '/assinar/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CotacaoTokenRoute = CotacaoTokenRouteImport.update({
-  id: '/cotacao/$token',
-  path: '/cotacao/$token',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ImovelPublicoTokenRoute = ImovelPublicoTokenRouteImport.update({
-  id: '/imovel-publico/$token',
-  path: '/imovel-publico/$token',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PortalIndexRoute = PortalIndexRouteImport.update({
@@ -248,19 +109,14 @@ const PortalIndexRoute = PortalIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PortalRoute,
 } as any)
-const PortalContratosRoute = PortalContratosRouteImport.update({
-  id: '/contratos',
-  path: '/contratos',
-  getParentRoute: () => PortalRoute,
+const ReservarTokenRoute = ReservarTokenRouteImport.update({
+  id: '/reservar/$token',
+  path: '/reservar/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const PortalDocumentosRoute = PortalDocumentosRouteImport.update({
-  id: '/documentos',
-  path: '/documentos',
-  getParentRoute: () => PortalRoute,
-} as any)
-const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
+const PortalProjetoRoute = PortalProjetoRouteImport.update({
+  id: '/projeto',
+  path: '/projeto',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalFotosRoute = PortalFotosRouteImport.update({
@@ -268,69 +124,189 @@ const PortalFotosRoute = PortalFotosRouteImport.update({
   path: '/fotos',
   getParentRoute: () => PortalRoute,
 } as any)
-const PortalProjetoRoute = PortalProjetoRouteImport.update({
-  id: '/projeto',
-  path: '/projeto',
+const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
   getParentRoute: () => PortalRoute,
 } as any)
-const ReservarTokenRoute = ReservarTokenRouteImport.update({
-  id: '/reservar/$token',
-  path: '/reservar/$token',
-  getParentRoute: () => rootRouteImport,
+const PortalDocumentosRoute = PortalDocumentosRouteImport.update({
+  id: '/documentos',
+  path: '/documentos',
+  getParentRoute: () => PortalRoute,
 } as any)
-const AppComercialClientesRoute = AppComercialClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
-  getParentRoute: () => AppComercialRoute,
-} as any)
-const AppComercialContratosRoute = AppComercialContratosRouteImport.update({
+const PortalContratosRoute = PortalContratosRouteImport.update({
   id: '/contratos',
   path: '/contratos',
-  getParentRoute: () => AppComercialRoute,
+  getParentRoute: () => PortalRoute,
 } as any)
-const AppComercialLicitacoesRoute = AppComercialLicitacoesRouteImport.update({
-  id: '/licitacoes',
-  path: '/licitacoes',
-  getParentRoute: () => AppComercialRoute,
+const ImovelPublicoTokenRoute = ImovelPublicoTokenRouteImport.update({
+  id: '/imovel-publico/$token',
+  path: '/imovel-publico/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
-const AppComercialPropostasRoute = AppComercialPropostasRouteImport.update({
-  id: '/propostas',
-  path: '/propostas',
-  getParentRoute: () => AppComercialRoute,
+const CotacaoTokenRoute = CotacaoTokenRouteImport.update({
+  id: '/cotacao/$token',
+  path: '/cotacao/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AssinarTokenRoute = AssinarTokenRouteImport.update({
+  id: '/assinar/$token',
+  path: '/assinar/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDiarioMediaRoute = ApiDiarioMediaRouteImport.update({
+  id: '/api/diario-media',
+  path: '/api/diario-media',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronResumoDiarioRoute = ApiCronResumoDiarioRouteImport.update({
+  id: '/api/cron-resumo-diario',
+  path: '/api/cron-resumo-diario',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronPrazosRoute = ApiCronPrazosRouteImport.update({
+  id: '/api/cron-prazos',
+  path: '/api/cron-prazos',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppUsuariosRoute = AppUsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRhRoute = AppRhRouteImport.update({
+  id: '/rh',
+  path: '/rh',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRelatoriosRoute = AppRelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPrestadoresRoute = AppPrestadoresRouteImport.update({
+  id: '/prestadores',
+  path: '/prestadores',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPerfilRoute = AppPerfilRouteImport.update({
+  id: '/perfil',
+  path: '/perfil',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrdensServicoRoute = AppOrdensServicoRouteImport.update({
+  id: '/ordens-servico',
+  path: '/ordens-servico',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrcamentosRoute = AppOrcamentosRouteImport.update({
+  id: '/orcamentos',
+  path: '/orcamentos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppObrasRoute = AppObrasRouteImport.update({
+  id: '/obras',
+  path: '/obras',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMedicoesRoute = AppMedicoesRouteImport.update({
+  id: '/medicoes',
+  path: '/medicoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppImportacoesRoute = AppImportacoesRouteImport.update({
+  id: '/importacoes',
+  path: '/importacoes',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppImobiliariaRoute = AppImobiliariaRouteImport.update({
+  id: '/imobiliaria',
+  path: '/imobiliaria',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFiscalRoute = AppFiscalRouteImport.update({
+  id: '/fiscal',
+  path: '/fiscal',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppFinanceiroRoute = AppFinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEstoqueRoute = AppEstoqueRouteImport.update({
+  id: '/estoque',
+  path: '/estoque',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEquipamentosRoute = AppEquipamentosRouteImport.update({
+  id: '/equipamentos',
+  path: '/equipamentos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEmpresaRoute = AppEmpresaRouteImport.update({
+  id: '/empresa',
+  path: '/empresa',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDocumentosRoute = AppDocumentosRouteImport.update({
+  id: '/documentos',
+  path: '/documentos',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDiarioRoute = AppDiarioRouteImport.update({
+  id: '/diario',
+  path: '/diario',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCronogramaRoute = AppCronogramaRouteImport.update({
+  id: '/cronograma',
+  path: '/cronograma',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppComprasRoute = AppComprasRouteImport.update({
+  id: '/compras',
+  path: '/compras',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppComercialRoute = AppComercialRouteImport.update({
+  id: '/comercial',
+  path: '/comercial',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppCotacoesIndexRoute = AppCotacoesIndexRouteImport.update({
   id: '/cotacoes/',
   path: '/cotacoes/',
   getParentRoute: () => AppRoute,
 } as any)
-const AppCotacoesCotacaoIdRoute = AppCotacoesCotacaoIdRouteImport.update({
-  id: '/cotacoes/$cotacaoId',
-  path: '/cotacoes/$cotacaoId',
+const ApiSinapiCronRoute = ApiSinapiCronRouteImport.update({
+  id: '/api/sinapi/cron',
+  path: '/api/sinapi/cron',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppVendasPedidosRoute = AppVendasPedidosRouteImport.update({
+  id: '/vendas/pedidos',
+  path: '/vendas/pedidos',
   getParentRoute: () => AppRoute,
 } as any)
-const AppEstoqueMovimentacaoRoute = AppEstoqueMovimentacaoRouteImport.update({
-  id: '/movimentacao',
-  path: '/movimentacao',
-  getParentRoute: () => AppEstoqueRoute,
+const AppProjeto3dIdRoute = AppProjeto3dIdRouteImport.update({
+  id: '/projeto3d/$id',
+  path: '/projeto3d/$id',
+  getParentRoute: () => AppRoute,
 } as any)
-const AppImobiliariaClientesRoute = AppImobiliariaClientesRouteImport.update({
-  id: '/clientes',
-  path: '/clientes',
+const AppImobiliariaLocacoesRoute = AppImobiliariaLocacoesRouteImport.update({
+  id: '/locacoes',
+  path: '/locacoes',
   getParentRoute: () => AppImobiliariaRoute,
 } as any)
-const AppImobiliariaDashboardRoute = AppImobiliariaDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AppImobiliariaRoute,
-} as any)
-const AppImobiliariaEspacosRoute = AppImobiliariaEspacosRouteImport.update({
-  id: '/espacos',
-  path: '/espacos',
-  getParentRoute: () => AppImobiliariaRoute,
-} as any)
-const AppImobiliariaFiadoresRoute = AppImobiliariaFiadoresRouteImport.update({
-  id: '/fiadores',
-  path: '/fiadores',
+const AppImobiliariaImoveisRoute = AppImobiliariaImoveisRouteImport.update({
+  id: '/imoveis',
+  path: '/imoveis',
   getParentRoute: () => AppImobiliariaRoute,
 } as any)
 const AppImobiliariaFinanceiroRoute =
@@ -339,25 +315,55 @@ const AppImobiliariaFinanceiroRoute =
     path: '/financeiro',
     getParentRoute: () => AppImobiliariaRoute,
   } as any)
-const AppImobiliariaImoveisRoute = AppImobiliariaImoveisRouteImport.update({
-  id: '/imoveis',
-  path: '/imoveis',
+const AppImobiliariaFiadoresRoute = AppImobiliariaFiadoresRouteImport.update({
+  id: '/fiadores',
+  path: '/fiadores',
   getParentRoute: () => AppImobiliariaRoute,
 } as any)
-const AppImobiliariaLocacoesRoute = AppImobiliariaLocacoesRouteImport.update({
-  id: '/locacoes',
-  path: '/locacoes',
+const AppImobiliariaEspacosRoute = AppImobiliariaEspacosRouteImport.update({
+  id: '/espacos',
+  path: '/espacos',
   getParentRoute: () => AppImobiliariaRoute,
 } as any)
-const AppProjeto3dIdRoute = AppProjeto3dIdRouteImport.update({
-  id: '/projeto3d/$id',
-  path: '/projeto3d/$id',
+const AppImobiliariaDashboardRoute = AppImobiliariaDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AppImobiliariaRoute,
+} as any)
+const AppImobiliariaClientesRoute = AppImobiliariaClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => AppImobiliariaRoute,
+} as any)
+const AppEstoqueMovimentacaoRoute = AppEstoqueMovimentacaoRouteImport.update({
+  id: '/movimentacao',
+  path: '/movimentacao',
+  getParentRoute: () => AppEstoqueRoute,
+} as any)
+const AppCotacoesCotacaoIdRoute = AppCotacoesCotacaoIdRouteImport.update({
+  id: '/cotacoes/$cotacaoId',
+  path: '/cotacoes/$cotacaoId',
   getParentRoute: () => AppRoute,
 } as any)
-const AppVendasPedidosRoute = AppVendasPedidosRouteImport.update({
-  id: '/vendas/pedidos',
-  path: '/vendas/pedidos',
-  getParentRoute: () => AppRoute,
+const AppComercialPropostasRoute = AppComercialPropostasRouteImport.update({
+  id: '/propostas',
+  path: '/propostas',
+  getParentRoute: () => AppComercialRoute,
+} as any)
+const AppComercialLicitacoesRoute = AppComercialLicitacoesRouteImport.update({
+  id: '/licitacoes',
+  path: '/licitacoes',
+  getParentRoute: () => AppComercialRoute,
+} as any)
+const AppComercialContratosRoute = AppComercialContratosRouteImport.update({
+  id: '/contratos',
+  path: '/contratos',
+  getParentRoute: () => AppComercialRoute,
+} as any)
+const AppComercialClientesRoute = AppComercialClientesRouteImport.update({
+  id: '/clientes',
+  path: '/clientes',
+  getParentRoute: () => AppComercialRoute,
 } as any)
 const AppCotacoesCotacaoIdComparativoRoute =
   AppCotacoesCotacaoIdComparativoRouteImport.update({
@@ -423,6 +429,7 @@ export interface FileRoutesByFullPath {
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
   '/projeto3d/$id': typeof AppProjeto3dIdRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
+  '/api/sinapi/cron': typeof ApiSinapiCronRoute
   '/cotacoes/': typeof AppCotacoesIndexRoute
   '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
@@ -482,6 +489,7 @@ export interface FileRoutesByTo {
   '/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
   '/projeto3d/$id': typeof AppProjeto3dIdRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
+  '/api/sinapi/cron': typeof ApiSinapiCronRoute
   '/cotacoes': typeof AppCotacoesIndexRoute
   '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
@@ -544,6 +552,7 @@ export interface FileRoutesById {
   '/_app/imobiliaria/locacoes': typeof AppImobiliariaLocacoesRoute
   '/_app/projeto3d/$id': typeof AppProjeto3dIdRoute
   '/_app/vendas/pedidos': typeof AppVendasPedidosRoute
+  '/api/sinapi/cron': typeof ApiSinapiCronRoute
   '/_app/cotacoes/': typeof AppCotacoesIndexRoute
   '/_app/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
@@ -606,6 +615,7 @@ export interface FileRouteTypes {
     | '/imobiliaria/locacoes'
     | '/projeto3d/$id'
     | '/vendas/pedidos'
+    | '/api/sinapi/cron'
     | '/cotacoes/'
     | '/cotacoes/$cotacaoId/comparativo'
   fileRoutesByTo: FileRoutesByTo
@@ -665,6 +675,7 @@ export interface FileRouteTypes {
     | '/imobiliaria/locacoes'
     | '/projeto3d/$id'
     | '/vendas/pedidos'
+    | '/api/sinapi/cron'
     | '/cotacoes'
     | '/cotacoes/$cotacaoId/comparativo'
   id:
@@ -726,6 +737,7 @@ export interface FileRouteTypes {
     | '/_app/imobiliaria/locacoes'
     | '/_app/projeto3d/$id'
     | '/_app/vendas/pedidos'
+    | '/api/sinapi/cron'
     | '/_app/cotacoes/'
     | '/_app/cotacoes/$cotacaoId/comparativo'
   fileRoutesById: FileRoutesById
@@ -745,43 +757,16 @@ export interface RootRouteChildren {
   CotacaoTokenRoute: typeof CotacaoTokenRoute
   ImovelPublicoTokenRoute: typeof ImovelPublicoTokenRoute
   ReservarTokenRoute: typeof ReservarTokenRoute
+  ApiSinapiCronRoute: typeof ApiSinapiCronRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_app': {
-      id: '/_app'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AppRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ponto': {
-      id: '/ponto'
-      path: '/ponto'
-      fullPath: '/ponto'
-      preLoaderRoute: typeof PontoRouteImport
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portal': {
@@ -791,207 +776,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
+    '/ponto': {
+      id: '/ponto'
+      path: '/ponto'
+      fullPath: '/ponto'
+      preLoaderRoute: typeof PontoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/comercial': {
-      id: '/_app/comercial'
-      path: '/comercial'
-      fullPath: '/comercial'
-      preLoaderRoute: typeof AppComercialRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/compras': {
-      id: '/_app/compras'
-      path: '/compras'
-      fullPath: '/compras'
-      preLoaderRoute: typeof AppComprasRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/cronograma': {
-      id: '/_app/cronograma'
-      path: '/cronograma'
-      fullPath: '/cronograma'
-      preLoaderRoute: typeof AppCronogramaRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/dashboard': {
-      id: '/_app/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AppDashboardRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/diario': {
-      id: '/_app/diario'
-      path: '/diario'
-      fullPath: '/diario'
-      preLoaderRoute: typeof AppDiarioRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/documentos': {
-      id: '/_app/documentos'
-      path: '/documentos'
-      fullPath: '/documentos'
-      preLoaderRoute: typeof AppDocumentosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/empresa': {
-      id: '/_app/empresa'
-      path: '/empresa'
-      fullPath: '/empresa'
-      preLoaderRoute: typeof AppEmpresaRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/equipamentos': {
-      id: '/_app/equipamentos'
-      path: '/equipamentos'
-      fullPath: '/equipamentos'
-      preLoaderRoute: typeof AppEquipamentosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/estoque': {
-      id: '/_app/estoque'
-      path: '/estoque'
-      fullPath: '/estoque'
-      preLoaderRoute: typeof AppEstoqueRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/financeiro': {
-      id: '/_app/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof AppFinanceiroRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/fiscal': {
-      id: '/_app/fiscal'
-      path: '/fiscal'
-      fullPath: '/fiscal'
-      preLoaderRoute: typeof AppFiscalRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/imobiliaria': {
-      id: '/_app/imobiliaria'
-      path: '/imobiliaria'
-      fullPath: '/imobiliaria'
-      preLoaderRoute: typeof AppImobiliariaRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/importacoes': {
-      id: '/_app/importacoes'
-      path: '/importacoes'
-      fullPath: '/importacoes'
-      preLoaderRoute: typeof AppImportacoesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/medicoes': {
-      id: '/_app/medicoes'
-      path: '/medicoes'
-      fullPath: '/medicoes'
-      preLoaderRoute: typeof AppMedicoesRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/obras': {
-      id: '/_app/obras'
-      path: '/obras'
-      fullPath: '/obras'
-      preLoaderRoute: typeof AppObrasRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/orcamentos': {
-      id: '/_app/orcamentos'
-      path: '/orcamentos'
-      fullPath: '/orcamentos'
-      preLoaderRoute: typeof AppOrcamentosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/ordens-servico': {
-      id: '/_app/ordens-servico'
-      path: '/ordens-servico'
-      fullPath: '/ordens-servico'
-      preLoaderRoute: typeof AppOrdensServicoRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/perfil': {
-      id: '/_app/perfil'
-      path: '/perfil'
-      fullPath: '/perfil'
-      preLoaderRoute: typeof AppPerfilRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/prestadores': {
-      id: '/_app/prestadores'
-      path: '/prestadores'
-      fullPath: '/prestadores'
-      preLoaderRoute: typeof AppPrestadoresRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/relatorios': {
-      id: '/_app/relatorios'
-      path: '/relatorios'
-      fullPath: '/relatorios'
-      preLoaderRoute: typeof AppRelatoriosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/rh': {
-      id: '/_app/rh'
-      path: '/rh'
-      fullPath: '/rh'
-      preLoaderRoute: typeof AppRhRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/usuarios': {
-      id: '/_app/usuarios'
-      path: '/usuarios'
-      fullPath: '/usuarios'
-      preLoaderRoute: typeof AppUsuariosRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/api/cron-prazos': {
-      id: '/api/cron-prazos'
-      path: '/api/cron-prazos'
-      fullPath: '/api/cron-prazos'
-      preLoaderRoute: typeof ApiCronPrazosRouteImport
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/cron-resumo-diario': {
-      id: '/api/cron-resumo-diario'
-      path: '/api/cron-resumo-diario'
-      fullPath: '/api/cron-resumo-diario'
-      preLoaderRoute: typeof ApiCronResumoDiarioRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/diario-media': {
-      id: '/api/diario-media'
-      path: '/api/diario-media'
-      fullPath: '/api/diario-media'
-      preLoaderRoute: typeof ApiDiarioMediaRouteImport
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/assinar/$token': {
-      id: '/assinar/$token'
-      path: '/assinar/$token'
-      fullPath: '/assinar/$token'
-      preLoaderRoute: typeof AssinarTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cotacao/$token': {
-      id: '/cotacao/$token'
-      path: '/cotacao/$token'
-      fullPath: '/cotacao/$token'
-      preLoaderRoute: typeof CotacaoTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/imovel-publico/$token': {
-      id: '/imovel-publico/$token'
-      path: '/imovel-publico/$token'
-      fullPath: '/imovel-publico/$token'
-      preLoaderRoute: typeof ImovelPublicoTokenRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/portal/': {
@@ -1001,25 +818,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalIndexRouteImport
       parentRoute: typeof PortalRoute
     }
-    '/portal/contratos': {
-      id: '/portal/contratos'
-      path: '/contratos'
-      fullPath: '/portal/contratos'
-      preLoaderRoute: typeof PortalContratosRouteImport
-      parentRoute: typeof PortalRoute
+    '/reservar/$token': {
+      id: '/reservar/$token'
+      path: '/reservar/$token'
+      fullPath: '/reservar/$token'
+      preLoaderRoute: typeof ReservarTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/portal/documentos': {
-      id: '/portal/documentos'
-      path: '/documentos'
-      fullPath: '/portal/documentos'
-      preLoaderRoute: typeof PortalDocumentosRouteImport
-      parentRoute: typeof PortalRoute
-    }
-    '/portal/financeiro': {
-      id: '/portal/financeiro'
-      path: '/financeiro'
-      fullPath: '/portal/financeiro'
-      preLoaderRoute: typeof PortalFinanceiroRouteImport
+    '/portal/projeto': {
+      id: '/portal/projeto'
+      path: '/projeto'
+      fullPath: '/portal/projeto'
+      preLoaderRoute: typeof PortalProjetoRouteImport
       parentRoute: typeof PortalRoute
     }
     '/portal/fotos': {
@@ -1029,47 +839,222 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalFotosRouteImport
       parentRoute: typeof PortalRoute
     }
-    '/portal/projeto': {
-      id: '/portal/projeto'
-      path: '/projeto'
-      fullPath: '/portal/projeto'
-      preLoaderRoute: typeof PortalProjetoRouteImport
+    '/portal/financeiro': {
+      id: '/portal/financeiro'
+      path: '/financeiro'
+      fullPath: '/portal/financeiro'
+      preLoaderRoute: typeof PortalFinanceiroRouteImport
       parentRoute: typeof PortalRoute
     }
-    '/reservar/$token': {
-      id: '/reservar/$token'
-      path: '/reservar/$token'
-      fullPath: '/reservar/$token'
-      preLoaderRoute: typeof ReservarTokenRouteImport
+    '/portal/documentos': {
+      id: '/portal/documentos'
+      path: '/documentos'
+      fullPath: '/portal/documentos'
+      preLoaderRoute: typeof PortalDocumentosRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/portal/contratos': {
+      id: '/portal/contratos'
+      path: '/contratos'
+      fullPath: '/portal/contratos'
+      preLoaderRoute: typeof PortalContratosRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/imovel-publico/$token': {
+      id: '/imovel-publico/$token'
+      path: '/imovel-publico/$token'
+      fullPath: '/imovel-publico/$token'
+      preLoaderRoute: typeof ImovelPublicoTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/comercial/clientes': {
-      id: '/_app/comercial/clientes'
-      path: '/clientes'
-      fullPath: '/comercial/clientes'
-      preLoaderRoute: typeof AppComercialClientesRouteImport
-      parentRoute: typeof AppComercialRoute
+    '/cotacao/$token': {
+      id: '/cotacao/$token'
+      path: '/cotacao/$token'
+      fullPath: '/cotacao/$token'
+      preLoaderRoute: typeof CotacaoTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/comercial/contratos': {
-      id: '/_app/comercial/contratos'
-      path: '/contratos'
-      fullPath: '/comercial/contratos'
-      preLoaderRoute: typeof AppComercialContratosRouteImport
-      parentRoute: typeof AppComercialRoute
+    '/assinar/$token': {
+      id: '/assinar/$token'
+      path: '/assinar/$token'
+      fullPath: '/assinar/$token'
+      preLoaderRoute: typeof AssinarTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/comercial/licitacoes': {
-      id: '/_app/comercial/licitacoes'
-      path: '/licitacoes'
-      fullPath: '/comercial/licitacoes'
-      preLoaderRoute: typeof AppComercialLicitacoesRouteImport
-      parentRoute: typeof AppComercialRoute
+    '/api/diario-media': {
+      id: '/api/diario-media'
+      path: '/api/diario-media'
+      fullPath: '/api/diario-media'
+      preLoaderRoute: typeof ApiDiarioMediaRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_app/comercial/propostas': {
-      id: '/_app/comercial/propostas'
-      path: '/propostas'
-      fullPath: '/comercial/propostas'
-      preLoaderRoute: typeof AppComercialPropostasRouteImport
-      parentRoute: typeof AppComercialRoute
+    '/api/cron-resumo-diario': {
+      id: '/api/cron-resumo-diario'
+      path: '/api/cron-resumo-diario'
+      fullPath: '/api/cron-resumo-diario'
+      preLoaderRoute: typeof ApiCronResumoDiarioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron-prazos': {
+      id: '/api/cron-prazos'
+      path: '/api/cron-prazos'
+      fullPath: '/api/cron-prazos'
+      preLoaderRoute: typeof ApiCronPrazosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/usuarios': {
+      id: '/_app/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof AppUsuariosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/rh': {
+      id: '/_app/rh'
+      path: '/rh'
+      fullPath: '/rh'
+      preLoaderRoute: typeof AppRhRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/relatorios': {
+      id: '/_app/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof AppRelatoriosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/prestadores': {
+      id: '/_app/prestadores'
+      path: '/prestadores'
+      fullPath: '/prestadores'
+      preLoaderRoute: typeof AppPrestadoresRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/perfil': {
+      id: '/_app/perfil'
+      path: '/perfil'
+      fullPath: '/perfil'
+      preLoaderRoute: typeof AppPerfilRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ordens-servico': {
+      id: '/_app/ordens-servico'
+      path: '/ordens-servico'
+      fullPath: '/ordens-servico'
+      preLoaderRoute: typeof AppOrdensServicoRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/orcamentos': {
+      id: '/_app/orcamentos'
+      path: '/orcamentos'
+      fullPath: '/orcamentos'
+      preLoaderRoute: typeof AppOrcamentosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/obras': {
+      id: '/_app/obras'
+      path: '/obras'
+      fullPath: '/obras'
+      preLoaderRoute: typeof AppObrasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/medicoes': {
+      id: '/_app/medicoes'
+      path: '/medicoes'
+      fullPath: '/medicoes'
+      preLoaderRoute: typeof AppMedicoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/importacoes': {
+      id: '/_app/importacoes'
+      path: '/importacoes'
+      fullPath: '/importacoes'
+      preLoaderRoute: typeof AppImportacoesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/imobiliaria': {
+      id: '/_app/imobiliaria'
+      path: '/imobiliaria'
+      fullPath: '/imobiliaria'
+      preLoaderRoute: typeof AppImobiliariaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/fiscal': {
+      id: '/_app/fiscal'
+      path: '/fiscal'
+      fullPath: '/fiscal'
+      preLoaderRoute: typeof AppFiscalRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/financeiro': {
+      id: '/_app/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof AppFinanceiroRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/estoque': {
+      id: '/_app/estoque'
+      path: '/estoque'
+      fullPath: '/estoque'
+      preLoaderRoute: typeof AppEstoqueRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/equipamentos': {
+      id: '/_app/equipamentos'
+      path: '/equipamentos'
+      fullPath: '/equipamentos'
+      preLoaderRoute: typeof AppEquipamentosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/empresa': {
+      id: '/_app/empresa'
+      path: '/empresa'
+      fullPath: '/empresa'
+      preLoaderRoute: typeof AppEmpresaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/documentos': {
+      id: '/_app/documentos'
+      path: '/documentos'
+      fullPath: '/documentos'
+      preLoaderRoute: typeof AppDocumentosRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/diario': {
+      id: '/_app/diario'
+      path: '/diario'
+      fullPath: '/diario'
+      preLoaderRoute: typeof AppDiarioRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/cronograma': {
+      id: '/_app/cronograma'
+      path: '/cronograma'
+      fullPath: '/cronograma'
+      preLoaderRoute: typeof AppCronogramaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/compras': {
+      id: '/_app/compras'
+      path: '/compras'
+      fullPath: '/compras'
+      preLoaderRoute: typeof AppComprasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/comercial': {
+      id: '/_app/comercial'
+      path: '/comercial'
+      fullPath: '/comercial'
+      preLoaderRoute: typeof AppComercialRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/cotacoes/': {
       id: '/_app/cotacoes/'
@@ -1078,53 +1063,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCotacoesIndexRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/cotacoes/$cotacaoId': {
-      id: '/_app/cotacoes/$cotacaoId'
-      path: '/cotacoes/$cotacaoId'
-      fullPath: '/cotacoes/$cotacaoId'
-      preLoaderRoute: typeof AppCotacoesCotacaoIdRouteImport
+    '/api/sinapi/cron': {
+      id: '/api/sinapi/cron'
+      path: '/api/sinapi/cron'
+      fullPath: '/api/sinapi/cron'
+      preLoaderRoute: typeof ApiSinapiCronRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/vendas/pedidos': {
+      id: '/_app/vendas/pedidos'
+      path: '/vendas/pedidos'
+      fullPath: '/vendas/pedidos'
+      preLoaderRoute: typeof AppVendasPedidosRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/estoque/movimentacao': {
-      id: '/_app/estoque/movimentacao'
-      path: '/movimentacao'
-      fullPath: '/estoque/movimentacao'
-      preLoaderRoute: typeof AppEstoqueMovimentacaoRouteImport
-      parentRoute: typeof AppEstoqueRoute
+    '/_app/projeto3d/$id': {
+      id: '/_app/projeto3d/$id'
+      path: '/projeto3d/$id'
+      fullPath: '/projeto3d/$id'
+      preLoaderRoute: typeof AppProjeto3dIdRouteImport
+      parentRoute: typeof AppRoute
     }
-    '/_app/imobiliaria/clientes': {
-      id: '/_app/imobiliaria/clientes'
-      path: '/clientes'
-      fullPath: '/imobiliaria/clientes'
-      preLoaderRoute: typeof AppImobiliariaClientesRouteImport
-      parentRoute: typeof AppImobiliariaRoute
-    }
-    '/_app/imobiliaria/dashboard': {
-      id: '/_app/imobiliaria/dashboard'
-      path: '/dashboard'
-      fullPath: '/imobiliaria/dashboard'
-      preLoaderRoute: typeof AppImobiliariaDashboardRouteImport
-      parentRoute: typeof AppImobiliariaRoute
-    }
-    '/_app/imobiliaria/espacos': {
-      id: '/_app/imobiliaria/espacos'
-      path: '/espacos'
-      fullPath: '/imobiliaria/espacos'
-      preLoaderRoute: typeof AppImobiliariaEspacosRouteImport
-      parentRoute: typeof AppImobiliariaRoute
-    }
-    '/_app/imobiliaria/fiadores': {
-      id: '/_app/imobiliaria/fiadores'
-      path: '/fiadores'
-      fullPath: '/imobiliaria/fiadores'
-      preLoaderRoute: typeof AppImobiliariaFiadoresRouteImport
-      parentRoute: typeof AppImobiliariaRoute
-    }
-    '/_app/imobiliaria/financeiro': {
-      id: '/_app/imobiliaria/financeiro'
-      path: '/financeiro'
-      fullPath: '/imobiliaria/financeiro'
-      preLoaderRoute: typeof AppImobiliariaFinanceiroRouteImport
+    '/_app/imobiliaria/locacoes': {
+      id: '/_app/imobiliaria/locacoes'
+      path: '/locacoes'
+      fullPath: '/imobiliaria/locacoes'
+      preLoaderRoute: typeof AppImobiliariaLocacoesRouteImport
       parentRoute: typeof AppImobiliariaRoute
     }
     '/_app/imobiliaria/imoveis': {
@@ -1134,26 +1098,82 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppImobiliariaImoveisRouteImport
       parentRoute: typeof AppImobiliariaRoute
     }
-    '/_app/imobiliaria/locacoes': {
-      id: '/_app/imobiliaria/locacoes'
-      path: '/locacoes'
-      fullPath: '/imobiliaria/locacoes'
-      preLoaderRoute: typeof AppImobiliariaLocacoesRouteImport
+    '/_app/imobiliaria/financeiro': {
+      id: '/_app/imobiliaria/financeiro'
+      path: '/financeiro'
+      fullPath: '/imobiliaria/financeiro'
+      preLoaderRoute: typeof AppImobiliariaFinanceiroRouteImport
       parentRoute: typeof AppImobiliariaRoute
     }
-    '/_app/projeto3d/$id': {
-      id: '/_app/projeto3d/$id'
-      path: '/projeto3d/$id'
-      fullPath: '/projeto3d/$id'
-      preLoaderRoute: typeof AppProjeto3dIdRouteImport
+    '/_app/imobiliaria/fiadores': {
+      id: '/_app/imobiliaria/fiadores'
+      path: '/fiadores'
+      fullPath: '/imobiliaria/fiadores'
+      preLoaderRoute: typeof AppImobiliariaFiadoresRouteImport
+      parentRoute: typeof AppImobiliariaRoute
+    }
+    '/_app/imobiliaria/espacos': {
+      id: '/_app/imobiliaria/espacos'
+      path: '/espacos'
+      fullPath: '/imobiliaria/espacos'
+      preLoaderRoute: typeof AppImobiliariaEspacosRouteImport
+      parentRoute: typeof AppImobiliariaRoute
+    }
+    '/_app/imobiliaria/dashboard': {
+      id: '/_app/imobiliaria/dashboard'
+      path: '/dashboard'
+      fullPath: '/imobiliaria/dashboard'
+      preLoaderRoute: typeof AppImobiliariaDashboardRouteImport
+      parentRoute: typeof AppImobiliariaRoute
+    }
+    '/_app/imobiliaria/clientes': {
+      id: '/_app/imobiliaria/clientes'
+      path: '/clientes'
+      fullPath: '/imobiliaria/clientes'
+      preLoaderRoute: typeof AppImobiliariaClientesRouteImport
+      parentRoute: typeof AppImobiliariaRoute
+    }
+    '/_app/estoque/movimentacao': {
+      id: '/_app/estoque/movimentacao'
+      path: '/movimentacao'
+      fullPath: '/estoque/movimentacao'
+      preLoaderRoute: typeof AppEstoqueMovimentacaoRouteImport
+      parentRoute: typeof AppEstoqueRoute
+    }
+    '/_app/cotacoes/$cotacaoId': {
+      id: '/_app/cotacoes/$cotacaoId'
+      path: '/cotacoes/$cotacaoId'
+      fullPath: '/cotacoes/$cotacaoId'
+      preLoaderRoute: typeof AppCotacoesCotacaoIdRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/vendas/pedidos': {
-      id: '/_app/vendas/pedidos'
-      path: '/vendas/pedidos'
-      fullPath: '/vendas/pedidos'
-      preLoaderRoute: typeof AppVendasPedidosRouteImport
-      parentRoute: typeof AppRoute
+    '/_app/comercial/propostas': {
+      id: '/_app/comercial/propostas'
+      path: '/propostas'
+      fullPath: '/comercial/propostas'
+      preLoaderRoute: typeof AppComercialPropostasRouteImport
+      parentRoute: typeof AppComercialRoute
+    }
+    '/_app/comercial/licitacoes': {
+      id: '/_app/comercial/licitacoes'
+      path: '/licitacoes'
+      fullPath: '/comercial/licitacoes'
+      preLoaderRoute: typeof AppComercialLicitacoesRouteImport
+      parentRoute: typeof AppComercialRoute
+    }
+    '/_app/comercial/contratos': {
+      id: '/_app/comercial/contratos'
+      path: '/contratos'
+      fullPath: '/comercial/contratos'
+      preLoaderRoute: typeof AppComercialContratosRouteImport
+      parentRoute: typeof AppComercialRoute
+    }
+    '/_app/comercial/clientes': {
+      id: '/_app/comercial/clientes'
+      path: '/clientes'
+      fullPath: '/comercial/clientes'
+      preLoaderRoute: typeof AppComercialClientesRouteImport
+      parentRoute: typeof AppComercialRoute
     }
     '/_app/cotacoes/$cotacaoId/comparativo': {
       id: '/_app/cotacoes/$cotacaoId/comparativo'
@@ -1326,6 +1346,7 @@ const rootRouteChildren: RootRouteChildren = {
   CotacaoTokenRoute: CotacaoTokenRoute,
   ImovelPublicoTokenRoute: ImovelPublicoTokenRoute,
   ReservarTokenRoute: ReservarTokenRoute,
+  ApiSinapiCronRoute: ApiSinapiCronRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
