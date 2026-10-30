@@ -198,29 +198,29 @@ git commit -m "refactor(propostas): isolar adaptacao do editor e legado"
 - Consumes: RPCs da Task 2 e adaptadores da Task 3.
 - Produces: `usePropostaEditor(propostaId: string | null)` retornando `{ estado, editorData, configuracao, revisoes, salvarRascunho, publicarRascunho, selecionarRevisaoLegada, abrirRevisaoHistorica, isPending }`.
 
-- [ ] **Step 1: Escrever teste estrutural falho**
+- [x] **Step 1: Escrever teste estrutural falho**
 
 Verificar que o hook consulta `proposta_revisoes` ordenado por número, restaura `configuracao`, chama `salvar_rascunho_proposta`/`publicar_rascunho_proposta` e invalida `['propostas']`, `['proposta-editor', propostaId]` e `['proposta-revisoes', propostaId]`. Verificar que o editor não contém histórico simulado.
 
-- [ ] **Step 2: Executar e confirmar falha**
+- [x] **Step 2: Executar e confirmar falha**
 
 Run: `node --test tests/proposta-editor-source.test.mjs`
 
 Expected: FAIL porque hook/componente ainda não existem.
 
-- [ ] **Step 3: Implementar o hook com estados explícitos**
+- [x] **Step 3: Implementar o hook com estados explícitos**
 
 Carregar proposta, cliente, revisão ativa e histórico; usar adaptador legado somente quando não houver revisão. Não escolher automaticamente entre múltiplas revisões. Propagar mensagens das RPCs sem mascará-las com sucesso local.
 
-- [ ] **Step 4: Implementar histórico real**
+- [x] **Step 4: Implementar histórico real**
 
 Extrair o diálogo para `HistoricoRevisoesProposta`; apresentar número, status, data, valor e ação de visualizar/imprimir a fotografia congelada. Revisões históricas são somente leitura.
 
-- [ ] **Step 5: Conectar o editor**
+- [x] **Step 5: Conectar o editor**
 
 Receber configuração persistida e lista de revisões pelas props; remover toasts de sucesso falsos e histórico construído do estado atual. Desabilitar edição fora do rascunho e manter impressão disponível.
 
-- [ ] **Step 6: Executar testes e lint**
+- [x] **Step 6: Executar testes e lint**
 
 Run: `node --test tests/proposta-editor-source.test.mjs tests/proposta-editor-adapter.test.mjs tests/editor-proposta-comercial.test.mjs`
 
@@ -230,7 +230,7 @@ Run: `npx eslint src/hooks/use-proposta-editor.ts src/components/propostas/histo
 
 Expected: exit 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/hooks/use-proposta-editor.ts src/components/propostas/historico-revisoes-proposta.tsx src/components/propostas/editor-proposta-comercial.tsx tests/proposta-editor-source.test.mjs

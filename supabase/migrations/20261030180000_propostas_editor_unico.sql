@@ -166,11 +166,21 @@ BEGIN
    ORDER BY numero DESC
    LIMIT 1
    FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Proposta sem revisão vinculada'; END IF;
 
   v_valor := COALESCE(NULLIF(p_fotografia->>'totalPrecoCentavos', '')::numeric, 0) / 100;
 
-  IF v_revisao.status = 'rascunho' THEN
+  IF NOT FOUND THEN
+    IF v_proposta.orcamento_revisao_id IS NULL THEN
+      RAISE EXCEPTION 'Proposta sem revisão de orçamento vinculada';
+    END IF;
+    INSERT INTO public.proposta_revisoes(
+      proposta_id, orcamento_revisao_id, numero, status, configuracao, fotografia
+    ) VALUES (
+      p_proposta_id, v_proposta.orcamento_revisao_id, 1, 'rascunho',
+      COALESCE(p_configuracao, '{}'::jsonb),
+      public.sanitizar_fotografia_proposta(COALESCE(p_fotografia, '{}'::jsonb))
+    ) RETURNING id INTO v_revisao_id;
+  ELSIF v_revisao.status = 'rascunho' THEN
     UPDATE public.proposta_revisoes
        SET configuracao = COALESCE(p_configuracao, '{}'::jsonb),
            fotografia = public.sanitizar_fotografia_proposta(COALESCE(p_fotografia, '{}'::jsonb))

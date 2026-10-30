@@ -39,6 +39,8 @@ import {
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
 import type { PropostaEditorData } from '@/lib/propostas/proposta-editor.types'
+import type { PropostaRevisaoResumo } from '@/lib/propostas/proposta-editor.types'
+import { HistoricoRevisoesProposta } from './historico-revisoes-proposta'
 import { supabase as client } from '@/integrations/supabase/client.custom'
 
 const supabase = client as any
@@ -48,6 +50,9 @@ const brl = (cents: number) =>
 interface EditorPropostaComercialProps {
   proposta: PropostaEditorData
   configuracaoInicial?: Partial<ConfiguracaoPropostaComercial> | null
+  revisoes?: PropostaRevisaoResumo[]
+  revisaoSelecionadaId?: string
+  onSelecionarRevisao?: (id: string) => void
   onSalvarRascunho?: (config: ConfiguracaoPropostaComercial) => Promise<void>
   onPublicarRevisao?: (config: ConfiguracaoPropostaComercial) => Promise<void>
   onVoltar?: () => void
@@ -56,6 +61,9 @@ interface EditorPropostaComercialProps {
 export function EditorPropostaComercial({
   proposta,
   configuracaoInicial,
+  revisoes = [],
+  revisaoSelecionadaId,
+  onSelecionarRevisao,
   onSalvarRascunho,
   onPublicarRevisao,
   onVoltar,
@@ -103,12 +111,12 @@ export function EditorPropostaComercial({
   const [salvando, setSalvando] = useState(false)
 
   // Status da proposta
-  const isAceita = proposta.status === 'aceita'
+  const isEditavel = proposta.status === 'rascunho'
 
   // Atualizador de campo individual
   const updateConfig = (patch: Partial<ConfiguracaoPropostaComercial>) => {
-    if (isAceita) {
-      toast.error('Proposta aceita está congelada. Crie uma nova revisão para alterar.')
+    if (!isEditavel) {
+      toast.error('Esta revisão está congelada e disponível somente para leitura e impressão.')
       return
     }
     setConfig((prev) => ({ ...prev, ...patch }))
@@ -242,12 +250,12 @@ export function EditorPropostaComercial({
           )}
           <span
             className={`font-bold text-xs px-2.5 py-1 rounded border ${
-              isAceita
+              !isEditavel
                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                 : 'bg-amber-100 text-amber-800 border-amber-300'
             }`}
           >
-            {isAceita ? 'Proposta Aceita (Congelada)' : `Rascunho Comercial (Rev. ${proposta.revisaoNumero ?? 1})`}
+            {isEditavel ? `Rascunho Comercial (Rev. ${proposta.revisaoNumero ?? 1})` : `Revisão ${proposta.revisaoNumero ?? 1} · ${proposta.status} (somente leitura)`}
           </span>
           <span className="text-xs text-slate-500 hidden sm:inline">
             Obra: <strong>{proposta.obraNome ?? 'Obra'}</strong> • Preços congelados do orçamento
@@ -269,7 +277,7 @@ export function EditorPropostaComercial({
             variant="outline"
             size="sm"
             onClick={salvarRascunho}
-            disabled={salvando || isAceita}
+            disabled={salvando || !isEditavel}
             className="text-xs bg-white text-slate-700 border-slate-300"
           >
             Salvar Rascunho
@@ -278,7 +286,7 @@ export function EditorPropostaComercial({
           <Button
             size="sm"
             onClick={publicar}
-            disabled={salvando || isAceita}
+            disabled={salvando || !isEditavel}
             className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs shadow-sm"
           >
             <CheckCircle2 className="mr-1.5 size-3.5" />
@@ -753,41 +761,13 @@ export function EditorPropostaComercial({
         </main>
       </div>
 
-      {/* DIÁLOGO HISTÓRICO DE REVISÕES */}
-      <Dialog open={historicoOpen} onOpenChange={setHistoricoOpen}>
-        <DialogContent className="max-w-2xl bg-white text-slate-900 border border-slate-200">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">
-              Histórico de Revisões da Proposta
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2 text-xs">
-            <div className="bg-slate-50 p-3 rounded border border-slate-200 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900">
-                    Revisão {proposta.revisaoNumero ?? 1} (Atual)
-                  </span>
-                  <Badge variant="outline" className="text-[10px]">
-                    {proposta.status ?? 'rascunho'}
-                  </Badge>
-                </div>
-                <p className="text-slate-500 text-[11px] mt-0.5">
-                  Valor Total: {brl(valorTotalVisivelCentavos)}
-                </p>
-              </div>
-              <span className="text-[11px] text-slate-400">Em edição</span>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setHistoricoOpen(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <HistoricoRevisoesProposta
+        open={historicoOpen}
+        onOpenChange={setHistoricoOpen}
+        revisoes={revisoes}
+        revisaoSelecionadaId={revisaoSelecionadaId}
+        onSelecionar={onSelecionarRevisao}
+      />
     </div>
   )
 }

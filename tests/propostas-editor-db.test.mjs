@@ -177,6 +177,34 @@ test('salva rascunho e inicia próximo número somente após rejeição ou expir
   }
 })
 
+test('materializa a primeira revisão ao salvar uma proposta legada vinculada ao orçamento', async () => {
+  const db = await criarBanco()
+  try {
+    const { clienteId, revisao } = await criarOrigem(db)
+    const propostaId = (await db.query(
+      `INSERT INTO propostas(cliente_id,titulo,orcamento_revisao_id)
+       VALUES ($1,'Proposta legada',$2) RETURNING id`,
+      [clienteId, revisao],
+    )).rows[0].id
+
+    const revisaoId = (await db.query(
+      'SELECT salvar_rascunho_proposta($1,$2,$3) AS id',
+      [propostaId, JSON.stringify({ tituloProposta: 'Migrada' }), JSON.stringify(fotografiaComercial)],
+    )).rows[0].id
+    const linha = (await db.query(
+      'SELECT id,numero,status,orcamento_revisao_id FROM proposta_revisoes WHERE proposta_id=$1',
+      [propostaId],
+    )).rows[0]
+
+    assert.equal(linha.id, revisaoId)
+    assert.equal(Number(linha.numero), 1)
+    assert.equal(linha.status, 'rascunho')
+    assert.equal(linha.orcamento_revisao_id, revisao)
+  } finally {
+    await db.close()
+  }
+})
+
 test('exclui somente rascunho e somente como admin ou diretor', async () => {
   const db = await criarBanco()
   try {
