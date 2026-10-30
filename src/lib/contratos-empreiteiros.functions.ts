@@ -177,12 +177,12 @@ export async function obterDetalhesContrato(contratoId: string) {
   if (itemIds.length > 0) {
     const { data: itensMedidos } = await supabase
       .from("medicoes_terceirizados")
-      .select("servico_id, quantidade, quantidade_executada, status")
+      .select("servico_id, quantidade_executada, status")
       .in("servico_id", itemIds);
 
     (itensMedidos || []).forEach((m: any) => {
       if (["aprovada", "paga", "financeiro_gerado"].includes(m.status)) {
-        const qtd = Number(m.quantidade || m.quantidade_executada || 0);
+        const qtd = Number(m.quantidade_executada || 0);
         mapMedido.set(m.servico_id, (mapMedido.get(m.servico_id) || 0) + qtd);
       }
     });

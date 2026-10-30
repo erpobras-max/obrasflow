@@ -518,15 +518,15 @@ export function MedicaoEditorSheet({
                         </TableCell>
                         <TableCell className="text-center font-mono">{linha.unidade}</TableCell>
                         <TableCell className="text-right font-medium">
-                          {linha.quantidadeContratada.toLocaleString("pt-BR")}
+                          {Number(linha.quantidadeContratada || 0).toLocaleString("pt-BR")}
                         </TableCell>
                         <TableCell className="text-right">
-                          {preco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          {Number(preco || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </TableCell>
                         <TableCell className="text-right bg-slate-50/50">
-                          <div>{linha.quantidadeAnterior.toLocaleString("pt-BR")}</div>
+                          <div>{Number(linha.quantidadeAnterior || 0).toLocaleString("pt-BR")}</div>
                           <div className="text-[10px] text-slate-500 font-mono">
-                            {linha.percentualAnterior.toFixed(1)}%
+                            {Number(linha.percentualAnterior || 0).toFixed(1)}%
                           </div>
                         </TableCell>
 
@@ -570,14 +570,14 @@ export function MedicaoEditorSheet({
                         </TableCell>
 
                         <TableCell className="text-right font-semibold text-blue-700 bg-blue-50/30 border-r border-blue-100">
-                          {valorMedido.toLocaleString("pt-BR", {
+                          {Number(valorMedido || 0).toLocaleString("pt-BR", {
                             style: "currency",
                             currency: "BRL",
                           })}
                         </TableCell>
 
                         <TableCell className="text-right bg-slate-50/50 font-medium">
-                          <div>{linha.quantidadeAcumulada.toLocaleString("pt-BR")}</div>
+                          <div>{Number(linha.quantidadeAcumulada || 0).toLocaleString("pt-BR")}</div>
                           <div className="text-[10px] text-slate-500 font-mono">
                             {linha.quantidadeContratada > 0
                               ? ((linha.quantidadeAcumulada / linha.quantidadeContratada) * 100).toFixed(1)
@@ -587,7 +587,7 @@ export function MedicaoEditorSheet({
                         </TableCell>
 
                         <TableCell className="text-right font-medium text-slate-700">
-                          {linha.saldoQuantidade.toLocaleString("pt-BR")}
+                          {Number(linha.saldoQuantidade || 0).toLocaleString("pt-BR")}
                         </TableCell>
                       </TableRow>
                     );

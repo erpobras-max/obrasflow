@@ -498,3 +498,11 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Atualizada a função `mapearAtividadesParaItensContrato` para preservar preços unitários diretos em centavos e registrar a procedência dos itens (`origemTipo`).
   - Adicionado campo de busca instantânea no diálogo por descrição, código ou etapa, exibição de preços unitários e valor total estimado, seleção/desmarcação dos itens visíveis e somatório em tempo real dos itens selecionados no rodapé.
   - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
+
+
+- **Correção no Boletim de Medições, Relatório de Impressão e Ações de Contratos (Branch fix/204-medicao-relatorio-botoes-contrato)**:
+  - Sanado o erro 400 em `medicoes_terceirizados`: removida a coluna inexistente `quantidade` da consulta de acumulado em `obterDetalhesContrato` (`src/lib/contratos-empreiteiros.functions.ts`), utilizando a coluna real `quantidade_executada`.
+  - Tratamento defensivo em todas as formatações numéricas (`.toLocaleString("pt-BR")`) em `medicao-editor-sheet.tsx` e `contrato-detalhe-view.tsx`, prevenindo exceções do tipo `TypeError: Cannot read properties of undefined (reading 'toLocaleString')`.
+  - Sanada a falha `TypeError: Cannot read properties of null (reading 'url')` no componente `EmpresaLogo` (`src/components/empresa-logo.tsx`), garantindo checagem estrita de `loaded` e repassando `value={empresa?.logo_url}` em `MedicaoRelatorioImprimir` e na rota pública de medições.
+  - Disponibilizados botões visíveis de **Editar** (ícone Lápis) e **Excluir** (ícone Lixeira) diretamente em cada linha da tabela de contratos em `/contratos-empreiteiros`, além dos botões de ação no cabeçalho dos detalhes do contrato (`ContratoDetalheView`), ambos com diálogo de confirmação via `AlertDialog` e edição pelo `ContratoEditorDialog`.
+  - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.

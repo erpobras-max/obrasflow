@@ -20,7 +20,7 @@ import {
   Building2,
   DollarSign,
   CheckCircle2,
-  Clock,
+  Clock, Pencil, Trash2,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -40,7 +40,7 @@ import { MedicaoEditorSheet } from "./medicao-editor-sheet";
 import { MedicaoRelatorioImprimir } from "./medicao-relatorio-imprimir";
 import {
   obterDetalhesContrato,
-  criarBoletimMedicao,
+  criarBoletimMedicao, excluirContratoEmpreiteiro,
 } from "@/lib/contratos-empreiteiros.functions";
 
 interface ContratoDetalheViewProps {
@@ -54,6 +54,9 @@ export function ContratoDetalheView({ contratoId, onVoltar }: ContratoDetalheVie
 
   const [dialogAditivoOpen, setDialogAditivoOpen] = useState(false);
   const [dialogRetencoesOpen, setDialogRetencoesOpen] = useState(false);
+  const [dialogEditarOpen, setDialogEditarOpen] = useState(false);
+  const [dialogExcluirOpen, setDialogExcluirOpen] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
   const [medicaoSelecionada, setMedicaoSelecionada] = useState<any | null>(null);
   const [medicaoParaImpressao, setMedicaoParaImpressao] = useState<any | null>(null);
 
@@ -104,6 +107,20 @@ export function ContratoDetalheView({ contratoId, onVoltar }: ContratoDetalheVie
     }
   };
 
+  const handleExcluirContrato = async () => {
+    try {
+      setExcluindo(true);
+      await excluirContratoEmpreiteiro(contratoId);
+      toast.success("Contrato excluído com sucesso.");
+      setDialogExcluirOpen(false);
+      onVoltar();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao excluir contrato.");
+    } finally {
+      setExcluindo(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Barra de Topo */}
@@ -128,7 +145,25 @@ export function ContratoDetalheView({ contratoId, onVoltar }: ContratoDetalheVie
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDialogEditarOpen(true)}
+            className="h-8 text-xs text-slate-700 hover:text-blue-700 hover:bg-blue-50 border-slate-300"
+          >
+            <Pencil className="h-3.5 w-3.5 mr-1 text-blue-600" />
+            Editar Contrato
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setDialogExcluirOpen(true)}
+            className="h-8 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-50 border-rose-200"
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Excluir
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -267,25 +302,25 @@ export function ContratoDetalheView({ contratoId, onVoltar }: ContratoDetalheVie
                         <TableCell className="text-xs text-slate-600">{it.etapa}</TableCell>
                         <TableCell className="text-center text-xs font-mono">{it.unidade}</TableCell>
                         <TableCell className="text-right text-xs font-medium">
-                          {it.quantidadeContratada.toLocaleString("pt-BR")}
+                          {Number(it.quantidadeContratada || 0).toLocaleString("pt-BR")}
                         </TableCell>
                         <TableCell className="text-right text-xs">
-                          {preco.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          {Number(preco || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </TableCell>
                         <TableCell className="text-right text-xs font-semibold text-slate-800">
-                          {total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          {Number(total || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </TableCell>
                         <TableCell className="text-right text-xs text-blue-700 font-medium">
-                          {it.quantidadeMedida.toLocaleString("pt-BR")}
+                          {Number(it.quantidadeMedida || 0).toLocaleString("pt-BR")}
                         </TableCell>
                         <TableCell className="text-right text-xs text-slate-700">
-                          {it.saldoQuantidade.toLocaleString("pt-BR")}
+                          {Number(it.saldoQuantidade || 0).toLocaleString("pt-BR")}
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center gap-2 justify-center">
                             <Progress value={it.percentualExecutado} className="h-1.5 w-14" />
                             <span className="text-[11px] font-mono text-slate-600">
-                              {it.percentualExecutado.toFixed(0)}%
+                              {Number(it.percentualExecutado || 0).toFixed(0)}%
                             </span>
                           </div>
                         </TableCell>
@@ -344,15 +379,15 @@ export function ContratoDetalheView({ contratoId, onVoltar }: ContratoDetalheVie
                           {m.data_vencimento || "—"}
                         </TableCell>
                         <TableCell className="text-right text-xs">
-                          {bruto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          {Number(bruto || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </TableCell>
                         <TableCell className="text-right text-xs text-rose-600">
                           {deducoes > 0
-                            ? `-${deducoes.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
+                            ? `-${Number(deducoes || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
                             : "—"}
                         </TableCell>
                         <TableCell className="text-right text-xs font-bold text-slate-900">
-                          {liquido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+                          {Number(liquido || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
                         </TableCell>
                         <TableCell className="text-center">
                           <MedicaoStatusBadge status={m.status} />
@@ -495,6 +530,47 @@ export function ContratoDetalheView({ contratoId, onVoltar }: ContratoDetalheVie
           empresa={dadosEmpresa}
         />
       )}
+
+      {/* Dialog de Edição do Contrato */}
+      <ContratoEditorDialog
+        open={dialogEditarOpen}
+        onOpenChange={setDialogEditarOpen}
+        contratoParaEditar={{
+          ...contrato,
+          itens,
+        }}
+        onContratoSalvo={async () => {
+          await refetch();
+          setDialogEditarOpen(false);
+        }}
+      />
+
+      {/* Confirmação de Exclusão do Contrato */}
+      <AlertDialog open={dialogExcluirOpen} onOpenChange={setDialogExcluirOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-rose-600">Excluir Contrato de Empreiteiro</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Tem certeza que deseja excluir o contrato <strong>{contrato.numero}</strong> ({contrato.objeto})?
+              </p>
+              <p className="text-xs text-slate-500">
+                Esta ação apagará permanentemente o contrato e seus itens cadastrados. Contratos com medições aprovadas ou contas geradas no financeiro não podem ser excluídos.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluindo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleExcluirContrato}
+              disabled={excluindo}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {excluindo ? "Excluindo..." : "Confirmar Exclusão"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
