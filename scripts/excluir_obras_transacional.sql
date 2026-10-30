@@ -1,35 +1,46 @@
 -- ==============================================================================
--- Script 100% Dinâmico e Seguro para Exclusão das 5 Obras Antigas de Teste
--- Resolve dependências de Compras (cotações/solicitações) e Orçamento Analítico
+-- Script 100% Autocontido em Bloco Único PL/pgSQL
+-- Não depende de tabelas temporárias (elimina erro 42P01)
+-- Trata toda a cascata de Compras, Terceirizados e Orçamento Analítico
 -- ==============================================================================
 
-BEGIN;
-
--- 1. Identifica e isola as 5 obras alvo
-CREATE TEMP TABLE temp_obras_alvo ON COMMIT DROP AS
-SELECT id, numero, nome FROM public.obras
-WHERE numero IN (
-  'OBRA-2026-0005',
-  'OBRA-2026-0006',
-  'OBRA-2026-0007',
-  'OBRA-2026-0008',
-  'OBRA-2026-0009'
-);
-
--- Tabela temporária de orçamentos vinculados
-CREATE TEMP TABLE temp_orcamentos_alvo ON COMMIT DROP AS
-SELECT id, obra_id FROM public.orcamentos
-WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-
--- 2. Limpeza bottom-up das tabelas filhas do novo orçamento analítico
 DO $$
+DECLARE
+  v_obras_ids uuid[];
+  v_orcamentos_ids uuid[];
+  v_cotacoes_ids uuid[];
+  v_solicitacoes_ids uuid[];
+  rec RECORD;
+  v_total_removido integer := 0;
 BEGIN
+  -- 1. Coleta os IDs das 5 obras alvo em array na memória
+  SELECT array_agg(id) INTO v_obras_ids
+  FROM public.obras
+  WHERE numero IN (
+    'OBRA-2026-0005',
+    'OBRA-2026-0006',
+    'OBRA-2026-0007',
+    'OBRA-2026-0008',
+    'OBRA-2026-0009'
+  );
+
+  IF v_obras_ids IS NULL OR array_length(v_obras_ids, 1) = 0 THEN
+    RAISE NOTICE 'Nenhuma das 5 obras alvo foi encontrada (já foram excluídas).';
+    RETURN;
+  END IF;
+
+  -- Coleta orçamentos vinculados
+  SELECT coalesce(array_agg(id), '{}') INTO v_orcamentos_ids
+  FROM public.orcamentos
+  WHERE obra_id = ANY(v_obras_ids);
+
+  -- 2. Limpeza do orçamento analítico
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'orcamento_memoriais') THEN
     DELETE FROM public.orcamento_memoriais
     WHERE atividade_id IN (
       SELECT a.id FROM public.orcamento_atividades a
       JOIN public.orcamento_etapas e ON e.id = a.etapa_id
-      JOIN temp_orcamentos_alvo o ON o.id = e.orcamento_id
+      WHERE e.orcamento_id = ANY(v_orcamentos_ids)
     );
   END IF;
 
@@ -38,7 +49,7 @@ BEGIN
     WHERE atividade_id IN (
       SELECT a.id FROM public.orcamento_atividades a
       JOIN public.orcamento_etapas e ON e.id = a.etapa_id
-      JOIN temp_orcamentos_alvo o ON o.id = e.orcamento_id
+      WHERE e.orcamento_id = ANY(v_orcamentos_ids)
     );
   END IF;
 
@@ -46,67 +57,58 @@ BEGIN
     DELETE FROM public.orcamento_atividades
     WHERE etapa_id IN (
       SELECT e.id FROM public.orcamento_etapas e
-      JOIN temp_orcamentos_alvo o ON o.id = e.orcamento_id
+      WHERE e.orcamento_id = ANY(v_orcamentos_ids)
     );
   END IF;
 
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'orcamento_etapas') THEN
     DELETE FROM public.orcamento_etapas
-    WHERE orcamento_id IN (SELECT id FROM temp_orcamentos_alvo);
+    WHERE orcamento_id = ANY(v_orcamentos_ids);
   END IF;
 
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'orcamento_itens') THEN
     DELETE FROM public.orcamento_itens
-    WHERE orcamento_id IN (SELECT id FROM temp_orcamentos_alvo);
+    WHERE orcamento_id = ANY(v_orcamentos_ids);
   END IF;
 
   DELETE FROM public.orcamentos
-  WHERE id IN (SELECT id FROM temp_orcamentos_alvo);
-END $$;
+  WHERE id = ANY(v_orcamentos_ids);
 
--- 3. Limpeza das tabelas de Compras (cotacoes_pedidos -> cotacoes_compra -> solicitacoes_compra)
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_pedidos') THEN
-    DELETE FROM public.cotacoes_pedidos 
-    WHERE obra_id IN (SELECT id FROM temp_obras_alvo)
-       OR cotacao_id IN (
-         SELECT c.id FROM public.cotacoes_compra c
-         WHERE c.obra_id IN (SELECT id FROM temp_obras_alvo) 
-            OR c.solicitacao_id IN (SELECT s.id FROM public.solicitacoes_compra s WHERE s.obra_id IN (SELECT id FROM temp_obras_alvo))
-       );
-  END IF;
-
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_compra') THEN
-    DELETE FROM public.cotacoes_compra
-    WHERE obra_id IN (SELECT id FROM temp_obras_alvo)
-       OR solicitacao_id IN (SELECT s.id FROM public.solicitacoes_compra s WHERE s.obra_id IN (SELECT id FROM temp_obras_alvo));
-  END IF;
-
+  -- 3. Limpeza do módulo de Compras (cotacoes_pedidos -> cotacoes_compra -> solicitacoes_compra)
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'solicitacoes_compra') THEN
-    DELETE FROM public.solicitacoes_compra
-    WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-END $$;
+    SELECT coalesce(array_agg(id), '{}') INTO v_solicitacoes_ids
+    FROM public.solicitacoes_compra
+    WHERE obra_id = ANY(v_obras_ids);
 
--- 4. Limpeza de medições de terceirizados (filhas de servicos_terceirizados)
-DO $$
-BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_compra') THEN
+      SELECT coalesce(array_agg(id), '{}') INTO v_cotacoes_ids
+      FROM public.cotacoes_compra
+      WHERE obra_id = ANY(v_obras_ids) OR solicitacao_id = ANY(v_solicitacoes_ids);
+
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_pedidos') THEN
+        DELETE FROM public.cotacoes_pedidos
+        WHERE obra_id = ANY(v_obras_ids) OR cotacao_id = ANY(v_cotacoes_ids);
+      END IF;
+
+      DELETE FROM public.cotacoes_compra
+      WHERE id = ANY(v_cotacoes_ids);
+    END IF;
+
+    DELETE FROM public.solicitacoes_compra
+    WHERE id = ANY(v_solicitacoes_ids);
+  END IF;
+
+  -- 4. Limpeza de medições de terceirizados
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'medicoes_terceirizados') 
      AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'servicos_terceirizados') THEN
     DELETE FROM public.medicoes_terceirizados
     WHERE servico_id IN (
       SELECT id FROM public.servicos_terceirizados
-      WHERE obra_id IN (SELECT id FROM temp_obras_alvo)
+      WHERE obra_id = ANY(v_obras_ids)
     );
   END IF;
-END $$;
 
--- 5. Tratamento dinâmico das demais tabelas públicas que contêm a coluna 'obra_id'
-DO $$
-DECLARE
-  rec RECORD;
-BEGIN
+  -- 5. Demais tabelas que possuem a coluna obra_id
   FOR rec IN (
     SELECT c.table_name, c.is_nullable
     FROM information_schema.columns c
@@ -122,18 +124,21 @@ BEGIN
       'obra_funcionarios', 'diarios_obra', 'diario_obras', 'ordens_servico', 
       'medicoes', 'servicos_terceirizados', 'documentos', 'estoque_obra'
     ) THEN
-      EXECUTE format('DELETE FROM public.%I WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
+      EXECUTE format('DELETE FROM public.%I WHERE obra_id = ANY($1)', rec.table_name) USING v_obras_ids;
     ELSIF rec.is_nullable = 'YES' THEN
-      EXECUTE format('UPDATE public.%I SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
+      EXECUTE format('UPDATE public.%I SET obra_id = NULL WHERE obra_id = ANY($1)', rec.table_name) USING v_obras_ids;
     ELSE
-      EXECUTE format('DELETE FROM public.%I WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
+      EXECUTE format('DELETE FROM public.%I WHERE obra_id = ANY($1)', rec.table_name) USING v_obras_ids;
     END IF;
   END LOOP;
-END $$;
 
--- 6. Exclusão definitiva das 5 obras alvo
-DELETE FROM public.obras
-WHERE id IN (SELECT id FROM temp_obras_alvo);
+  -- 6. Exclusão definitiva das obras alvo
+  DELETE FROM public.obras
+  WHERE id = ANY(v_obras_ids);
+
+  GET DIAGNOSTICS v_total_removido = ROW_COUNT;
+  RAISE NOTICE 'Sucesso! Foram excluídas % obras e todos os seus vínculos limpos.', v_total_removido;
+END $$;
 
 -- 7. Conferência final: deve retornar 0
 SELECT 
@@ -146,5 +151,3 @@ WHERE numero IN (
   'OBRA-2026-0008',
   'OBRA-2026-0009'
 );
-
-COMMIT;
