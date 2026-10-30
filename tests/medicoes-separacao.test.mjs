@@ -65,3 +65,4 @@ test("contrato empreiteiro: cálculo de contas a pagar não gera receita", () =>
   assert.equal(contaGerada.tabela, "contas_pagar");
   assert.equal(contaGerada.valor, 8300.0);
 });
+

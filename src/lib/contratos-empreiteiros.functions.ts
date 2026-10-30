@@ -161,33 +161,47 @@ export async function obterDetalhesContrato(contratoId: string) {
 
   if (errRetencoes) throw errRetencoes;
 
+  // Buscar medições dos itens desse contrato para calcular acumulado medido
+  const itemIds = (itens || []).map((i: any) => i.id);
+  const mapMedido = new Map<string, number>();
+
+  if (itemIds.length > 0) {
+    const { data: itensMedidos } = await supabase
+      .from("medicoes_terceirizados")
+      .select("servico_id, quantidade, quantidade_executada, status")
+      .in("servico_id", itemIds);
+
+    (itensMedidos || []).forEach((m: any) => {
+      if (["aprovada", "paga", "financeiro_gerado"].includes(m.status)) {
+        const qtd = Number(m.quantidade || m.quantidade_executada || 0);
+        mapMedido.set(m.servico_id, (mapMedido.get(m.servico_id) || 0) + qtd);
+      }
+    });
+  }
+
   // Calcular acumulado físico e financeiro por item
   const itensComAcumulado = (itens || []).map((item: any) => {
+    const qtdContratada = Number(item.quantidade || 0);
+    const qtdMedida = mapMedido.get(item.id) || 0;
+    const saldoQtd = Math.max(0, qtdContratada - qtdMedida);
+    const pctExecutado = qtdContratada > 0 ? Math.min(100, (qtdMedida / qtdContratada) * 100) : 0;
+
     return {
       id: item.id,
       codigo: item.codigo,
       descricao: item.descricao,
-      unidade: item.unidade,
+      unidade: item.unidade || "un",
       etapa: item.etapa || "Geral",
-      quantidadeContratada: Number(item.quantidade_total || item.quantidade || 0),
+      quantidadeContratada: qtdContratada,
       precoUnitarioCentavos: Number(
-        item.preco_unitario_centavos || Math.round((item.valor_unitario || 0) * 100)
+        item.preco_unitario_centavos || item.valor_unitario || 0
       ),
       precoTotalCentavos: Number(
-        item.preco_total_centavos || Math.round((item.valor_total || 0) * 100)
+        item.preco_total_centavos || item.valor_total || 0
       ),
-      quantidadeMedida: Number(item.quantidade_medida || 0),
-      saldoQuantidade: Math.max(
-        0,
-        Number(item.quantidade_total || 0) - Number(item.quantidade_medida || 0)
-      ),
-      percentualExecutado:
-        Number(item.quantidade_total || 0) > 0
-          ? Math.min(
-              100,
-              (Number(item.quantidade_medida || 0) / Number(item.quantidade_total || 1)) * 100
-            )
-          : 0,
+      quantidadeMedida: qtdMedida,
+      saldoQuantidade: saldoQtd,
+      percentualExecutado: pctExecutado,
     };
   });
 
@@ -260,19 +274,21 @@ export async function criarContratoComItens(params: {
       contrato_empreiteiro_id: novoContrato.id,
       obra_id: params.obraId,
       fornecedor_id: params.fornecedorId,
+      tipo_servico: item.etapa || item.descricao || "Geral",
       descricao: item.descricao,
-      unidade: item.unidade,
+      unidade: item.unidade || "un",
       quantidade: item.quantidadeContratada,
-      quantidade_total: item.quantidadeContratada,
-      quantidade_medida: 0,
-      valor_unitario: item.precoUnitarioCentavos / 100,
-      valor_total: (item.quantidadeContratada * item.precoUnitarioCentavos) / 100,
+      valor_unitario: Math.max(1, Math.round(item.precoUnitarioCentavos)),
+      valor_total: Math.max(1, Math.round(item.quantidadeContratada * item.precoUnitarioCentavos)),
       preco_unitario_centavos: item.precoUnitarioCentavos,
       preco_total_centavos: Math.round(item.quantidadeContratada * item.precoUnitarioCentavos),
       codigo: item.codigo || null,
       etapa: item.etapa || "Geral",
       origem: item.origemTipo || "manual",
+      data_inicio: params.dataInicio || new Date().toISOString().split("T")[0],
+      data_fim: params.dataFimPrevista || null,
       status: "aprovado",
+      ordem: idx,
     }));
 
     const { error: errItens } = await supabase
@@ -389,9 +405,15 @@ export async function salvarItensBoletimMedicao(
   await supabase.from("medicoes_terceirizados").delete().eq("medicao_empreiteiro_id", medicaoId);
 
   if (itensMedicao.length > 0) {
+    const dataVenc = new Date().toISOString().split("T")[0];
     const rows = itensMedicao.map((item) => ({
       medicao_empreiteiro_id: medicaoId,
       servico_id: item.itemServicoId,
+      quantidade_executada: item.quantidadeAtual > 0 ? item.quantidadeAtual : 0.001,
+      valor_unitario: Math.max(1, Math.round(item.valorCentavos / (item.quantidadeAtual || 1))),
+      valor_total: Math.max(1, item.valorCentavos),
+      data_medicao: new Date().toISOString().split("T")[0],
+      data_vencimento: dataVenc,
       quantidade: item.quantidadeAtual,
       modo_entrada: item.modoEntrada,
       percentual_atual: item.percentualAtual,
@@ -400,7 +422,7 @@ export async function salvarItensBoletimMedicao(
       quantidade_anterior: item.quantidadeAnterior,
       quantidade_acumulada: item.quantidadeAcumulada,
       saldo_quantidade: item.saldoQuantidade,
-      status: "pendente",
+      status: "rascunho",
     }));
 
     const { error: errItens } = await supabase.from("medicoes_terceirizados").insert(rows);

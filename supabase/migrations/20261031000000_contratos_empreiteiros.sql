@@ -187,6 +187,7 @@ ALTER TABLE public.servicos_terceirizados
   ADD COLUMN IF NOT EXISTS contrato_empreiteiro_id uuid REFERENCES public.contratos_empreiteiros(id) ON DELETE CASCADE,
   ADD COLUMN IF NOT EXISTS codigo text,
   ADD COLUMN IF NOT EXISTS etapa text,
+  ADD COLUMN IF NOT EXISTS unidade text DEFAULT 'un',
   ADD COLUMN IF NOT EXISTS origem text DEFAULT 'manual',
   ADD COLUMN IF NOT EXISTS preco_unitario_centavos bigint,
   ADD COLUMN IF NOT EXISTS preco_total_centavos bigint;
