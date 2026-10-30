@@ -131,7 +131,7 @@ function OrcamentosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("obras")
-        .select("id,numero,nome,orcamento,valor_executado")
+        .select("id,numero,nome,orcamento,valor_executado,cliente_id")
         .order("nome");
       if (error) throw error;
       return data ?? [];
@@ -1004,7 +1004,16 @@ function OrcamentosPage() {
                 onItensAlterados={() => qc.invalidateQueries({ queryKey: ["orcamento-itens", orcamento?.id] })}
                 onGerarProposta={async () => {
                   try {
-                    const obra = obras?.find((o) => o.id === selectedObraId);
+                    let obra = obras?.find((o) => o.id === selectedObraId);
+                    if (selectedObraId) {
+                      const { data: obraDb } = await supabase
+                        .from("obras")
+                        .select("id, numero, nome, cliente_id")
+                        .eq("id", selectedObraId)
+                        .maybeSingle();
+                      if (obraDb) obra = obraDb;
+                    }
+
                     const nomeObra = obra?.nome || "Obra";
                     const { data: propsExistentes } = await supabase
                       .from("propostas")
@@ -1024,12 +1033,49 @@ function OrcamentosPage() {
                     }
 
                     if (clienteId) {
+                      // Calcular valor total inicial do orçamento (caso já existam etapas analíticas ou itens)
+                      let initialValorTotal = orcamento?.total_estimado ? Number(orcamento.total_estimado) / 100 : 0;
+                      if (initialValorTotal === 0 && orcamento?.id) {
+                        const { data: etapasAnaliticas } = await supabase
+                          .from("orcamento_etapas")
+                          .select("id")
+                          .eq("orcamento_id", orcamento.id);
+                        if (etapasAnaliticas && etapasAnaliticas.length > 0) {
+                          const epIds = etapasAnaliticas.map((e) => e.id);
+                          const { data: ativs } = await supabase
+                            .from("orcamento_atividades")
+                            .select("id, quantidade, etapa_id, bdi_percentual, codigo, descricao, unidade")
+                            .in("etapa_id", epIds);
+                          if (ativs && ativs.length > 0) {
+                            const ativIds = ativs.map((a) => a.id);
+                            const { data: insDb } = await supabase
+                              .from("orcamento_atividade_insumos")
+                              .select("atividade_id, preco_unitario_centavos, coeficiente")
+                              .in("atividade_id", ativIds);
+                            const insList = insDb ?? [];
+                            const bdiGeral = Number(orcamento.bdi_geral ?? 25);
+                            let totalCentavos = 0;
+                            ativs.forEach((a) => {
+                              const bdi = a.bdi_percentual != null ? Number(a.bdi_percentual) : bdiGeral;
+                              const insAtiv = insList.filter((i) => i.atividade_id === a.id);
+                              const custoCents = insAtiv.reduce((sum, i) => sum + Math.round(Number(i.coeficiente ?? 1) * Number(i.preco_unitario_centavos ?? 0)), 0);
+                              if (custoCents > 0) {
+                                totalCentavos += Math.round(custoCents * (1 + bdi / 100)) * Number(a.quantidade ?? 1);
+                              }
+                            });
+                            if (totalCentavos > 0) {
+                              initialValorTotal = totalCentavos / 100;
+                            }
+                          }
+                        }
+                      }
+
                       const { data: nova, error } = await supabase
                         .from("propostas")
                         .insert({
                           cliente_id: clienteId,
                           titulo: `Proposta Comercial - ${nomeObra}`,
-                          valor_total: orcamento?.total_estimado ? Number(orcamento.total_estimado) / 100 : 0,
+                          valor_total: initialValorTotal,
                           status: "rascunho",
                         })
                         .select("id")

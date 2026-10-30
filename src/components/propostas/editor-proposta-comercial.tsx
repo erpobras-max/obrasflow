@@ -48,9 +48,11 @@ const brl = (cents: number) =>
 export interface PropostaEditorData {
   id?: string
   numero?: string
+  clienteId?: string
   clienteNome?: string
   clienteCpfCnpj?: string
   clienteEmail?: string
+  obraId?: string
   obraNome?: string
   obraEndereco?: string
   prazoExecucaoTexto?: string
@@ -74,10 +76,17 @@ export interface PropostaEditorData {
   }>
 }
 
+export interface SalvarPropostaParams {
+  config: ConfiguracaoPropostaComercial
+  valorTotalCentavos: number
+  clienteId?: string
+  etapas: any[]
+}
+
 interface EditorPropostaComercialProps {
   proposta: PropostaEditorData
-  onSalvarRascunho?: (config: ConfiguracaoPropostaComercial) => Promise<void>
-  onPublicarRevisao?: (config: ConfiguracaoPropostaComercial) => Promise<void>
+  onSalvarRascunho?: (params: SalvarPropostaParams) => Promise<void>
+  onPublicarRevisao?: (params: SalvarPropostaParams) => Promise<void>
   onVoltar?: () => void
 }
 
@@ -88,6 +97,41 @@ export function EditorPropostaComercial({
   onVoltar,
 }: EditorPropostaComercialProps) {
   // Consulta dados e logo da empresa cadastrada em /empresa
+  const { data: listaClientes } = useQuery({
+    queryKey: ['clientes-opt-editor'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('clientes')
+        .select('id,nome,nome_fantasia,cpf_cnpj,cnpj,cpf,email')
+        .is('deleted_at', null)
+        .order('nome')
+      if (error) throw error
+      return (data ?? []) as any[]
+    },
+  })
+
+  const [selectedClienteId, setSelectedClienteId] = useState<string>(
+    proposta.clienteId || ''
+  )
+
+  useEffect(() => {
+    if (proposta.clienteId) {
+      setSelectedClienteId(proposta.clienteId)
+    }
+  }, [proposta.clienteId])
+
+  const clienteAtual = useMemo(() => {
+    if (selectedClienteId && listaClientes) {
+      return listaClientes.find((item: any) => item.id === selectedClienteId) || null
+    }
+    return null
+  }, [selectedClienteId, listaClientes])
+
+  const clienteNome = clienteAtual?.nome || clienteAtual?.nome_fantasia || proposta.clienteNome || 'Cliente'
+  const docCliente = clienteAtual?.cpf_cnpj || clienteAtual?.cnpj || clienteAtual?.cpf || ''
+  const clienteCpfCnpj = docCliente ? formatCpfCnpj(docCliente) : (proposta.clienteCpfCnpj || '')
+  const clienteEmail = clienteAtual?.email || proposta.clienteEmail || ''
+
   const { data: empresa } = useQuery({
     queryKey: ['configuracoes-empresa'],
     queryFn: async () => {
@@ -193,7 +237,12 @@ export function EditorPropostaComercial({
     setSalvando(true)
     try {
       if (onSalvarRascunho) {
-        await onSalvarRascunho(config)
+        await onSalvarRascunho({
+          config,
+          valorTotalCentavos: valorTotalVisivelCentavos,
+          clienteId: selectedClienteId || proposta.clienteId,
+          etapas: etapasVisiveis,
+        })
       } else {
         toast.success('Rascunho da proposta salvo com sucesso.')
       }
@@ -209,7 +258,12 @@ export function EditorPropostaComercial({
     setSalvando(true)
     try {
       if (onPublicarRevisao) {
-        await onPublicarRevisao(config)
+        await onPublicarRevisao({
+          config,
+          valorTotalCentavos: valorTotalVisivelCentavos,
+          clienteId: selectedClienteId || proposta.clienteId,
+          etapas: etapasVisiveis,
+        })
       } else {
         toast.success('Nova revisão publicada e congelada com sucesso!')
       }
@@ -373,6 +427,24 @@ export function EditorPropostaComercial({
                   checked={config.mostrarDadosCliente}
                   onCheckedChange={(v) => updateConfig({ mostrarDadosCliente: v })}
                 />
+              </div>
+
+              <div className="pt-2">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                  Cliente Associado à Proposta:
+                </label>
+                <select
+                  value={selectedClienteId}
+                  onChange={(e) => setSelectedClienteId(e.target.value)}
+                  className="w-full h-8 text-xs bg-white text-slate-900 border border-slate-300 rounded-md px-2 font-medium"
+                >
+                  <option value="">Selecione um cliente...</option>
+                  {(listaClientes ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome || c.nome_fantasia}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="pt-2">
@@ -649,9 +721,9 @@ export function EditorPropostaComercial({
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
                 <div>
                   <span className="font-bold text-slate-400 uppercase text-[10px]">CONTRATANTE / CLIENTE:</span>
-                  <div className="font-bold text-slate-900 mt-0.5">{proposta.clienteNome || 'Cliente'}</div>
-                  <div className="text-slate-600">CPF/CNPJ: {proposta.clienteCpfCnpj || '-'}</div>
-                  <div className="text-slate-600">E-mail: {proposta.clienteEmail || '-'}</div>
+                  <div className="font-bold text-slate-900 mt-0.5">{clienteNome}</div>
+                  <div className="text-slate-600">CPF/CNPJ: {clienteCpfCnpj || '-'}</div>
+                  <div className="text-slate-600">E-mail: {clienteEmail || '-'}</div>
                 </div>
                 <div>
                   <span className="font-bold text-slate-400 uppercase text-[10px]">OBRA / LOCALIZAÇÃO:</span>
@@ -823,9 +895,9 @@ export function EditorPropostaComercial({
                 </div>
                 <div>
                   <div className="border-b border-slate-400 w-48 mx-auto mb-1.5" />
-                  <strong className="text-slate-900 block">{proposta.clienteNome ?? 'Cliente'}</strong>
+                  <strong className="text-slate-900 block">{clienteNome}</strong>
                   <div className="text-slate-500 text-[11px]">De Acordo do Contratante</div>
-                  {proposta.clienteCpfCnpj && <div className="text-slate-400 text-[10px]">CPF/CNPJ: {proposta.clienteCpfCnpj}</div>}
+                  {clienteCpfCnpj && <div className="text-slate-400 text-[10px]">CPF/CNPJ: {clienteCpfCnpj}</div>}
                 </div>
               </div>
             )}
