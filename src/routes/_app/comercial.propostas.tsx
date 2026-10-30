@@ -155,14 +155,7 @@ function PropostasPage() {
   const [printTarget, setPrintTarget] = useState<PropostaRow | null>(null);
   const [editorTarget, setEditorTarget] = useState<PropostaRow | null>(null);
 
-  useEffect(() => {
-    if (searchParams.propostaId && propostas) {
-      const match = propostas.find((p) => p.id === searchParams.propostaId);
-      if (match) {
-        setEditorTarget(match);
-      }
-    }
-  }, [searchParams.propostaId, propostas]);
+
 
   const { data: editorData, isLoading: editorLoading } = useQuery({
     queryKey: ["proposta-editor-completo", editorTarget?.id],
@@ -242,6 +235,15 @@ function PropostasPage() {
       return (data ?? []) as PropostaRow[];
     },
   });
+
+  useEffect(() => {
+    if (searchParams.propostaId && propostas) {
+      const match = propostas.find((p) => p.id === searchParams.propostaId);
+      if (match) {
+        setEditorTarget(match);
+      }
+    }
+  }, [searchParams.propostaId, propostas]);
 
   const { data: clientes } = useQuery({
     queryKey: ["clientes-opt"],

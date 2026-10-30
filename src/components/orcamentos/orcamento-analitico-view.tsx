@@ -676,6 +676,25 @@ export function OrcamentoAnaliticoView({
   const bdiEfetivo =
     totais.custo > 0 ? (((totais.preco - totais.custo) / totais.custo) * 100).toFixed(2) : '0,00'
 
+  // Sincronizar automaticamente o valor do orçamento com a tabela de Obras
+  useEffect(() => {
+    if (!obraId || !orcamentoId || carregando || totais.preco === 0) return
+
+    const timer = setTimeout(async () => {
+      const valorReais = totais.preco / 100
+      try {
+        await Promise.all([
+          supabase.from('obras').update({ orcamento: valorReais }).eq('id', obraId),
+          supabase.from('orcamentos').update({ total_estimado: totais.preco }).eq('id', orcamentoId),
+        ])
+      } catch (err) {
+        console.warn('Erro ao sincronizar valor do orçamento com a obra:', err)
+      }
+    }, 400)
+
+    return () => clearTimeout(timer)
+  }, [obraId, orcamentoId, totais.preco, carregando])
+
   if (carregando) {
     return (
       <div className="flex min-h-64 items-center justify-center bg-white border border-slate-200 rounded-lg p-8 shadow-sm">
