@@ -16,6 +16,8 @@ import {
   DollarSign,
   ChevronRight,
   Filter,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -28,13 +30,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { ContratoStatusBadge } from "@/components/contratos-empreiteiros/contrato-status-badge";
 import { ContratoEditorDialog } from "@/components/contratos-empreiteiros/contrato-editor-dialog";
 import { ContratoDetalheView } from "@/components/contratos-empreiteiros/contrato-detalhe-view";
@@ -61,6 +56,9 @@ function ContratosEmpreiteirosPage() {
   const [filtroStatus, setFiltroStatus] = useState<string>("todos");
   const [termoBusca, setTermoBusca] = useState("");
   const [openNovoContrato, setOpenNovoContrato] = useState(false);
+  const [contratoParaEditar, setContratoParaEditar] = useState<any | null>(null);
+  const [contratoParaExcluir, setContratoParaExcluir] = useState<any | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
 
   // Obras para filtro
   const { data: obras = [] } = useQuery({
@@ -94,27 +92,43 @@ function ContratosEmpreiteirosPage() {
     return (
       c.numero?.toLowerCase().includes(busca) ||
       c.objeto?.toLowerCase().includes(busca) ||
-      c.fornecedores?.razao_social?.toLowerCase().includes(busca) ||
+      c.obras?.nome?.toLowerCase().includes(busca) ||
       c.fornecedores?.nome_fantasia?.toLowerCase().includes(busca) ||
-      c.obras?.nome?.toLowerCase().includes(busca)
+      c.fornecedores?.razao_social?.toLowerCase().includes(busca)
     );
   });
 
-  // Totais agregados
-  const totalContratado = contratosFiltrados.reduce(
-    (acc: number, c: any) => acc + Number(c.valor_total_atual_centavos || 0) / 100,
+  // Indicadores consolidados
+  const totalContratadoCentavos = contratos.reduce(
+    (acc: number, c: any) => acc + Number(c.valor_total_atual_centavos || 0),
     0
   );
-  const totalMedido = contratosFiltrados.reduce(
-    (acc: number, c: any) => acc + Number(c.totalMedidoBrutoCentavos || 0) / 100,
+  const totalMedidoCentavos = contratos.reduce(
+    (acc: number, c: any) => acc + Number(c.totalMedidoBrutoCentavos || 0),
     0
   );
-  const totalSaldo = Math.max(0, totalContratado - totalMedido);
-  const percentualGeral = totalContratado > 0 ? (totalMedido / totalContratado) * 100 : 0;
+  const totalSaldoCentavos = Math.max(0, totalContratadoCentavos - totalMedidoCentavos);
+  const percentualGeral =
+    totalContratadoCentavos > 0 ? (totalMedidoCentavos / totalContratadoCentavos) * 100 : 0;
+
+  const handleExcluirContrato = async () => {
+    if (!contratoParaExcluir) return;
+    try {
+      setExcluindo(true);
+      await excluirContratoEmpreiteiro(contratoParaExcluir.id);
+      toast.success(`Contrato ${contratoParaExcluir.numero} excluído com sucesso.`);
+      setContratoParaExcluir(null);
+      await refetch();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao excluir contrato.");
+    } finally {
+      setExcluindo(false);
+    }
+  };
 
   if (contratoSelecionadoId) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
         <ContratoDetalheView
           contratoId={contratoSelecionadoId}
           onVoltar={() => {
@@ -128,88 +142,103 @@ function ContratosEmpreiteirosPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Cabeçalho da Página */}
+      {/* Cabeçalho */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <FileCheck className="h-6 w-6 text-blue-600" />
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Contratos de Empreiteiros
-            </h1>
-          </div>
+            Contratos de Empreiteiros
+          </h1>
           <p className="text-xs text-slate-500 mt-1">
             Gestão de contratos com prestadores terceirizados, boletins de medição com avanço físico-financeiro, retenções técnicas e integração com contas a pagar.
           </p>
         </div>
-
-        <Button
-          onClick={() => setOpenNovoContrato(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          Novo Contrato
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setOpenNovoContrato(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-xs"
+            size="sm"
+          >
+            <Plus className="h-4 w-4 mr-1.5" />
+            Novo Contrato
+          </Button>
+        </div>
       </div>
 
       {/* Cards de Métricas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="p-4 bg-white border rounded-lg shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Contratos Listados</div>
-          <div className="text-2xl font-bold text-slate-900 mt-1">
-            {contratosFiltrados.length}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border rounded-xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Contratos Listados</span>
+            <FileCheck className="h-4 w-4 text-blue-600" />
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            {contratosFiltrados.filter((c: any) => c.status === "ativo").length} ativos
-          </div>
-        </div>
-
-        <div className="p-4 bg-white border rounded-lg shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Total Contratado</div>
-          <div className="text-2xl font-bold text-slate-900 mt-1">
-            {totalContratado.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            Empreiteiros e terceirizados
+          <div className="text-2xl font-bold text-slate-900 mt-2">{contratos.length}</div>
+          <div className="text-[11px] text-slate-500 mt-1">
+            {contratos.filter((c: any) => c.status === "ativo").length} ativos
           </div>
         </div>
 
-        <div className="p-4 bg-white border rounded-lg shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Total Medido Bruto</div>
-          <div className="text-2xl font-bold text-blue-600 mt-1">
-            {totalMedido.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+        <div className="bg-white border rounded-xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Total Contratado</span>
+            <DollarSign className="h-4 w-4 text-slate-600" />
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
+          <div className="text-2xl font-bold text-slate-900 mt-2">
+            {(totalContratadoCentavos / 100).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Empreiteiros e terceirizados</div>
+        </div>
+
+        <div className="bg-white border rounded-xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Total Medido Bruto</span>
+            <HardHat className="h-4 w-4 text-blue-600" />
+          </div>
+          <div className="text-2xl font-bold text-blue-700 mt-2">
+            {(totalMedidoCentavos / 100).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">
             {percentualGeral.toFixed(1)}% do total contratado
           </div>
         </div>
 
-        <div className="p-4 bg-white border rounded-lg shadow-xs">
-          <div className="text-xs text-slate-500 font-medium">Saldo a Medir</div>
-          <div className="text-2xl font-bold text-emerald-600 mt-1">
-            {totalSaldo.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+        <div className="bg-white border rounded-xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-slate-500 text-xs font-medium">
+            <span>Saldo a Medir</span>
+            <DollarSign className="h-4 w-4 text-emerald-600" />
           </div>
-          <div className="text-[11px] text-slate-500 mt-0.5">
-            Saldo físico-financeiro
+          <div className="text-2xl font-bold text-emerald-600 mt-2">
+            {(totalSaldoCentavos / 100).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
           </div>
+          <div className="text-[11px] text-slate-500 mt-1">Saldo físico-financeiro</div>
         </div>
       </div>
 
-      {/* Filtros e Busca */}
-      <div className="p-4 bg-white border rounded-lg shadow-xs flex flex-col md:flex-row gap-3 items-center justify-between">
-        <div className="relative flex-1 w-full md:max-w-xs">
-          <Search className="h-4 w-4 absolute left-2.5 top-2.5 text-slate-400" />
+      {/* Barra de Filtros */}
+      <div className="bg-white border rounded-xl p-3 shadow-2xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
           <Input
             placeholder="Buscar por nº, objeto ou prestador..."
-            className="pl-8 h-9 text-xs"
             value={termoBusca}
             onChange={(e) => setTermoBusca(e.target.value)}
+            className="pl-8 h-9 text-xs"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
           <Select value={filtroObraId} onValueChange={setFiltroObraId}>
-            <SelectTrigger className="h-9 text-xs w-[180px]">
-              <SelectValue placeholder="Todas as obras" />
+            <SelectTrigger className="h-9 text-xs w-full sm:w-48">
+              <SelectValue placeholder="Todas as Obras" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todas as Obras</SelectItem>
@@ -222,15 +251,16 @@ function ContratosEmpreiteirosPage() {
           </Select>
 
           <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="h-9 text-xs w-[140px]">
-              <SelectValue placeholder="Status" />
+            <SelectTrigger className="h-9 text-xs w-full sm:w-36">
+              <SelectValue placeholder="Todos os Status" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os Status</SelectItem>
-              <SelectItem value="ativo">Ativos</SelectItem>
-              <SelectItem value="rascunho">Rascunhos</SelectItem>
-              <SelectItem value="concluido">Concluídos</SelectItem>
-              <SelectItem value="cancelado">Cancelados</SelectItem>
+              <SelectItem value="rascunho">Rascunho</SelectItem>
+              <SelectItem value="em_aprovacao">Em Aprovação</SelectItem>
+              <SelectItem value="ativo">Ativo</SelectItem>
+              <SelectItem value="concluido">Concluído</SelectItem>
+              <SelectItem value="cancelado">Cancelado</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -249,7 +279,7 @@ function ContratosEmpreiteirosPage() {
               <TableHead className="w-32 text-right">Saldo a Medir</TableHead>
               <TableHead className="w-28 text-center">% Medido</TableHead>
               <TableHead className="w-24 text-center">Status</TableHead>
-              <TableHead className="w-16"></TableHead>
+              <TableHead className="w-24 text-right">Ações</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -325,10 +355,36 @@ function ContratosEmpreiteirosPage() {
                     <TableCell className="text-center">
                       <ContratoStatusBadge status={c.status} />
                     </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                        <ChevronRight className="h-4 w-4 text-slate-400" />
-                      </Button>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-slate-500 hover:text-blue-600 hover:bg-blue-50"
+                          title="Editar Contrato"
+                          onClick={() => setContratoParaEditar(c)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-slate-500 hover:text-rose-600 hover:bg-rose-50"
+                          title="Excluir Contrato"
+                          onClick={() => setContratoParaExcluir(c)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-slate-400 hover:text-slate-700"
+                          title="Abrir Detalhes"
+                          onClick={() => setContratoSelecionadoId(c.id)}
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -347,7 +403,52 @@ function ContratosEmpreiteirosPage() {
           setContratoSelecionadoId(id);
         }}
       />
+
+      {/* Dialog de Edição de Contrato */}
+      <ContratoEditorDialog
+        open={Boolean(contratoParaEditar)}
+        onOpenChange={(op) => {
+          if (!op) setContratoParaEditar(null);
+        }}
+        contratoParaEditar={contratoParaEditar}
+        onContratoSalvo={async () => {
+          await refetch();
+          setContratoParaEditar(null);
+        }}
+      />
+
+      {/* Confirmação de Exclusão do Contrato */}
+      <AlertDialog
+        open={Boolean(contratoParaExcluir)}
+        onOpenChange={(op) => {
+          if (!op) setContratoParaExcluir(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-rose-600">Excluir Contrato de Empreiteiro</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>
+                Tem certeza que deseja excluir o contrato{" "}
+                <strong>{contratoParaExcluir?.numero}</strong> ({contratoParaExcluir?.objeto})?
+              </p>
+              <p className="text-xs text-slate-500">
+                Esta ação apagará permanentemente o contrato e todos os seus itens cadastrados. Contratos com medições aprovadas ou contas geradas no financeiro não podem ser excluídos.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={excluindo}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleExcluirContrato}
+              disabled={excluindo}
+              className="bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {excluindo ? "Excluindo..." : "Confirmar Exclusão"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-

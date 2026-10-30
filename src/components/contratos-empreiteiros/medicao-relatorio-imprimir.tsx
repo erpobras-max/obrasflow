@@ -51,7 +51,7 @@ export function MedicaoRelatorioImprimir({
           {/* Cabeçalho Construtora */}
           <div className="flex justify-between items-center border-b pb-4 mb-4">
             <div className="flex items-center gap-3">
-              <EmpresaLogo className="h-12 w-auto max-w-[140px] object-contain" />
+              <EmpresaLogo value={empresa?.logo_url} className="h-12 w-auto max-w-[140px] object-contain" />
               <div>
                 <h1 className="text-base font-bold text-slate-900 uppercase tracking-tight">
                   {empresa?.nome_fantasia || empresa?.razao_social || "ObrasFlow Engenharia & Construções"}

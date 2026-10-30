@@ -80,7 +80,7 @@ function MedicaoEmpreiteiroPublicaPage() {
         {/* Barra superior de ações */}
         <div className="flex justify-between items-center no-print">
           <div className="flex items-center gap-2">
-            <EmpresaLogo className="h-8 w-auto max-w-[120px] object-contain" />
+            <EmpresaLogo value={empresa?.logo_url} className="h-8 w-auto max-w-[120px] object-contain" />
             <span className="text-xs font-semibold text-slate-700">
               {empresa?.nome_fantasia || "ObrasFlow ERP"}
             </span>
