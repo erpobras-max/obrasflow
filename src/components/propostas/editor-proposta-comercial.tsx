@@ -38,40 +38,12 @@ import {
   normalizarConfiguracaoProposta,
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
+import type { PropostaEditorData } from '@/lib/propostas/proposta-editor.types'
 import { supabase as client } from '@/integrations/supabase/client.custom'
 
 const supabase = client as any
 const brl = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-
-export interface PropostaEditorData {
-  id?: string
-  numero?: string
-  clienteNome?: string
-  clienteCpfCnpj?: string
-  clienteEmail?: string
-  obraNome?: string
-  obraEndereco?: string
-  prazoExecucaoTexto?: string
-  orcamentoRevisaoId?: string
-  status?: 'rascunho' | 'enviada' | 'aceita' | 'rejeitada'
-  revisaoNumero?: number
-  etapas: Array<{
-    id: string
-    codigo: string
-    nome: string
-    valorTotalCentavos: number
-    atividades: Array<{
-      id: string
-      codigo?: string | null
-      descricao: string
-      unidade: string
-      quantidade: number
-      precoUnitarioCentavos: number
-      precoTotalCentavos: number
-    }>
-  }>
-}
 
 interface EditorPropostaComercialProps {
   proposta: PropostaEditorData

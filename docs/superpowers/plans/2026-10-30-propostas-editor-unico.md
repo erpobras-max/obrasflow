@@ -155,21 +155,21 @@ git commit -m "feat(propostas): adicionar ciclo de vida transacional de revisoes
   - `resolverCandidatasLegado(revisoes: RevisaoOrcamentoResumo[]): { tipo: 'nenhuma' | 'unica' | 'multipla'; revisaoId?: string }`;
   - `adaptarItensLegados(itens: ItemPropostaLegado[]): EtapaEditor[]`.
 
-- [ ] **Step 1: Escrever testes falhos do adaptador**
+- [x] **Step 1: Escrever testes falhos do adaptador**
 
 Cobrir fotografia nova, itens legados, ausência de origem, uma candidata automática e múltiplas candidatas exigindo escolha. Afirmar valores em centavos, ordem de etapas e ausência de campos internos no resultado.
 
-- [ ] **Step 2: Executar e confirmar falha**
+- [x] **Step 2: Executar e confirmar falha**
 
 Run: `node --test tests/proposta-editor-adapter.test.mjs`
 
 Expected: FAIL por módulos inexistentes.
 
-- [ ] **Step 3: Implementar tipos e funções puras**
+- [x] **Step 3: Implementar tipos e funções puras**
 
 Mover `PropostaEditorData` do componente para o arquivo de tipos. O adaptador não consulta Supabase; recebe dados já carregados e retorna união discriminada para estados `pronta`, `escolher_revisao` ou `sem_origem`.
 
-- [ ] **Step 4: Executar testes e lint**
+- [x] **Step 4: Executar testes e lint**
 
 Run: `node --test tests/proposta-editor-adapter.test.mjs tests/editor-proposta-comercial.test.mjs`
 
@@ -179,7 +179,7 @@ Run: `npx eslint src/lib/propostas/proposta-editor.types.ts src/lib/propostas/pr
 
 Expected: exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/propostas src/components/propostas/editor-proposta-comercial.tsx tests/proposta-editor-adapter.test.mjs
