@@ -130,12 +130,12 @@ export function MedicaoEditorSheet({
       if (idsAnteriores.length > 0) {
         const { data: itensAnteriores } = await supabase
           .from("medicoes_terceirizados")
-          .select("servico_id, quantidade")
+          .select("servico_id, quantidade_executada")
           .in("medicao_empreiteiro_id", idsAnteriores);
 
         (itensAnteriores || []).forEach((ia: any) => {
           const anterior = mapQtdAnterior.get(ia.servico_id) || 0;
-          mapQtdAnterior.set(ia.servico_id, anterior + Number(ia.quantidade || 0));
+          mapQtdAnterior.set(ia.servico_id, anterior + Number(ia.quantidade_executada || ia.quantidade || 0));
         });
       }
 
@@ -147,7 +147,7 @@ export function MedicaoEditorSheet({
         const pctAnterior = qtdContratada > 0 ? (qtdAnterior / qtdContratada) * 100 : 0;
 
         const regExistente = mapExistentes.get(item.id);
-        const qtdAtual = regExistente ? Number(regExistente.quantidade || 0) : 0;
+        const qtdAtual = regExistente ? Number(regExistente.quantidade_executada || regExistente.quantidade || 0) : 0;
         const modo = (regExistente?.modo_entrada as any) || "quantidade";
         const valorCentavos = regExistente
           ? Number(regExistente.valor_centavos || Math.round(qtdAtual * precoUnit))

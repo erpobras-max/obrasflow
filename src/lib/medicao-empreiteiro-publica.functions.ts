@@ -118,7 +118,7 @@ export async function buscarDadosMedicaoPorToken(token: string) {
     .select(
       `
       *,
-      servicos_terceirizados:servico_id ( id, descricao, unidade, codigo, etapa, preco_unitario_centavos, quantidade_total )
+      servicos_terceirizados:servico_id ( id, descricao, codigo, etapa, preco_unitario_centavos, quantidade, origem, tipo_servico )
     `
     )
     .eq("medicao_empreiteiro_id", medicaoId);
@@ -148,7 +148,22 @@ export async function buscarDadosMedicaoPorToken(token: string) {
   return {
     medicao,
     contrato,
-    itens: medItens || [],
+    itens: (medItens || []).map((it: any) => {
+      const servico = it.servicos_terceirizados;
+      let unid = "un";
+      if (servico?.origem && typeof servico.origem === "string" && servico.origem.includes("unidade:")) {
+        const match = servico.origem.match(/unidade:([^|;]+)/);
+        if (match?.[1]) unid = match[1].trim();
+      }
+      return {
+        ...it,
+        servicos_terceirizados: {
+          ...servico,
+          unidade: unid,
+          quantidade_total: servico?.quantidade || 0,
+        },
+      };
+    }),
     ajustes: ajustes || [],
     anexos: (anexos || []).map((a: any) => ({
       ...a,

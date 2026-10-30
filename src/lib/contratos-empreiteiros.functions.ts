@@ -1,3 +1,12 @@
+export function extrairUnidadeItem(item: any): string {
+  if (item.unidade && typeof item.unidade === "string") return item.unidade;
+  if (item.origem && typeof item.origem === "string" && item.origem.includes("unidade:")) {
+    const match = item.origem.match(/unidade:([^|;]+)/);
+    if (match?.[1]) return match[1].trim();
+  }
+  return "un";
+}
+
 import { supabase } from "@/lib/supabase";
 import type {
   ContratoEmpreiteiro,
@@ -190,7 +199,7 @@ export async function obterDetalhesContrato(contratoId: string) {
       id: item.id,
       codigo: item.codigo,
       descricao: item.descricao,
-      unidade: item.unidade || "un",
+      unidade: extrairUnidadeItem(item),
       etapa: item.etapa || "Geral",
       quantidadeContratada: qtdContratada,
       precoUnitarioCentavos: Number(
@@ -276,7 +285,6 @@ export async function criarContratoComItens(params: {
       fornecedor_id: params.fornecedorId,
       tipo_servico: item.etapa || item.descricao || "Geral",
       descricao: item.descricao,
-      unidade: item.unidade || "un",
       quantidade: item.quantidadeContratada,
       valor_unitario: Math.max(1, Math.round(item.precoUnitarioCentavos)),
       valor_total: Math.max(1, Math.round(item.quantidadeContratada * item.precoUnitarioCentavos)),
@@ -284,7 +292,7 @@ export async function criarContratoComItens(params: {
       preco_total_centavos: Math.round(item.quantidadeContratada * item.precoUnitarioCentavos),
       codigo: item.codigo || null,
       etapa: item.etapa || "Geral",
-      origem: item.origemTipo || "manual",
+      origem: `unidade:${item.unidade || "un"}|origem:${item.origemTipo || "manual"}`,
       data_inicio: params.dataInicio || new Date().toISOString().split("T")[0],
       data_fim: params.dataFimPrevista || null,
       status: "aprovado",
@@ -414,11 +422,9 @@ export async function salvarItensBoletimMedicao(
       valor_total: Math.max(1, item.valorCentavos),
       data_medicao: new Date().toISOString().split("T")[0],
       data_vencimento: dataVenc,
-      quantidade: item.quantidadeAtual,
       modo_entrada: item.modoEntrada,
       percentual_atual: item.percentualAtual,
       valor_centavos: item.valorCentavos,
-      valor_medicao: item.valorCentavos / 100,
       quantidade_anterior: item.quantidadeAnterior,
       quantidade_acumulada: item.quantidadeAcumulada,
       saldo_quantidade: item.saldoQuantidade,
