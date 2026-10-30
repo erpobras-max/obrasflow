@@ -1,4 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { EmpresaLogo } from '@/components/empresa-logo'
+import { formatCpfCnpj, formatTelefone } from '@/lib/validacao-documento'
 import {
   FileText,
   Printer,
@@ -82,10 +85,34 @@ export function EditorPropostaComercial({
   onPublicarRevisao,
   onVoltar,
 }: EditorPropostaComercialProps) {
-  const [config, setConfig] = useState<ConfiguracaoPropostaComercial>({
+    const [config, setConfig] = useState<ConfiguracaoPropostaComercial>({
     ...configuracaoPropostaPadrao,
     tituloProposta: `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
   })
+
+  // Consulta dados e logo da empresa cadastrada em /empresa
+  const { data: empresa } = useQuery({
+    queryKey: ['configuracoes-empresa'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes_empresa')
+        .select('*')
+        .eq('id', 1)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+  })
+
+  const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'ObrasFlow Engenharia & Construções'
+  const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : '12.345.678/0001-90'
+  const registroEmpresa = empresa?.inscricao_municipal
+    ? `CREA/CAU: ${empresa.inscricao_municipal}`
+    : (empresa?.inscricao_estadual ? `IE: ${empresa.inscricao_estadual}` : 'CREA/CAU: 194820-SP')
+  const emailEmpresa = empresa?.email || 'contato@obrasflow.com.br'
+  const telefoneEmpresa = (empresa?.telefone || empresa?.celular)
+    ? formatTelefone(empresa.telefone || empresa.celular)
+    : '(11) 3456-7890'
 
   const [modoImpressao, setModoImpressao] = useState(false)
   const [historicoOpen, setHistoricoOpen] = useState(false)
@@ -484,12 +511,18 @@ export function EditorPropostaComercial({
             {/* CAPA COMERCIAL OPCIONAL */}
             {config.mostrarCapa && (
               <div className="text-center py-16 border-b-2 border-slate-200 space-y-5">
-                <div className="w-20 h-20 mx-auto bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow">
-                  OF
-                </div>
+                {empresa?.logo_url ? (
+                  <div className="flex justify-center">
+                    <EmpresaLogo value={empresa.logo_url} className="h-20 w-auto max-w-48 object-contain rounded-2xl shadow" />
+                  </div>
+                ) : (
+                  <div className="w-20 h-20 mx-auto bg-slate-900 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow">
+                    {nomeEmpresa.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <h1 className="text-2xl font-bold text-slate-900">{config.tituloProposta}</h1>
                 <p className="text-sm text-slate-600">Obra: {proposta.obraNome ?? 'Obra'}</p>
-                <div className="pt-8 text-xs text-slate-400">OBRASFLOW ENGENHARIA & CONSTRUÇÕES LTDA.</div>
+                <div className="pt-8 text-xs text-slate-400">{(empresa?.razao_social || nomeEmpresa).toUpperCase()}</div>
               </div>
             )}
 
@@ -497,14 +530,18 @@ export function EditorPropostaComercial({
             <div className="flex items-start justify-between border-b border-slate-200 pb-6">
               <div className="flex items-center gap-4">
                 {config.mostrarLogo && (
-                  <div className="w-14 h-14 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow">
-                    OF
-                  </div>
+                  empresa?.logo_url ? (
+                    <EmpresaLogo value={empresa.logo_url} className="h-14 w-auto max-w-36 object-contain rounded-lg shadow-sm" />
+                  ) : (
+                    <div className="w-14 h-14 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow">
+                      {nomeEmpresa.slice(0, 2).toUpperCase()}
+                    </div>
+                  )
                 )}
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">OBRASFLOW ENGENHARIA & CONSTRUÇÕES</h3>
-                  <p className="text-xs text-slate-500">CNPJ: 12.345.678/0001-90 • CREA/CAU: 194820-SP</p>
-                  <p className="text-xs text-slate-500">contato@obrasflow.com.br • (11) 3456-7890</p>
+                  <h3 className="text-base font-bold text-slate-900">{nomeEmpresa.toUpperCase()}</h3>
+                  <p className="text-xs text-slate-500">{`CNPJ: ${cnpjFormatado} • ${registroEmpresa}`}</p>
+                  <p className="text-xs text-slate-500">{`${emailEmpresa} • ${telefoneEmpresa}`}</p>
                 </div>
               </div>
 
@@ -681,12 +718,12 @@ export function EditorPropostaComercial({
               <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs">
                 <div>
                   <div className="border-b border-slate-400 w-48 mx-auto mb-1" />
-                  <strong className="text-slate-900">ObrasFlow Engenharia & Construções</strong>
+                  <strong className="text-slate-900">{nomeEmpresa}</strong>
                   <div className="text-slate-500 text-[11px]">Diretoria Técnica & Comercial</div>
                 </div>
                 <div>
                   <div className="border-b border-slate-400 w-48 mx-auto mb-1" />
-                  <strong className="text-slate-900">{proposta.clienteNome ?? 'Contratante'}</strong>
+                  <strong className="text-slate-900">{proposta.clienteNome ?? 'Cliente'}</strong>
                   <div className="text-slate-500 text-[11px]">De Acordo do Contratante</div>
                 </div>
               </div>
