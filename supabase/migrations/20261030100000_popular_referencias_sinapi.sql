@@ -46,3 +46,4 @@ SET custo_total = EXCLUDED.custo_total,
     descricao = EXCLUDED.descricao,
     unidade = EXCLUDED.unidade,
     tipo_classe = EXCLUDED.tipo_classe;
+

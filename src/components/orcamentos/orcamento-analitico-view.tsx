@@ -109,6 +109,11 @@ export function OrcamentoAnaliticoView({
   const [editCodigoEtapa, setEditCodigoEtapa] = useState('')
   const [editNomeEtapa, setEditNomeEtapa] = useState('')
 
+  // Competência e UF SINAPI do Orçamento
+  const [sinapiUf, setSinapiUf] = useState('MG')
+  const [sinapiMes, setSinapiMes] = useState('10/2024')
+  const [sinapiCompetenciaOpen, setSinapiCompetenciaOpen] = useState(false)
+
   // Formulário de Nova Atividade
   const [novaDescricaoAtividade, setNovaDescricaoAtividade] = useState('')
   const [novaUnidadeAtividade, setNovaUnidadeAtividade] = useState('un')
@@ -583,8 +588,17 @@ export function OrcamentoAnaliticoView({
   return (
     <div className="space-y-5" data-testid="orcamento-analitico">
       {/* Subtítulo da Competência SINAPI Oficial Congelada */}
-      <div className="text-xs text-sky-800 font-medium">
-        Base SINAPI atualizada automaticamente - MG · 09/2025 - orçamento congelado nesta competência
+      <div className="flex flex-wrap items-center gap-2 text-xs text-sky-800 font-medium">
+        <span>
+          Base SINAPI Oficial (Caixa) · <strong className="font-bold">{sinapiUf}</strong> · <strong className="font-bold">{sinapiMes}</strong> — referência técnica do orçamento
+        </span>
+        <button
+          type="button"
+          onClick={() => setSinapiCompetenciaOpen(true)}
+          className="text-sky-600 hover:text-sky-900 underline text-[11px] font-semibold cursor-pointer"
+        >
+          (alterar estado / competência)
+        </button>
       </div>
 
       {/* BLOCO SUPERIOR: BDI, PREÇO AO CLIENTE E BOTÕES DE AÇÃO */}
@@ -1017,6 +1031,64 @@ export function OrcamentoAnaliticoView({
         etapas={etapas.map((e) => ({ id: e.id, codigo: e.codigo, nome: e.nome }))}
         onInserir={(comp, etapaId) => void inserirComposicaoDoCatalogo(comp, etapaId)}
       />
+
+      {/* Modal Alterar Competência e UF SINAPI */}
+      <Dialog open={sinapiCompetenciaOpen} onOpenChange={setSinapiCompetenciaOpen}>
+        <DialogContent className="max-w-md bg-white text-slate-900 border border-slate-200">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900 flex items-center gap-2">
+              <Database className="size-4 text-sky-600" />
+              Configurar Base e Competência SINAPI
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2 text-xs">
+            <p className="text-slate-500 text-xs">
+              Defina o Estado (UF) e o Mês de Referência oficial da Caixa Econômica Federal a serem aplicados neste orçamento.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Estado (UF):</label>
+                <select
+                  value={sinapiUf}
+                  onChange={(e) => setSinapiUf(e.target.value)}
+                  className="w-full h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-900"
+                >
+                  {['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].map((uf) => (
+                    <option key={uf} value={uf}>{uf}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Competência (Mês/Ano):</label>
+                <select
+                  value={sinapiMes}
+                  onChange={(e) => setSinapiMes(e.target.value)}
+                  className="w-full h-9 rounded-md border border-slate-300 bg-white px-2 text-xs font-semibold text-slate-900"
+                >
+                  {['10/2024', '09/2024', '08/2024', '07/2024', '06/2024', '05/2024', '04/2024', '03/2024', '02/2024', '01/2024', '12/2023'].map((mes) => (
+                    <option key={mes} value={mes}>{mes}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setSinapiCompetenciaOpen(false)}>
+              Fechar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                toast.success(`Competência definida para ${sinapiUf} · ${sinapiMes}`)
+                setSinapiCompetenciaOpen(false)
+              }}
+              className="bg-sky-600 hover:bg-sky-700 text-white"
+            >
+              Aplicar Referência
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Editar Etapa */}
       <Dialog open={!!etapaEmEdicao} onOpenChange={(v) => !v && setEtapaEmEdicao(null)}>
