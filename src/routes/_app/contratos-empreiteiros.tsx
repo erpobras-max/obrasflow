@@ -54,6 +54,8 @@ function ContratosEmpreiteirosPage() {
   const {
     data: contratos = [],
     isLoading,
+    isError,
+    error,
     refetch,
   } = useQuery({
     queryKey: ["contratos-empreiteiros-lista", filtroObraId, filtroStatus],
@@ -71,7 +73,8 @@ function ContratosEmpreiteirosPage() {
     return (
       c.numero?.toLowerCase().includes(busca) ||
       c.objeto?.toLowerCase().includes(busca) ||
-      c.fornecedores?.nome?.toLowerCase().includes(busca) ||
+      c.fornecedores?.razao_social?.toLowerCase().includes(busca) ||
+      c.fornecedores?.nome_fantasia?.toLowerCase().includes(busca) ||
       c.obras?.nome?.toLowerCase().includes(busca)
     );
   });
@@ -238,6 +241,17 @@ function ContratosEmpreiteirosPage() {
                   </div>
                 </TableCell>
               </TableRow>
+            ) : isError ? (
+              <TableRow>
+                <TableCell colSpan={9} className="text-center py-8 text-xs text-red-600">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <span>Ocorreu um erro ao carregar os contratos: {String((error as any)?.message || error)}</span>
+                    <Button variant="outline" size="sm" onClick={() => refetch()} className="text-xs">
+                      Tentar novamente
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
             ) : contratosFiltrados.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-12 text-xs text-slate-400">
@@ -268,7 +282,7 @@ function ContratosEmpreiteirosPage() {
                       </div>
                     </TableCell>
                     <TableCell className="text-xs text-slate-700 font-medium">
-                      {c.fornecedores?.nome || c.fornecedores?.razao_social || "—"}
+                      {c.fornecedores?.nome_fantasia || c.fornecedores?.razao_social || "—"}
                     </TableCell>
                     <TableCell className="text-right text-xs font-semibold text-slate-900">
                       {totalAtual.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}

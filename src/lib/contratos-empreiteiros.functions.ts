@@ -53,7 +53,7 @@ export async function listarContratosEmpreiteiros(filtros?: FiltrosContratos) {
       observacoes,
       created_at,
       obras:obra_id ( id, nome ),
-      fornecedores:fornecedor_id ( id, nome )
+      fornecedores:fornecedor_id ( id, razao_social, nome_fantasia )
     `
     )
     .order("created_at", { ascending: false });
@@ -115,8 +115,8 @@ export async function obterDetalhesContrato(contratoId: string) {
     .select(
       `
       *,
-      obras:obra_id ( id, nome, endereco ),
-      fornecedores:fornecedor_id ( id, nome, cnpj_cpf, telefone, email )
+      obras:obra_id ( id, nome, logradouro, cidade, uf ),
+      fornecedores:fornecedor_id ( id, razao_social, nome_fantasia, cnpj, cpf, telefone, email )
     `
     )
     .eq("id", contratoId)

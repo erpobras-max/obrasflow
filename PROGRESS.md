@@ -469,3 +469,9 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Geração de link público instantâneo com token aleatório criptográfico de 32 caracteres hex em `medicao_empreiteiro_links`, com cópia em 1 clique para WhatsApp/e-mail.
   - Rota pública `/medicao-empreiteiro/$token` (`src/routes/medicao-empreiteiro.$token.tsx`): Permite ao empreiteiro visualizar o boletim de medição completo com dados da obra, status, itens medidos, deduções, fotos de comprovação e botão de impressão/PDF no celular ou computador, sem necessidade de login.
   - Manual Operacional `docs/CONTRATOS_EMPREITEIROS_OPERACAO.md` criado com fluxo detalhado passo a passo para engenheiros, gestores e fiscais de obra.
+
+- **Ajustes de Compatibilidade de Schema e Exibição de Contratos**:
+  - Ajustadas as consultas de chave estrangeira em `src/lib/contratos-empreiteiros.functions.ts` (`listarContratosEmpreiteiros` e `obterDetalhesContrato`) para selecionar as colunas reais da tabela `fornecedores` (`razao_social`, `nome_fantasia`, `cnpj`, `cpf`) e `obras` (`logradouro`, `cidade`, `uf`), sanando o erro 400 do PostgREST que mantinha a listagem em carregamento contínuo.
+  - Atualizada a listagem (`/contratos-empreiteiros`), o detalhe do contrato, o boletim de medição e a impressão de relatório para exibir `nome_fantasia || razao_social` e endereço formatado.
+  - Adicionado tratamento de erro (`isError`) e botão de repetição na tabela de contratos.
+  - Todos os 109 testes automatizados aprovados e build SSR verificado com sucesso.

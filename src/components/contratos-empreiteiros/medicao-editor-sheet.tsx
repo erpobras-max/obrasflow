@@ -402,7 +402,7 @@ export function MedicaoEditorSheet({
               </div>
               <DialogDescription className="text-xs mt-1">
                 Obra: <strong>{contrato?.obras?.nome}</strong> • Empreiteiro:{" "}
-                <strong>{contrato?.fornecedores?.nome || contrato?.fornecedores?.razao_social}</strong>
+                <strong>{contrato?.fornecedores?.nome_fantasia || contrato?.fornecedores?.razao_social || 'Prestador'}</strong>
               </DialogDescription>
             </div>
 
@@ -787,7 +787,7 @@ export function MedicaoEditorSheet({
                       currency: "BRL",
                     })}
                   </strong>{" "}
-                  para o prestador <strong>{contrato?.fornecedores?.nome || contrato?.fornecedores?.razao_social}</strong>.
+                  para o prestador <strong>{contrato?.fornecedores?.nome_fantasia || contrato?.fornecedores?.razao_social || 'Prestador'}</strong>.
                 </li>
                 <li>
                   O avanço físico medido será acumulado no histórico do contrato de forma irreversível até eventual cancelamento.

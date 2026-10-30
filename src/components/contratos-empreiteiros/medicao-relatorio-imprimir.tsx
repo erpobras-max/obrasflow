@@ -76,7 +76,7 @@ export function MedicaoRelatorioImprimir({
             <div>
               <div className="text-[10px] font-bold uppercase text-slate-400">Obra / Local:</div>
               <div className="font-semibold text-slate-900">{contrato?.obras?.nome}</div>
-              <div className="text-[11px] text-slate-600">{contrato?.obras?.endereco || "—"}</div>
+              <div className="text-[11px] text-slate-600">{contrato?.obras?.logradouro ? `${contrato.obras.logradouro}${contrato.obras.cidade ? ` • ${contrato.obras.cidade}/${contrato.obras.uf || ''}` : ''}` : '—'}</div>
               <div className="text-[11px] text-slate-500 mt-1">
                 Objeto: <span className="text-slate-800">{contrato?.objeto}</span>
               </div>
@@ -84,10 +84,10 @@ export function MedicaoRelatorioImprimir({
             <div>
               <div className="text-[10px] font-bold uppercase text-slate-400">Contratado / Empreiteiro:</div>
               <div className="font-semibold text-slate-900">
-                {contrato?.fornecedores?.nome || contrato?.fornecedores?.razao_social}
+                {contrato?.fornecedores?.nome_fantasia || contrato?.fornecedores?.razao_social || '—'}
               </div>
               <div className="text-[11px] text-slate-600">
-                {contrato?.fornecedores?.cnpj_cpf ? `CPF/CNPJ: ${contrato.fornecedores.cnpj_cpf}` : ""}
+                {contrato?.fornecedores?.cnpj ? `CNPJ: ${contrato.fornecedores.cnpj}` : contrato?.fornecedores?.cpf ? `CPF: ${contrato.fornecedores.cpf}` : ''}
                 {contrato?.fornecedores?.telefone ? ` • Tel: ${contrato.fornecedores.telefone}` : ""}
               </div>
               <div className="text-[11px] text-slate-500 mt-1">
@@ -185,7 +185,7 @@ export function MedicaoRelatorioImprimir({
             <div className="text-center">
               <div className="border-t border-slate-400 w-3/4 mx-auto mb-1"></div>
               <div className="font-semibold text-xs text-slate-900">
-                {contrato?.fornecedores?.nome || contrato?.fornecedores?.razao_social}
+                {contrato?.fornecedores?.nome_fantasia || contrato?.fornecedores?.razao_social || '—'}
               </div>
               <div className="text-[10px] text-slate-500">Representante do Empreiteiro</div>
             </div>

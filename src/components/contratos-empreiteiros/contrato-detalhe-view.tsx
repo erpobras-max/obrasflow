@@ -112,7 +112,7 @@ export function ContratoDetalheView({ contratoId, onVoltar }: ContratoDetalheVie
             <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
               <span>Obra: <strong>{contrato.obras?.nome}</strong></span>
               <span>•</span>
-              <span>Empreiteiro: <strong>{contrato.fornecedores?.nome || contrato.fornecedores?.razao_social}</strong></span>
+              <span>Empreiteiro: <strong>{contrato.fornecedores?.nome_fantasia || contrato.fornecedores?.razao_social || '—'}</strong></span>
             </div>
           </div>
         </div>
