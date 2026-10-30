@@ -8,7 +8,7 @@ import * as XLSX from "xlsx";
 import JSZip from "jszip";
 import {
   Calculator, Plus, Search, FileSpreadsheet, Database, Upload, Trash2,
-  AlertCircle, Check, Loader2, ArrowUpDown, ChevronDown, RefreshCw, HelpCircle
+  AlertCircle, Check, Loader2, ArrowUpDown, ChevronDown, RefreshCw, HelpCircle, Sparkles
 } from "lucide-react";
 
 import { supabase as supabaseOriginal } from "@/integrations/supabase/client.custom";
