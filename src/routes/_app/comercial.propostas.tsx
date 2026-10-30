@@ -47,6 +47,7 @@ export const Route = createFileRoute("/_app/comercial/propostas")({
   validateSearch: (search: Record<string, unknown>) => ({
     busca: typeof search.busca === "string" ? search.busca : undefined,
     clienteId: typeof search.clienteId === "string" ? search.clienteId : undefined,
+    propostaId: typeof search.propostaId === "string" ? search.propostaId : undefined,
   }),
   component: PropostasPage,
 });
@@ -153,6 +154,15 @@ function PropostasPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<PropostaRow | null>(null);
   const [editorTarget, setEditorTarget] = useState<PropostaRow | null>(null);
+
+  useEffect(() => {
+    if (searchParams.propostaId && propostas) {
+      const match = propostas.find((p) => p.id === searchParams.propostaId);
+      if (match) {
+        setEditorTarget(match);
+      }
+    }
+  }, [searchParams.propostaId, propostas]);
 
   const { data: editorData, isLoading: editorLoading } = useQuery({
     queryKey: ["proposta-editor-completo", editorTarget?.id],
@@ -337,9 +347,27 @@ function PropostasPage() {
             </Select>
           </div>
           {podeEditar && (
-            <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2">
-              <Plus className="size-4" /> Nova proposta
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (propostas && propostas.length > 0) {
+                    setEditorTarget(propostas[0]);
+                  } else {
+                    setEditTarget(null);
+                    setFormOpen(true);
+                  }
+                }}
+                className="gap-1.5 text-xs font-semibold text-sky-700 border-sky-300 bg-sky-50 hover:bg-sky-100"
+                title="Abrir o Editor Comercial com painel lateral"
+              >
+                <FileText className="size-4" />
+                Abrir Editor Comercial
+              </Button>
+              <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2">
+                <Plus className="size-4" /> Nova proposta
+              </Button>
+            </div>
           )}
         </div>
 
@@ -367,7 +395,17 @@ function PropostasPage() {
               ) : filtradas.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-mono text-xs">{p.numero}</TableCell>
-                  <TableCell className="font-medium">{p.titulo}</TableCell>
+                  <TableCell className="font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setEditorTarget(p)}
+                      className="text-sky-700 hover:text-sky-900 hover:underline font-semibold text-left inline-flex items-center gap-1.5 cursor-pointer"
+                      title="Abrir no Editor Comercial Completo"
+                    >
+                      <FileText className="size-3.5 text-sky-600 flex-shrink-0" />
+                      <span>{p.titulo}</span>
+                    </button>
+                  </TableCell>
                   <TableCell>{clientesMap[p.cliente_id] ?? "—"}</TableCell>
                   <TableCell>
                     <Badge className={cn(STATUS_PROPOSTA_BADGE[p.status])}>
@@ -413,8 +451,15 @@ function PropostasPage() {
                           <XCircle className="size-4" />
                         </Button>
                       </>}
-                      <Button size="icon" variant="ghost" className="size-8 text-sky-700 hover:text-sky-800" title="Editor Comercial com Painel Lateral (Split View)" onClick={() => setEditorTarget(p)}>
-                        <Settings2 className="size-3.5" />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-2 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-300 gap-1.5 cursor-pointer shadow-2xs"
+                        title="Abrir Editor Comercial com Painel Lateral"
+                        onClick={() => setEditorTarget(p)}
+                      >
+                        <FileText className="size-3.5" />
+                        Editor
                       </Button>
                       <Button size="icon" variant="ghost" className="size-8" title="Gerar proposta para envio" onClick={() => setPrintTarget(p)}>
                         <Printer className="size-3.5" />

@@ -563,13 +563,38 @@ export function OrcamentoAnaliticoView({
     toast.success(`Composição ${comp.codigo} inserida com sucesso`)
   }
 
-  // Excluir Atividade
+  // Excluir Atividade com deleção em cascata garantida
   async function excluirAtividade(atividadeId: string) {
-    if (!confirm('Deseja realmente remover esta atividade do orçamento?')) return
-    const { error } = await supabase.from('orcamento_atividades').delete().eq('id', atividadeId)
-    if (error) return toast.error(error.message)
-    await carregarOuMigrar()
-    toast.success('Atividade removida')
+    if (!confirm('Deseja realmente remover esta composição/atividade do orçamento?')) return
+    try {
+      // 1. Deletar memoriais vinculados
+      await supabase.from('orcamento_memoriais').delete().eq('atividade_id', atividadeId)
+
+      // 2. Deletar insumos vinculados da composição
+      await supabase.from('orcamento_atividade_insumos').delete().eq('atividade_id', atividadeId)
+
+      // 3. Deletar a atividade analítica
+      const { error } = await supabase.from('orcamento_atividades').delete().eq('id', atividadeId)
+      if (error) {
+        toast.error(`Falha ao excluir no banco: ${error.message}`)
+        return
+      }
+
+      // 4. Se houver item legado correspondente, remove também
+      await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('id', atividadeId)
+
+      // 5. Atualizar estado local imediatamente
+      setEtapas((prev) =>
+        prev.map((e) => ({
+          ...e,
+          atividades: e.atividades.filter((a) => a.id !== atividadeId),
+        }))
+      )
+
+      toast.success('Composição removida com sucesso!')
+    } catch (e: any) {
+      toast.error(`Erro ao excluir composição: ${e.message}`)
+    }
   }
 
   // Resumo de Custos
@@ -745,6 +770,18 @@ export function OrcamentoAnaliticoView({
             <Sparkles className="size-3.5" />
             + Inserir composição
           </Button>
+
+          {onGerarProposta && (
+            <Button
+              size="sm"
+              onClick={onGerarProposta}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+              title="Acessar Proposta Comercial com Painel Lateral"
+            >
+              <FileText className="size-3.5" />
+              Proposta Comercial
+            </Button>
+          )}
 
           {/* Engrenagem de Opções Técnicas */}
           <DropdownMenu>

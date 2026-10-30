@@ -928,7 +928,44 @@ function OrcamentosPage() {
                   valor_unitario: Number(item.valor_unitario),
                 })) ?? []}
                 somenteLeitura={!podeEditar}
-                onGerarProposta={() => {
+                onGerarProposta={async () => {
+                  try {
+                    const nomeObra = obras?.find((o) => o.id === selectedObraId)?.nome || "Obra";
+                    const { data: propsExistentes } = await supabase
+                      .from("propostas")
+                      .select("id, titulo")
+                      .ilike("titulo", `%${nomeObra}%`)
+                      .limit(1);
+
+                    if (propsExistentes && propsExistentes.length > 0) {
+                      navigate({ to: "/comercial/propostas", search: { propostaId: propsExistentes[0].id } });
+                      return;
+                    }
+
+                    const { data: clientes } = await supabase.from("clientes").select("id").limit(1);
+                    const primeiroClienteId = clientes?.[0]?.id;
+
+                    if (primeiroClienteId) {
+                      const { data: nova, error } = await supabase
+                        .from("propostas")
+                        .insert({
+                          cliente_id: primeiroClienteId,
+                          titulo: `Proposta Comercial - ${nomeObra}`,
+                          valor_total: orcamento?.total_estimado ? Number(orcamento.total_estimado) / 100 : 0,
+                          status: "rascunho",
+                        })
+                        .select("id")
+                        .single();
+
+                      if (!error && nova) {
+                        toast.success("Proposta comercial iniciada com sucesso!");
+                        navigate({ to: "/comercial/propostas", search: { propostaId: nova.id } });
+                        return;
+                      }
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  }
                   navigate({ to: "/comercial/propostas" });
                 }}
               />
