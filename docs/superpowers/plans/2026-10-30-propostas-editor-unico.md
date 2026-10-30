@@ -249,29 +249,29 @@ git commit -m "feat(propostas): persistir editor e historico de revisoes"
 - Consumes: `criar_proposta_de_revisao`, `criarFotografiaProposta`, obras → orçamentos → revisões.
 - Produces: `NovaPropostaOrcamentoDialog` com `onCriada(propostaId: string): void`; `validarSelecaoNovaProposta(selecao): ResultadoSelecao`; ação explícita `duplicar=true` somente a partir de uma proposta/revisão já escolhida.
 
-- [ ] **Step 1: Escrever testes falhos de seleção**
+- [x] **Step 1: Escrever testes falhos de seleção**
 
 Cobrir ausência de obra, obra sem orçamento, orçamento sem revisão, seleção válida, rascunho existente e duplicação explícita. Afirmar que cliente/título/valor vêm da obra e da fotografia, não de campos livres.
 
-- [ ] **Step 2: Executar e confirmar falha**
+- [x] **Step 2: Executar e confirmar falha**
 
 Run: `node --test tests/proposta-criacao.test.mjs`
 
 Expected: FAIL por módulo inexistente.
 
-- [ ] **Step 3: Implementar validação pura e diálogo encadeado**
+- [x] **Step 3: Implementar validação pura e diálogo encadeado**
 
 Consultar somente obras com orçamento; ao escolher obra, listar seus orçamentos; ao escolher orçamento, listar revisões por número/data. Confirmar chama a RPC com configuração normalizada e fotografia comercial sanitizável, então abre o ID retornado.
 
-- [ ] **Step 4: Implementar tratamento de rascunho existente e duplicação**
+- [x] **Step 4: Implementar tratamento de rascunho existente e duplicação**
 
 Quando a RPC comum retornar proposta existente, informar e abrir o rascunho. Expor `Duplicar proposta` apenas como ação consciente em proposta existente, com confirmação e `p_duplicar=true`.
 
-- [ ] **Step 5: Conectar à listagem**
+- [x] **Step 5: Conectar à listagem**
 
 O botão `Nova proposta` abre somente esse diálogo. Remover o botão `Abrir Editor Comercial` que seleciona a primeira linha arbitrariamente. Manter deep link `?propostaId=` abrindo o editor correto.
 
-- [ ] **Step 6: Executar testes e lint**
+- [x] **Step 6: Executar testes e lint**
 
 Run: `node --test tests/proposta-criacao.test.mjs tests/proposta-editor-source.test.mjs`
 
@@ -281,7 +281,7 @@ Run: `npx eslint src/components/propostas/nova-proposta-orcamento-dialog.tsx src
 
 Expected: exit 0.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/components/propostas/nova-proposta-orcamento-dialog.tsx src/lib/propostas/proposta-criacao.ts src/routes/_app/comercial.propostas.tsx tests/proposta-criacao.test.mjs
@@ -300,25 +300,25 @@ git commit -m "feat(propostas): criar proposta somente a partir do orcamento"
 - Consumes: `NovaPropostaOrcamentoDialog` da Task 5 e `usePropostaEditor` da Task 4.
 - Produces: rota enxuta com listagem, editor único e ações comerciais; nenhum consumidor dos componentes antigos.
 
-- [ ] **Step 1: Escrever teste estrutural falho**
+- [x] **Step 1: Escrever teste estrutural falho**
 
 Ler a rota como texto e afirmar ausência de `PropostaFormDialog`, `PropostaImpressao`, `CatalogoPropostas`, `setEditTarget`, `setPrintTarget`, `react-hook-form` e botões antigos; afirmar presença de `NovaPropostaOrcamentoDialog`, `usePropostaEditor` e abertura do editor pelo título/ação.
 
-- [ ] **Step 2: Executar e confirmar falha**
+- [x] **Step 2: Executar e confirmar falha**
 
 Run: `node --test tests/propostas-rota-unica.test.mjs`
 
 Expected: FAIL porque o modo antigo ainda está embutido/importado.
 
-- [ ] **Step 3: Remover imports, estados, diálogo e formulário antigos**
+- [x] **Step 3: Remover imports, estados, diálogo e formulário antigos**
 
 Excluir o `PropostaFormDialog` inline e toda lógica de catálogo/itens manuais. Preservar filtros, tabela, aceite/rejeição, obra, contrato e exclusão.
 
-- [ ] **Step 4: Remover componentes sem consumidores**
+- [x] **Step 4: Remover componentes sem consumidores**
 
 Confirmar com `rg "PropostaImpressao|CatalogoPropostas" src`; se somente os próprios arquivos restarem, removê-los. A impressão passa exclusivamente por `EditorPropostaComercial`.
 
-- [ ] **Step 5: Executar testes e lint**
+- [x] **Step 5: Executar testes e lint**
 
 Run: `node --test tests/propostas-rota-unica.test.mjs tests/proposta-criacao.test.mjs tests/proposta-editor-source.test.mjs`
 
@@ -328,7 +328,7 @@ Run: `npx eslint src/routes/_app/comercial.propostas.tsx src/components/proposta
 
 Expected: exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A src/routes/_app/comercial.propostas.tsx src/components/propostas tests/propostas-rota-unica.test.mjs
@@ -347,25 +347,25 @@ git commit -m "refactor(propostas): remover formulario e impressao antigos"
 - Consumes: `excluir_proposta_rascunho` da Task 2.
 - Produces: `excluirProposta(id: string): Promise<void>` sem remoção otimista; script somente leitura que lista proposta, status, revisões, obra, contratos, cronogramas e políticas/vínculos relevantes.
 
-- [ ] **Step 1: Ampliar teste falho da rota**
+- [x] **Step 1: Ampliar teste falho da rota**
 
 Afirmar que a exclusão usa `rpc('excluir_proposta_rascunho')`, não possui `onMutate` removendo cache, mostra loading e só invalida `['propostas']` após sucesso. Afirmar que o botão de lixeira só aparece para rascunho e admin/diretor.
 
-- [ ] **Step 2: Executar e confirmar falha**
+- [x] **Step 2: Executar e confirmar falha**
 
 Run: `node --test tests/propostas-rota-unica.test.mjs`
 
 Expected: FAIL porque a rota ainda usa sequência de deletes e remoção otimista.
 
-- [ ] **Step 3: Implementar exclusão confirmada**
+- [x] **Step 3: Implementar exclusão confirmada**
 
 Substituir toda sequência atual pela RPC. Manter a linha durante a requisição, impedir clique duplo e exibir mensagem devolvida pelo banco em falha.
 
-- [ ] **Step 4: Criar diagnóstico somente leitura**
+- [x] **Step 4: Criar diagnóstico somente leitura**
 
 O script recebe/localiza `PROP-2026-0008` e retorna os vínculos sem excluir ou atualizar nada. Executá-lo no Supabase somente na fase de publicação autorizada; registrar a causa encontrada na Issue #200 antes de chamar a RPC em produção.
 
-- [ ] **Step 5: Executar testes e lint**
+- [x] **Step 5: Executar testes e lint**
 
 Run: `node --test tests/propostas-rota-unica.test.mjs tests/propostas-editor-db.test.mjs`
 
@@ -375,7 +375,7 @@ Run: `npx eslint src/routes/_app/comercial.propostas.tsx src/hooks/use-proposta-
 
 Expected: exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/routes/_app/comercial.propostas.tsx src/hooks/use-proposta-editor.ts tests/propostas-rota-unica.test.mjs scripts/diagnosticar_proposta_0008.sql
@@ -395,25 +395,25 @@ git commit -m "fix(propostas): confirmar exclusao definitiva de rascunhos"
 - Consumes: estados de proposta/revisão da Task 2.
 - Produces: transições sincronizadas `rascunho → enviada → aceita|rejeitada|expirada`; histórico sempre correspondente ao status vigente.
 
-- [ ] **Step 1: Escrever testes falhos de transição**
+- [x] **Step 1: Escrever testes falhos de transição**
 
 Testar que aceitar/rejeitar/expirar uma proposta atualiza também sua revisão ativa; aceitar rascunho é rejeitado; revisão ainda enviada bloqueia um novo rascunho; rejeitada/expirada permite iniciar o próximo número; proposta aceita não pode ganhar novo rascunho nem ser excluída; revisão enviada permanece visualizável e imprimível.
 
-- [ ] **Step 2: Executar e confirmar falha**
+- [x] **Step 2: Executar e confirmar falha**
 
 Run: `node --test tests/propostas-editor-db.test.mjs tests/propostas-rota-unica.test.mjs`
 
 Expected: FAIL nas transições ainda não sincronizadas.
 
-- [ ] **Step 3: Implementar transição atômica**
+- [x] **Step 3: Implementar transição atômica**
 
 Adicionar RPC `public.alterar_status_proposta_editor(p_proposta_id uuid, p_status text) RETURNS boolean`, permitindo apenas `enviada → aceita|rejeitada|expirada`, atualizando proposta e revisão enviada ativa na mesma transação. Conectar os botões da listagem à RPC.
 
-- [ ] **Step 4: Ajustar histórico e bloqueios do editor**
+- [x] **Step 4: Ajustar histórico e bloqueios do editor**
 
 Usar status da revisão selecionada; edição somente em rascunho, impressão em qualquer status e ações comerciais somente quando a transição for válida.
 
-- [ ] **Step 5: Executar testes e lint**
+- [x] **Step 5: Executar testes e lint**
 
 Run: `node --test tests/propostas-editor-db.test.mjs tests/propostas-rota-unica.test.mjs tests/editor-proposta-comercial.test.mjs`
 
@@ -423,7 +423,7 @@ Run: `npx eslint src/routes/_app/comercial.propostas.tsx src/components/proposta
 
 Expected: exit 0.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add supabase/migrations/20261030180000_propostas_editor_unico.sql src/routes/_app/comercial.propostas.tsx src/components/propostas/historico-revisoes-proposta.tsx tests/propostas-editor-db.test.mjs tests/propostas-rota-unica.test.mjs

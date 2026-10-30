@@ -276,20 +276,71 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.alterar_status_proposta_editor(
+  p_proposta_id uuid,
+  p_status text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_usuario uuid := auth.uid();
+  v_status_atual public.status_proposta;
+  v_revisao_id uuid;
+BEGIN
+  IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
+    RAISE EXCEPTION 'Permissão insuficiente para alterar status da proposta';
+  END IF;
+  IF p_status NOT IN ('aceita', 'rejeitada', 'expirada') THEN
+    RAISE EXCEPTION 'Transição de status inválida: %', p_status;
+  END IF;
+
+  SELECT status INTO v_status_atual
+    FROM public.propostas
+   WHERE id = p_proposta_id
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Proposta não encontrada'; END IF;
+  IF v_status_atual <> 'enviada' THEN
+    RAISE EXCEPTION 'Somente proposta enviada pode ser aceita, rejeitada ou expirada';
+  END IF;
+
+  UPDATE public.proposta_revisoes
+     SET status = p_status
+   WHERE id = (
+     SELECT id FROM public.proposta_revisoes
+      WHERE proposta_id = p_proposta_id AND status = 'enviada'
+      ORDER BY numero DESC LIMIT 1
+      FOR UPDATE
+   )
+   RETURNING id INTO v_revisao_id;
+  IF v_revisao_id IS NULL THEN RAISE EXCEPTION 'Revisão enviada não encontrada'; END IF;
+
+  UPDATE public.propostas
+     SET status = p_status::public.status_proposta
+   WHERE id = p_proposta_id;
+  RETURN true;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.sanitizar_fotografia_proposta(jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.pode_editar_proposta_editor(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.salvar_rascunho_proposta(uuid,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.publicar_rascunho_proposta(uuid,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.excluir_proposta_rascunho(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.alterar_status_proposta_editor(uuid,text) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.salvar_rascunho_proposta(uuid,jsonb,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.publicar_rascunho_proposta(uuid,jsonb,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.excluir_proposta_rascunho(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.alterar_status_proposta_editor(uuid,text) TO authenticated;
 
 -- Rollback manual, somente se nenhuma revisão nova precisar ser preservada:
 -- DROP FUNCTION IF EXISTS public.excluir_proposta_rascunho(uuid);
+-- DROP FUNCTION IF EXISTS public.alterar_status_proposta_editor(uuid,text);
 -- DROP FUNCTION IF EXISTS public.publicar_rascunho_proposta(uuid,jsonb,jsonb);
 -- DROP FUNCTION IF EXISTS public.salvar_rascunho_proposta(uuid,jsonb,jsonb);
 -- DROP FUNCTION IF EXISTS public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean);

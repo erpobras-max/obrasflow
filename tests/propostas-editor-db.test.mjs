@@ -232,3 +232,41 @@ test('exclui somente rascunho e somente como admin ou diretor', async () => {
     await db.close()
   }
 })
+
+test('sincroniza aceite, rejeição e expiração somente a partir de revisão enviada', async () => {
+  const db = await criarBanco()
+  try {
+    const { revisao } = await criarOrigem(db)
+    const criarPublicada = async () => {
+      const propostaId = (await db.query(
+        'SELECT criar_proposta_de_revisao($1,$2,$3,true) AS id',
+        [revisao, '{}', JSON.stringify(fotografiaComercial)],
+      )).rows[0].id
+      await db.query('SELECT publicar_rascunho_proposta($1,$2,$3)', [propostaId, '{}', '{}'])
+      return propostaId
+    }
+
+    const rascunho = (await db.query(
+      'SELECT criar_proposta_de_revisao($1,$2,$3,true) AS id',
+      [revisao, '{}', '{}'],
+    )).rows[0].id
+    await assert.rejects(
+      db.query("SELECT alterar_status_proposta_editor($1,'aceita')", [rascunho]),
+      /enviada/i,
+    )
+
+    for (const status of ['aceita', 'rejeitada', 'expirada']) {
+      const propostaId = await criarPublicada()
+      assert.equal(
+        (await db.query('SELECT alterar_status_proposta_editor($1,$2) AS ok', [propostaId, status])).rows[0].ok,
+        true,
+      )
+      const proposta = (await db.query('SELECT status FROM propostas WHERE id=$1', [propostaId])).rows[0]
+      const revisaoAtual = (await db.query('SELECT status FROM proposta_revisoes WHERE proposta_id=$1', [propostaId])).rows[0]
+      assert.equal(proposta.status, status)
+      assert.equal(revisaoAtual.status, status)
+    }
+  } finally {
+    await db.close()
+  }
+})

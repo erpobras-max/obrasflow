@@ -1,1235 +1,159 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
-import { Plus, Pencil, Trash2, FileText, Printer, Settings2, CheckCircle2, XCircle, Database, ArrowDown, ArrowUp, Calculator, HardHat, FileSignature } from "lucide-react";
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, Copy, FileSignature, FileText, HardHat, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
+import { toast } from 'sonner'
+import { EditorPropostaComercial } from '@/components/propostas/editor-proposta-comercial'
+import { NovaPropostaOrcamentoDialog } from '@/components/propostas/nova-proposta-orcamento-dialog'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useAuth } from '@/hooks/use-auth'
+import { usePropostaEditor } from '@/hooks/use-proposta-editor'
+import { supabase as client } from '@/integrations/supabase/client.custom'
+import { STATUS_PROPOSTA_BADGE, STATUS_PROPOSTA_LABEL, statusPropostaEnum, type StatusProposta } from '@/lib/clientes.schema'
+import { cn } from '@/lib/utils'
 
-import { supabase } from "@/integrations/supabase/client.custom";
-import { useAuth } from "@/hooks/use-auth";
-import {
-  propostaSchema, type PropostaFormValues, type PropostaItemValues, type StatusProposta,
-  STATUS_PROPOSTA_LABEL, STATUS_PROPOSTA_BADGE, statusPropostaEnum,
-} from "@/lib/clientes.schema";
-import { cn, formatBRLInput } from "@/lib/utils";
-import { formatCpfCnpj } from "@/lib/validacao-documento";
-import { CatalogoPropostas } from "@/components/propostas/catalogo-propostas";
-import { PropostaImpressao } from "@/components/propostas/proposta-impressao";
-import { EditorPropostaComercial } from "@/components/propostas/editor-proposta-comercial";
-import {
-  ReferenciaCustosPicker,
-  type ReferenciaCustoSelecionada,
-} from "@/components/referencias/referencia-custos-picker";
+const supabase = client as any
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
-} from "@/components/ui/form";
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table";
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-
-export const Route = createFileRoute("/_app/comercial/propostas")({
+export const Route = createFileRoute('/_app/comercial/propostas')({
   validateSearch: (search: Record<string, unknown>) => ({
-    busca: typeof search.busca === "string" ? search.busca : undefined,
-    clienteId: typeof search.clienteId === "string" ? search.clienteId : undefined,
-    propostaId: typeof search.propostaId === "string" ? search.propostaId : undefined,
+    busca: typeof search.busca === 'string' ? search.busca : undefined,
+    clienteId: typeof search.clienteId === 'string' ? search.clienteId : undefined,
+    propostaId: typeof search.propostaId === 'string' ? search.propostaId : undefined,
   }),
   component: PropostasPage,
-});
+})
 
 interface PropostaRow {
-  id: string;
-  numero: string;
-  cliente_id: string;
-  oportunidade_id: string | null;
-  titulo: string;
-  descricao: string | null;
-  valor_total: number;
-  status: StatusProposta;
-  validade: string | null;
-  data_envio: string | null;
-  condicoes_pagamento: string | null;
-  observacoes: string | null;
-}
-interface ItemRow {
-  id: string;
-  descricao: string;
-  quantidade: number;
-  valor_unitario: number;
-  referencia_id: string | null;
-  fonte_referencia: "sinapi" | "sicro" | null;
-  tipo_referencia: "insumo" | "composicao" | null;
-  codigo_referencia: string | null;
-  referencia_uf: string | null;
-  referencia_mes: string | null;
-  etapa_codigo: string | null; etapa_nome: string | null;
-  item_codigo: string | null; item_nome: string | null;
-  subitem_codigo: string | null; unidade: string | null;
+  id: string
+  numero: string
+  cliente_id: string
+  titulo: string
+  valor_total: number
+  status: StatusProposta
+  validade: string | null
 }
 interface ClienteOpt { id: string; nome: string }
-interface CatalogoSubitem { id: string; codigo: string; descricao: string; unidade: string; valor_unitario: number }
-interface CatalogoItem { id: string; codigo: string; descricao: string; propostas_catalogo_subitens: CatalogoSubitem[] }
-interface CatalogoEtapa { id: string; nome: string; descricao: string | null; propostas_catalogo_itens: CatalogoItem[] }
-interface SubetapaSelecionada {
-  chave: string; etapaId: string; etapaNome: string; itemId: string; itemCodigo: string;
-  itemNome: string; subitemId: string; subitemCodigo: string; descricao: string;
-  unidade: string; valorUnitario: number;
-}
-
-const fmtBRL = (v: number | null | undefined) =>
-  (v ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-const EMPTY: PropostaFormValues = {
-  cliente_id: "",
-  oportunidade_id: null,
-  titulo: "",
-  descricao: "",
-  status: "rascunho",
-  validade: "",
-  data_envio: "",
-  condicoes_pagamento: "",
-  observacoes: "",
-  itens: [],
-};
-
-const mensagensValidacao = (erro: unknown): string[] => {
-  if (!erro || typeof erro !== "object") return [];
-  const registro = erro as Record<string, unknown>;
-  const atual = typeof registro.message === "string" ? [registro.message] : [];
-  return [
-    ...atual,
-    ...Object.entries(registro)
-      .filter(([chave]) => chave !== "message" && chave !== "ref" && chave !== "type")
-      .flatMap(([, valor]) => mensagensValidacao(valor)),
-  ];
-};
-
-const normalizarItem = (item: Partial<PropostaItemValues>): PropostaItemValues => ({
-  descricao: String(item.descricao ?? "").trim(),
-  unidade: String(item.unidade || "un").trim(),
-  quantidade: Number(item.quantidade ?? 1),
-  valor_unitario: Number(item.valor_unitario ?? 0),
-  referencia_id: item.referencia_id || null,
-  fonte_referencia: item.fonte_referencia || null,
-  tipo_referencia: item.tipo_referencia || null,
-  codigo_referencia: item.codigo_referencia?.trim() || null,
-  referencia_uf: item.referencia_uf?.trim().toUpperCase() || null,
-  referencia_mes: item.referencia_mes?.trim() || null,
-  etapa_codigo: item.etapa_codigo?.trim() || null,
-  etapa_nome: item.etapa_nome?.trim() || null,
-  item_codigo: item.item_codigo?.trim() || null,
-  item_nome: item.item_nome?.trim() || null,
-  subitem_codigo: item.subitem_codigo?.trim() || null,
-});
+const brl = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 function PropostasPage() {
-  const searchParams = Route.useSearch();
-  const navigate = useNavigate();
-  const { perfil } = useAuth();
-  const qc = useQueryClient();
-  const podeEditar =
-    perfil?.perfil === "admin" ||
-    perfil?.perfil === "diretor" ||
-    perfil?.perfil === "financeiro_civil" ||
-    perfil?.perfil === "financeiro_imobiliaria";
-  const podeExcluir = perfil?.perfil === "admin" || perfil?.perfil === "diretor";
+  const search = Route.useSearch()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const { perfil } = useAuth()
+  const [propostaId, setPropostaId] = useState<string | null>(search.propostaId ?? null)
+  const [novaOpen, setNovaOpen] = useState(false)
+  const [duplicarOpen, setDuplicarOpen] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<'all' | StatusProposta>('all')
+  const [clienteFilter, setClienteFilter] = useState(search.clienteId ?? 'all')
+  const podeEditar = ['admin', 'diretor', 'financeiro', 'financeiro_civil', 'financeiro_imobiliaria'].includes(perfil?.perfil ?? '')
+  const podeExcluir = perfil?.perfil === 'admin' || perfil?.perfil === 'diretor'
 
-  const [formOpen, setFormOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<PropostaRow | null>(null);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [printTarget, setPrintTarget] = useState<PropostaRow | null>(null);
-  const [editorTarget, setEditorTarget] = useState<PropostaRow | null>(null);
+  useEffect(() => setPropostaId(search.propostaId ?? null), [search.propostaId])
+  useEffect(() => { if (search.clienteId) setClienteFilter(search.clienteId) }, [search.clienteId])
 
+  const abrirEditor = (id: string | null) => {
+    setPropostaId(id)
+    navigate({
+      to: '/comercial/propostas',
+      search: { busca: search.busca, clienteId: search.clienteId, propostaId: id ?? undefined },
+      replace: true,
+    })
+  }
 
-
-  const { data: editorData, isLoading: editorLoading } = useQuery({
-    queryKey: ["proposta-editor-completo", editorTarget?.id],
-    enabled: !!editorTarget,
+  const propostasQuery = useQuery({
+    queryKey: ['propostas'],
+    refetchOnMount: 'always',
     queryFn: async () => {
-      if (!editorTarget) return null;
-
-      // 1. Identificar Obra e Cliente da Proposta
-      let obra: any = null;
-      if ((editorTarget as any).obra_id) {
-        const { data } = await supabase.from("obras").select("*, clientes(*)").eq("id", (editorTarget as any).obra_id).maybeSingle();
-        if (data) obra = data;
-      }
-      if (!obra) {
-        const { data } = await supabase.from("obras").select("*, clientes(*)").eq("proposta_id", editorTarget.id).maybeSingle();
-        if (data) obra = data;
-      }
-      if (!obra && editorTarget.titulo) {
-        const nomeLimpo = editorTarget.titulo.replace(/^Proposta\s+Comercial\s*[-–—:]\s*/i, "").trim();
-        if (nomeLimpo) {
-          const { data } = await supabase.from("obras").select("*, clientes(*)").ilike("nome", nomeLimpo).limit(1).maybeSingle();
-          if (data) obra = data;
-        }
-      }
-
-      // Cliente da obra ou da proposta
-      let cliente = obra?.clientes as any;
-      if (!cliente && editorTarget.cliente_id) {
-        const { data } = await supabase.from("clientes").select("*").eq("id", editorTarget.cliente_id).maybeSingle();
-        if (data) cliente = data;
-      }
-
-      // 2. Itens da proposta
-      const { data: itensDb } = await supabase
-        .from("propostas_itens")
-        .select("*")
-        .eq("proposta_id", editorTarget.id)
-        .order("ordem");
-
-      let itens = (itensDb ?? []) as any[];
-
-      // Se a proposta ainda não tiver itens salvos, busca do orçamento real da obra
-      if (itens.length === 0 && obra?.id) {
-        const { data: orc } = await supabase
-          .from("orcamentos")
-          .select("id, bdi_geral")
-          .eq("obra_id", obra.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (orc?.id) {
-          const bdiGeral = Number(orc.bdi_geral ?? 25);
-          const { data: etapasAnaliticas } = await supabase
-            .from("orcamento_etapas")
-            .select("*")
-            .eq("orcamento_id", orc.id)
-            .order("ordem");
-
-          if (etapasAnaliticas && etapasAnaliticas.length > 0) {
-            const etapaIds = etapasAnaliticas.map((e) => e.id);
-            const { data: ativs } = await supabase
-              .from("orcamento_atividades")
-              .select("*")
-              .in("etapa_id", etapaIds)
-              .order("ordem");
-
-            if (ativs && ativs.length > 0) {
-              const etapaPorId = new Map(etapasAnaliticas.map((e) => [e.id, e]));
-              itens = ativs.map((a, idx) => {
-                const ep = etapaPorId.get(a.etapa_id);
-                const qtd = Number(a.quantidade ?? 1);
-                const bdiAtiv = a.bdi_percentual != null ? Number(a.bdi_percentual) : bdiGeral;
-                let precoTot = Number(a.preco_total_centavos ?? 0);
-                if (!precoTot && a.custo_total_centavos) {
-                  precoTot = Math.round(Number(a.custo_total_centavos) * (1 + bdiAtiv / 100));
-                }
-                const precoUnit = qtd > 0 && precoTot > 0 ? (precoTot / 100) / qtd : 0;
-                return {
-                  id: a.id,
-                  descricao: a.descricao,
-                  unidade: a.unidade || "un",
-                  quantidade: qtd,
-                  valor_unitario: precoUnit,
-                  etapa_codigo: ep?.codigo || "01",
-                  etapa_nome: ep?.nome || "Etapa 1",
-                  codigo_referencia: a.codigo || `${ep?.codigo || "01"}.${String(idx + 1).padStart(2, "0")}`,
-                  ordem: idx,
-                };
-              });
-            }
-          }
-
-          if (itens.length === 0) {
-            const { data: legados } = await supabase
-              .from("orcamento_itens")
-              .select("*")
-              .eq("orcamento_id", orc.id)
-              .order("id");
-
-            if (legados && legados.length > 0) {
-              itens = legados.map((leg, idx) => ({
-                id: leg.id,
-                descricao: leg.descricao,
-                unidade: leg.unidade || "un",
-                quantidade: Number(leg.quantidade ?? 1),
-                valor_unitario: Number(leg.valor_unitario ?? 0),
-                etapa_codigo: leg.etapa ? String(leg.etapa).slice(0, 2) : "01",
-                etapa_nome: leg.etapa || "Geral",
-                codigo_referencia: `${idx + 1}`,
-                ordem: idx,
-              }));
-            }
-          }
-        }
-      }
-
-      // Monta as etapas e atividades
-      const etapasMap = new Map<string, any>();
-      itens.forEach((it: any, idx: number) => {
-        const etapaCod = it.etapa_codigo || "01";
-        const etapaNome = it.etapa_nome || "SERVIÇOS GERAIS";
-        if (!etapasMap.has(etapaCod)) {
-          etapasMap.set(etapaCod, {
-            id: `etapa-${etapaCod}`,
-            codigo: etapaCod,
-            nome: etapaNome,
-            valorTotalCentavos: 0,
-            atividades: [],
-          });
-        }
-        const etapa = etapasMap.get(etapaCod)!;
-        const precoUnitarioCentavos = Math.round(Number(it.valor_unitario ?? 0) * 100);
-        const precoTotalCentavos = Math.round(Number(it.quantidade ?? 0) * precoUnitarioCentavos);
-        etapa.valorTotalCentavos += precoTotalCentavos;
-        etapa.atividades.push({
-          id: it.id,
-          codigo: it.codigo_referencia || `${etapaCod}.${String(idx + 1).padStart(2, "0")}`,
-          descricao: it.descricao,
-          unidade: it.unidade || "un",
-          quantidade: Number(it.quantidade ?? 1),
-          precoUnitarioCentavos,
-          precoTotalCentavos,
-        });
-      });
-
-      const enderecoObra = [obra?.logradouro, obra?.numero_endereco, obra?.bairro, obra?.cidade, obra?.uf].filter(Boolean).join(", ") || obra?.endereco || "";
-      let prazoTexto = "30 a 60 dias úteis";
-      if (obra?.prazo_meses) prazoTexto = `${obra.prazo_meses} meses`;
-      else if (obra?.data_fim_prevista) prazoTexto = `Até ${new Date(obra.data_fim_prevista).toLocaleDateString("pt-BR")}`;
-
-      const docCliente = cliente?.cpf_cnpj || cliente?.cnpj || cliente?.cpf || "";
-      const clienteCpfCnpj = docCliente ? formatCpfCnpj(docCliente) : "";
-
-      return {
-        id: editorTarget.id,
-        numero: editorTarget.numero,
-        clienteNome: cliente?.nome || "Cliente",
-        clienteCpfCnpj,
-        clienteEmail: cliente?.email || "",
-        obraNome: obra?.nome || editorTarget.titulo || "Obra",
-        obraEndereco: enderecoObra,
-        prazoExecucaoTexto: prazoTexto,
-        status: editorTarget.status as any,
-        revisaoNumero: 1,
-        etapas: Array.from(etapasMap.values()),
-      };
+      const { data, error } = await supabase.from('propostas').select('*').order('created_at', { ascending: false })
+      if (error) throw error
+      return (data ?? []) as PropostaRow[]
     },
-  });
-  const [statusFilter, setStatusFilter] = useState<"all" | StatusProposta>("all");
-  const [catalogoOpen, setCatalogoOpen] = useState(false);
-  const [clienteFilter, setClienteFilter] = useState<string>(searchParams.clienteId ?? "all");
-
-  useEffect(() => {
-    if (searchParams.clienteId) {
-      setClienteFilter(searchParams.clienteId);
-    }
-  }, [searchParams.clienteId]);
-
-  const { data: propostas, isLoading } = useQuery({
-    queryKey: ["propostas"],
-    refetchOnMount: "always",
+  })
+  const clientesQuery = useQuery({
+    queryKey: ['clientes-opt'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("propostas")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as PropostaRow[];
+      const { data, error } = await supabase.from('clientes').select('id,nome').is('deleted_at', null).order('nome')
+      if (error) throw error
+      return (data ?? []) as ClienteOpt[]
     },
-  });
+  })
+  const editor = usePropostaEditor(propostaId)
 
-  useEffect(() => {
-    if (searchParams.propostaId && propostas) {
-      const match = propostas.find((p) => p.id === searchParams.propostaId);
-      if (match) {
-        setEditorTarget(match);
-      }
+  const clientesMap = useMemo(
+    () => Object.fromEntries((clientesQuery.data ?? []).map((cliente) => [cliente.id, cliente.nome])),
+    [clientesQuery.data],
+  )
+  const filtradas = useMemo(() => (propostasQuery.data ?? []).filter((proposta) => {
+    if (statusFilter !== 'all' && proposta.status !== statusFilter) return false
+    if (clienteFilter !== 'all' && proposta.cliente_id !== clienteFilter) return false
+    if (search.busca) {
+      const termo = search.busca.toLocaleLowerCase('pt-BR')
+      return `${proposta.numero} ${proposta.titulo} ${clientesMap[proposta.cliente_id] ?? ''}`.toLocaleLowerCase('pt-BR').includes(termo)
     }
-  }, [searchParams.propostaId, propostas]);
-
-  const { data: clientes } = useQuery({
-    queryKey: ["clientes-opt"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clientes").select("id,nome").is("deleted_at", null).order("nome");
-      if (error) throw error;
-      return (data ?? []) as ClienteOpt[];
-    },
-  });
-
-  const clientesMap = useMemo(() => {
-    const m: Record<string, string> = {};
-    (clientes ?? []).forEach((c) => { m[c.id] = c.nome; });
-    return m;
-  }, [clientes]);
-
-  const filtradas = useMemo(() => {
-    if (!propostas) return [];
-    let list = propostas;
-    if (statusFilter !== "all") {
-      list = list.filter((p) => p.status === statusFilter);
-    }
-    if (clienteFilter !== "all") {
-      list = list.filter((p) => p.cliente_id === clienteFilter);
-    }
-    if (searchParams.busca) {
-      const q = searchParams.busca.toLowerCase();
-      list = list.filter((p) =>
-        p.numero.toLowerCase().includes(q) ||
-        p.titulo.toLowerCase().includes(q) ||
-        (clientesMap[p.cliente_id] ?? "").toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [propostas, statusFilter, clienteFilter, searchParams.busca, clientesMap]);
+    return true
+  }), [propostasQuery.data, statusFilter, clienteFilter, search.busca, clientesMap])
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      // 1. Desvincular obras que apontam para esta proposta
-      await supabase.from("obras").update({ proposta_id: null } as any).eq("proposta_id", id);
-
-      // 2. Desvincular contratos que apontam para esta proposta
-      await supabase.from("contratos").update({ proposta_id: null } as any).eq("proposta_id", id);
-
-      // 3. Desvincular cronogramas
-      await supabase.from("obras_cronogramas").update({ proposta_id: null } as any).eq("proposta_id", id);
-
-      // 4. Excluir revisões da proposta
-      await supabase.from("proposta_revisoes").delete().eq("proposta_id", id);
-
-      // 5. Excluir itens da proposta
-      await supabase.from("propostas_itens").delete().eq("proposta_id", id);
-
-      // 6. Excluir a proposta principal com verificação
-      const { data, error } = await supabase.from("propostas").delete().eq("id", id).select("id");
-      if (error) throw error;
-      if (!data || data.length === 0) {
-        throw new Error("Não foi possível excluir a proposta do banco de dados.");
-      }
+      const { error } = await supabase.rpc('excluir_proposta_rascunho', { p_proposta_id: id })
+      if (error) throw error
     },
-    onMutate: async (id: string) => {
-      await qc.cancelQueries({ queryKey: ["propostas"] });
-      const previous = qc.getQueryData<PropostaRow[]>(["propostas"]);
-      qc.setQueryData<PropostaRow[]>(["propostas"], (old) => (old ?? []).filter((p) => p.id !== id));
-      return { previous };
+    onSuccess: async () => {
+      toast.success('Rascunho excluído definitivamente.')
+      setDeleteId(null)
+      await queryClient.invalidateQueries({ queryKey: ['propostas'] })
     },
-    onError: (e: Error, _, context) => {
-      if (context?.previous) {
-        qc.setQueryData(["propostas"], context.previous);
-      }
-      toast.error(e.message);
-    },
-    onSuccess: () => {
-      toast.success("Proposta excluída");
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["propostas"] });
-    },
-  });
+    onError: (erro: Error) => toast.error(erro.message),
+  })
 
-  const decidirProposta = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: "aceita" | "rejeitada" }) => {
-      const { error } = await supabase.from("propostas").update({ status }).eq("id", id);
-      if (error) throw error;
+  const decidirMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: 'aceita' | 'rejeitada' }) => {
+      const { error } = await supabase.rpc('alterar_status_proposta_editor', {
+        p_proposta_id: id,
+        p_status: status,
+      })
+      if (error) throw error
     },
-    onSuccess: (_, variaveis) => {
-      toast.success(variaveis.status === "aceita" ? "Proposta aceita. Obra e etapas do cronograma disponíveis." : "Proposta rejeitada");
-      qc.invalidateQueries({ queryKey: ["propostas"] });
-      qc.invalidateQueries({ queryKey: ["obras"] });
-      qc.invalidateQueries({ queryKey: ["obras-cronograma-select"] });
-      qc.invalidateQueries({ queryKey: ["cronograma-obra"] });
+    onSuccess: async (_, variaveis) => {
+      toast.success(variaveis.status === 'aceita' ? 'Proposta aceita.' : 'Proposta rejeitada.')
+      await queryClient.invalidateQueries({ queryKey: ['propostas'] })
     },
-    onError: (e: Error) => toast.error(e.message),
-  });
+    onError: (erro: Error) => toast.error(erro.message),
+  })
 
-  if (editorTarget && editorData) {
-    return (
-      <EditorPropostaComercial
-        proposta={editorData}
-        onVoltar={() => setEditorTarget(null)}
-        onSalvarRascunho={async () => {
-          toast.success("Rascunho da proposta comercial salvo!");
-          qc.invalidateQueries({ queryKey: ["propostas"] });
-        }}
-        onPublicarRevisao={async () => {
-          toast.success("Nova revisão comercial publicada e congelada!");
-          qc.invalidateQueries({ queryKey: ["propostas"] });
-        }}
-      />
-    );
+  if (propostaId) {
+    if (editor.isPending) return <div className="space-y-3"><Skeleton className="h-12 w-full" /><Skeleton className="h-[560px] w-full" /></div>
+    if (editor.error) return <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 space-y-4"><h1 className="font-semibold">Não foi possível abrir a proposta</h1><p className="text-sm text-muted-foreground">{(editor.error as Error).message}</p><Button variant="outline" onClick={() => abrirEditor(null)}>Voltar à lista</Button></div>
+    if (editor.estado?.tipo === 'escolher_revisao') return <div className="max-w-2xl mx-auto rounded-lg border bg-card p-6 space-y-4"><h1 className="text-xl font-semibold">Escolha a revisão de origem</h1><p className="text-sm text-muted-foreground">Esta proposta antiga possui mais de uma revisão possível. Selecione explicitamente qual orçamento deve ser congelado.</p><div className="space-y-2">{editor.estado.candidatas.map((revisao) => <Button key={revisao.id} variant="outline" className="w-full justify-between" onClick={() => editor.selecionarRevisaoLegada(revisao.id)}><span>Revisão {revisao.numero}</span><span>{new Date(revisao.createdAt).toLocaleDateString('pt-BR')}</span></Button>)}</div><Button variant="ghost" onClick={() => abrirEditor(null)}>Cancelar</Button></div>
+    if (editor.estado?.tipo === 'sem_origem') return <div className="max-w-xl mx-auto rounded-lg border bg-card p-6 space-y-4"><h1 className="text-xl font-semibold">Proposta sem orçamento de origem</h1><p className="text-sm text-muted-foreground">Este registro legado não pode ser editado até ser vinculado a uma revisão de orçamento.</p><Button variant="outline" onClick={() => abrirEditor(null)}>Voltar à lista</Button></div>
+    if (editor.editorData) return <EditorPropostaComercial proposta={editor.editorData} configuracaoInicial={editor.configuracao} revisoes={editor.revisoes} revisaoSelecionadaId={editor.revisaoSelecionadaId} onSelecionarRevisao={editor.abrirRevisaoHistorica} onVoltar={() => abrirEditor(null)} onSalvarRascunho={async (config) => { await editor.salvarRascunho(config); toast.success('Rascunho salvo.') }} onPublicarRevisao={async (config) => { await editor.publicarRascunho(config); toast.success('Revisão publicada e congelada.') }} />
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Propostas</h1>
-        <p className="text-sm text-muted-foreground">
-          Gestão e acompanhamento de propostas comerciais de orçamentos de obras.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">Propostas</h1><p className="text-sm text-muted-foreground">Propostas comerciais geradas exclusivamente de revisões de orçamento.</p></div>{podeEditar && <Button onClick={() => setNovaOpen(true)}><Plus className="size-4" /> Nova proposta</Button>}</header>
+      <div className="flex flex-wrap gap-2">
+        <Select value={statusFilter} onValueChange={(valor) => setStatusFilter(valor as 'all' | StatusProposta)}><SelectTrigger className="w-48"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos os status</SelectItem>{statusPropostaEnum.options.map((status) => <SelectItem key={status} value={status}>{STATUS_PROPOSTA_LABEL[status]}</SelectItem>)}</SelectContent></Select>
+        <Select value={clienteFilter} onValueChange={setClienteFilter}><SelectTrigger className="w-64"><SelectValue placeholder="Todos os clientes" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os clientes</SelectItem>{(clientesQuery.data ?? []).map((cliente) => <SelectItem key={cliente.id} value={cliente.id}>{cliente.nome}</SelectItem>)}</SelectContent></Select>
       </div>
-
-      <div className="space-y-4">
-        <div className="flex items-center gap-3 justify-between">
-          <div className="flex items-center gap-2">
-            {podeEditar && <Button variant="outline" onClick={() => setCatalogoOpen(true)}><Settings2 className="size-4" /> Catálogo</Button>}
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os status</SelectItem>
-                {statusPropostaEnum.options.map((s) => (
-                  <SelectItem key={s} value={s}>{STATUS_PROPOSTA_LABEL[s]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {podeEditar && (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (propostas && propostas.length > 0) {
-                    setEditorTarget(propostas[0]);
-                  } else {
-                    setEditTarget(null);
-                    setFormOpen(true);
-                  }
-                }}
-                className="gap-1.5 text-xs font-semibold text-sky-700 border-sky-300 bg-sky-50 hover:bg-sky-100"
-                title="Abrir o Editor Comercial com painel lateral"
-              >
-                <FileText className="size-4" />
-                Abrir Editor Comercial
-              </Button>
-              <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2">
-                <Plus className="size-4" /> Nova proposta
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-md border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Número</TableHead>
-                <TableHead>Título</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Validade</TableHead>
-                <TableHead className="text-right">Valor</TableHead>
-                <TableHead className="w-24" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                <TableRow><TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
-              ) : filtradas.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                  <FileText className="size-8 mx-auto mb-2 opacity-50" />
-                  Nenhuma proposta encontrada
-                </TableCell></TableRow>
-              ) : filtradas.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-xs">{p.numero}</TableCell>
-                  <TableCell className="font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setEditorTarget(p)}
-                      className="text-sky-700 hover:text-sky-900 hover:underline font-semibold text-left inline-flex items-center gap-1.5 cursor-pointer"
-                      title="Abrir no Editor Comercial Completo"
-                    >
-                      <FileText className="size-3.5 text-sky-600 flex-shrink-0" />
-                      <span>{p.titulo}</span>
-                    </button>
-                  </TableCell>
-                  <TableCell>{clientesMap[p.cliente_id] ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge className={cn(STATUS_PROPOSTA_BADGE[p.status])}>
-                      {STATUS_PROPOSTA_LABEL[p.status]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{p.validade ? new Date(p.validade + "T00:00").toLocaleDateString("pt-BR") : "—"}</TableCell>
-                  <TableCell className="text-right font-mono">{fmtBRL(p.valor_total)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {p.status === "aceita" && (
-                        <>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="size-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            title="Ver Obra gerada"
-                            onClick={() => navigate({ to: "/obras", search: { busca: p.titulo } })}
-                          >
-                            <HardHat className="size-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="size-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                            title="Gerar / Ver Contrato"
-                            onClick={() =>
-                              navigate({
-                                to: "/comercial/contratos",
-                                search: { propostaId: p.id, clienteId: p.cliente_id },
-                              })
-                            }
-                          >
-                            <FileSignature className="size-4" />
-                          </Button>
-                        </>
-                      )}
-                      {(p.status === "rascunho" || p.status === "enviada") && <>
-                        <Button size="icon" variant="ghost" className="size-8 text-green-700 hover:text-green-800" title="Aceitar proposta e criar obra" onClick={() => decidirProposta.mutate({ id: p.id, status: "aceita" })}>
-                          <CheckCircle2 className="size-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" className="size-8 text-destructive" title="Rejeitar proposta" onClick={() => decidirProposta.mutate({ id: p.id, status: "rejeitada" })}>
-                          <XCircle className="size-4" />
-                        </Button>
-                      </>}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 px-2 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border-sky-300 gap-1.5 cursor-pointer shadow-2xs"
-                        title="Abrir Editor Comercial com Painel Lateral"
-                        onClick={() => setEditorTarget(p)}
-                      >
-                        <FileText className="size-3.5" />
-                        Editor
-                      </Button>
-                      <Button size="icon" variant="ghost" className="size-8" title="Gerar proposta para envio" onClick={() => setPrintTarget(p)}>
-                        <Printer className="size-3.5" />
-                      </Button>
-                      {podeEditar && (
-                        <Button size="icon" variant="ghost" className="size-8"
-                          onClick={() => { setEditTarget(p); setFormOpen(true); }}>
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      )}
-                      {podeExcluir && (
-                        <Button size="icon" variant="ghost" className="size-8 text-destructive"
-                          onClick={() => setDeleteId(p.id)}>
-                          <Trash2 className="size-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-
-        <Dialog open={catalogoOpen} onOpenChange={setCatalogoOpen}>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader><DialogTitle>Catálogo de etapas, itens e subitens</DialogTitle><DialogDescription>Cadastre e mantenha os modelos usados nas propostas.</DialogDescription></DialogHeader>
-            <CatalogoPropostas />
-          </DialogContent>
-        </Dialog>
-
-        <PropostaFormDialog
-          open={formOpen}
-          onOpenChange={(o) => { setFormOpen(o); if (!o) setEditTarget(null); }}
-          target={editTarget}
-          initialClienteId={searchParams.clienteId}
-          clientes={clientes ?? []}
-          onSuccess={() => qc.invalidateQueries({ queryKey: ["propostas"] })}
-        />
-
-        <PropostaImpressao proposta={printTarget} open={!!printTarget} onOpenChange={(o) => !o && setPrintTarget(null)} />
-
-        <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir proposta?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Esta ação não pode ser desfeita. Os itens também serão removidos.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                onClick={() => { if (deleteId) deleteMutation.mutate(deleteId); setDeleteId(null); }}
-              >Excluir</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </div>
+      <div className="rounded-md border bg-card overflow-hidden"><Table><TableHeader><TableRow><TableHead>Número</TableHead><TableHead>Título</TableHead><TableHead>Cliente</TableHead><TableHead>Status</TableHead><TableHead>Validade</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader><TableBody>
+        {propostasQuery.isLoading ? <TableRow><TableCell colSpan={7}><Skeleton className="h-9 w-full" /></TableCell></TableRow> : filtradas.length === 0 ? <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground"><FileText className="size-8 mx-auto mb-2 opacity-50" />Nenhuma proposta encontrada</TableCell></TableRow> : filtradas.map((proposta) => <TableRow key={proposta.id}><TableCell className="font-mono text-xs">{proposta.numero}</TableCell><TableCell><button className="font-medium text-primary hover:underline inline-flex items-center gap-2" onClick={() => abrirEditor(proposta.id)}><FileText className="size-4" />{proposta.titulo}</button></TableCell><TableCell>{clientesMap[proposta.cliente_id] ?? '—'}</TableCell><TableCell><Badge variant="outline" className={cn('text-xs', STATUS_PROPOSTA_BADGE[proposta.status])}>{STATUS_PROPOSTA_LABEL[proposta.status]}</Badge></TableCell><TableCell>{proposta.validade ? new Date(`${proposta.validade}T12:00:00`).toLocaleDateString('pt-BR') : '—'}</TableCell><TableCell className="text-right font-mono">{brl(Number(proposta.valor_total))}</TableCell><TableCell><div className="flex justify-end gap-1">
+          <Button size="icon" variant="ghost" title="Abrir editor" onClick={() => abrirEditor(proposta.id)}><Pencil className="size-4" /></Button>
+          {proposta.status === 'rascunho' && podeEditar && <Button size="icon" variant="ghost" title="Duplicar de outra revisão" onClick={() => setDuplicarOpen(true)}><Copy className="size-4" /></Button>}
+          {proposta.status === 'enviada' && podeEditar && <><Button size="icon" variant="ghost" title="Aceitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'aceita' })}><CheckCircle2 className="size-4 text-emerald-600" /></Button><Button size="icon" variant="ghost" title="Rejeitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'rejeitada' })}><XCircle className="size-4 text-amber-600" /></Button></>}
+          {proposta.status === 'aceita' && <><Button size="icon" variant="ghost" title="Abrir obras" onClick={() => navigate({ to: '/obras', search: { busca: proposta.numero, clienteId: undefined } })}><HardHat className="size-4" /></Button><Button size="icon" variant="ghost" title="Abrir contratos" onClick={() => navigate({ to: '/comercial/contratos', search: { propostaId: proposta.id, clienteId: proposta.cliente_id } })}><FileSignature className="size-4" /></Button></>}
+          {proposta.status === 'rascunho' && podeExcluir && <Button size="icon" variant="ghost" title="Excluir rascunho" onClick={() => setDeleteId(proposta.id)}><Trash2 className="size-4 text-destructive" /></Button>}
+        </div></TableCell></TableRow>)}
+      </TableBody></Table></div>
+      <NovaPropostaOrcamentoDialog open={novaOpen} onOpenChange={setNovaOpen} onCriada={abrirEditor} />
+      <NovaPropostaOrcamentoDialog open={duplicarOpen} onOpenChange={setDuplicarOpen} onCriada={abrirEditor} duplicar />
+      <AlertDialog open={Boolean(deleteId)} onOpenChange={(aberto) => { if (!aberto && !deleteMutation.isPending) setDeleteId(null) }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Excluir este rascunho definitivamente?</AlertDialogTitle><AlertDialogDescription>A exclusão remove apenas propostas ainda não publicadas. Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={deleteMutation.isPending}>Cancelar</AlertDialogCancel><AlertDialogAction disabled={deleteMutation.isPending} onClick={(evento) => { evento.preventDefault(); if (deleteId) deleteMutation.mutate(deleteId) }}>{deleteMutation.isPending ? 'Excluindo…' : 'Excluir rascunho'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
-  );
-}
-
-function PropostaFormDialog({
-  open, onOpenChange, target, initialClienteId, clientes, onSuccess,
-}: {
-  open: boolean;
-  onOpenChange: (o: boolean) => void;
-  target: PropostaRow | null;
-  initialClienteId?: string;
-  clientes: ClienteOpt[];
-  onSuccess: () => void;
-}) {
-  const isEdit = !!target;
-  const { user } = useAuth();
-  const form = useForm<PropostaFormValues>({
-    resolver: zodResolver(propostaSchema),
-    defaultValues: EMPTY,
-  });
-  const itens = useFieldArray({ control: form.control, name: "itens", keyName: "_formId" });
-  const [etapaDisponivel, setEtapaDisponivel] = useState("");
-  const [subetapasSelecionadas, setSubetapasSelecionadas] = useState<SubetapaSelecionada[]>([]);
-  const [referenciaOpen, setReferenciaOpen] = useState(false);
-  const [calculadoraOpen, setCalculadoraOpen] = useState(false);
-
-  const adicionarReferencia = (referencia: ReferenciaCustoSelecionada) => {
-    const novoItem = normalizarItem({
-      descricao: referencia.descricao,
-      unidade: "un",
-      quantidade: 1,
-      valor_unitario: referencia.valorUnitario,
-      referencia_id: referencia.id,
-      fonte_referencia: referencia.fonte,
-      tipo_referencia: referencia.tipo,
-      codigo_referencia: referencia.codigo,
-      referencia_uf: referencia.uf,
-      referencia_mes: referencia.competencia,
-    });
-    if (itens.fields.length === 0 || (itens.fields.length === 1 && !form.getValues("itens.0.descricao"))) itens.replace([novoItem]);
-    else itens.append(novoItem);
-    form.clearErrors("itens");
-  };
-  const { data: catalogoEtapas = [] } = useQuery({
-    queryKey: ["catalogo-etapas-proposta"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("propostas_catalogo_etapas")
-        .select("id,nome,descricao,propostas_catalogo_itens(id,codigo,descricao,propostas_catalogo_subitens(id,codigo,descricao,unidade,valor_unitario))")
-        .eq("ativo", true).order("ordem");
-      if (error) throw error;
-      return (data ?? []) as CatalogoEtapa[];
-    },
-  });
-  const etapaAtual = useMemo(
-    () => catalogoEtapas.find((etapa) => etapa.id === etapaDisponivel) ?? null,
-    [catalogoEtapas, etapaDisponivel],
-  );
-  const subetapasDisponiveis = useMemo<SubetapaSelecionada[]>(
-    () => (etapaAtual?.propostas_catalogo_itens ?? []).flatMap((item) =>
-      (item.propostas_catalogo_subitens ?? []).map((subitem) => ({
-        chave: `${etapaAtual.id}:${item.id}:${subitem.id}`,
-        etapaId: etapaAtual.id,
-        etapaNome: etapaAtual.nome,
-        itemId: item.id,
-        itemCodigo: item.codigo,
-        itemNome: item.descricao,
-        subitemId: subitem.id,
-        subitemCodigo: subitem.codigo,
-        descricao: subitem.descricao,
-        unidade: subitem.unidade || "un",
-        valorUnitario: Number(subitem.valor_unitario ?? 0),
-      })),
-    ),
-    [etapaAtual],
-  );
-  const incluirSubetapaCatalogo = (subetapa: SubetapaSelecionada) => {
-    if (subetapasSelecionadas.some((selecionada) => selecionada.chave === subetapa.chave)) return;
-    setSubetapasSelecionadas((atuais) => [...atuais, subetapa]);
-    const linha = normalizarItem({
-      descricao: subetapa.descricao,
-      unidade: subetapa.unidade,
-      quantidade: 1,
-      valor_unitario: subetapa.valorUnitario,
-      etapa_codigo: String(catalogoEtapas.findIndex((etapa) => etapa.id === subetapa.etapaId) + 1),
-      etapa_nome: subetapa.etapaNome,
-      item_codigo: subetapa.itemCodigo,
-      item_nome: subetapa.itemNome,
-      subitem_codigo: subetapa.subitemCodigo,
-    });
-    if (itens.fields.length === 0 || (itens.fields.length === 1 && !form.getValues("itens.0.descricao"))) itens.replace([linha]);
-    else itens.append(linha);
-    form.clearErrors("itens");
-  };
-  const removerSubetapaCatalogo = (subetapa: SubetapaSelecionada) => {
-    setSubetapasSelecionadas((atuais) => atuais.filter((atual) => atual.chave !== subetapa.chave));
-    itens.replace(form.getValues("itens").filter((item) =>
-      item.etapa_nome !== subetapa.etapaNome ||
-      item.item_codigo !== subetapa.itemCodigo ||
-      item.subitem_codigo !== subetapa.subitemCodigo,
-    ));
-  };
-  const subetapasPorEtapa = useMemo(() => subetapasSelecionadas.reduce<Record<string, SubetapaSelecionada[]>>(
-    (grupos, subetapa) => ({ ...grupos, [subetapa.etapaNome]: [...(grupos[subetapa.etapaNome] ?? []), subetapa] }),
-    {},
-  ), [subetapasSelecionadas]);
-  const watchedItens = useWatch({ control: form.control, name: "itens" });
-  const total = useMemo(
-    () => (watchedItens ?? []).reduce(
-      (s, i) => s + (Number(i?.quantidade || 0) * Number(i?.valor_unitario || 0)), 0,
-    ),
-    [watchedItens],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    if (target) {
-      (async () => {
-        const { data, error } = await (supabase as any)
-          .from("propostas_itens")
-          .select("id,descricao,unidade,quantidade,valor_unitario,referencia_id,fonte_referencia,tipo_referencia,codigo_referencia,referencia_uf,referencia_mes,etapa_codigo,etapa_nome,item_codigo,item_nome,subitem_codigo")
-          .eq("proposta_id", target.id)
-          .order("ordem", { ascending: true });
-        if (error) toast.error(error.message);
-        const its = ((data ?? []) as ItemRow[]).map((i) => ({
-          id: i.id, descricao: i.descricao,
-          quantidade: Number(i.quantidade), valor_unitario: Number(i.valor_unitario),
-          referencia_id: i.referencia_id,
-          fonte_referencia: i.fonte_referencia,
-          tipo_referencia: i.tipo_referencia,
-          codigo_referencia: i.codigo_referencia,
-          referencia_uf: i.referencia_uf,
-          referencia_mes: i.referencia_mes,
-          etapa_codigo: i.etapa_codigo, etapa_nome: i.etapa_nome,
-          item_codigo: i.item_codigo, item_nome: i.item_nome,
-          subitem_codigo: i.subitem_codigo, unidade: i.unidade ?? "un",
-        }));
-        form.reset({
-          cliente_id: target.cliente_id,
-          titulo: target.titulo,
-          descricao: target.descricao ?? "",
-          status: target.status,
-          validade: target.validade ?? "",
-          data_envio: target.data_envio ?? "",
-          condicoes_pagamento: target.condicoes_pagamento ?? "",
-          observacoes: target.observacoes ?? "",
-          itens: its.length ? its : [{ descricao: "", quantidade: 1, valor_unitario: 0 }],
-        });
-      })();
-    } else {
-      form.reset({
-        ...EMPTY,
-        cliente_id: initialClienteId || "",
-      });
-    }
-    setEtapaDisponivel("");
-    setSubetapasSelecionadas([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, target?.id, initialClienteId]);
-
-  const mutation = useMutation({
-    mutationFn: async (values: PropostaFormValues) => {
-      const head = {
-        cliente_id: values.cliente_id,
-        titulo: values.titulo,
-        descricao: values.descricao || null,
-        status: values.status,
-        validade: values.validade || null,
-        data_envio: values.data_envio || null,
-        condicoes_pagamento: values.condicoes_pagamento || null,
-        observacoes: values.observacoes || null,
-      };
-      let propostaId = target?.id;
-      if (isEdit && target) {
-        const { error } = await supabase.from("propostas").update(head).eq("id", target.id);
-        if (error) throw error;
-        const { error: delErr } = await supabase
-          .from("propostas_itens").delete().eq("proposta_id", target.id);
-        if (delErr) throw delErr;
-      } else {
-        const { data, error } = await supabase
-          .from("propostas")
-          .insert({ ...head, numero: "", created_by: user?.id ?? null })
-          .select("id").single();
-        if (error) throw error;
-        propostaId = data.id;
-      }
-      const itensPayload = values.itens.map((i, idx) => ({
-        proposta_id: propostaId!,
-        descricao: i.descricao,
-        quantidade: i.quantidade,
-        valor_unitario: i.valor_unitario,
-        referencia_id: i.referencia_id || null,
-        fonte_referencia: i.fonte_referencia || null,
-        tipo_referencia: i.tipo_referencia || null,
-        codigo_referencia: i.codigo_referencia || null,
-        referencia_uf: i.referencia_uf || null,
-        referencia_mes: i.referencia_mes || null,
-        etapa_codigo: i.etapa_codigo || null,
-        etapa_nome: i.etapa_nome || null,
-        item_codigo: i.item_codigo || null,
-        item_nome: i.item_nome || null,
-        subitem_codigo: i.subitem_codigo || null,
-        unidade: i.unidade || "un",
-        ordem: idx,
-      }));
-      const { error: insErr } = await (supabase as any).from("propostas_itens").insert(itensPayload);
-      if (insErr) throw insErr;
-    },
-    onSuccess: () => {
-      toast.success(isEdit ? "Proposta atualizada" : "Proposta criada");
-      onSuccess();
-      onOpenChange(false);
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-  const errosItensRaiz = form.formState.errors.itens;
-  const errosItens = Array.isArray(errosItensRaiz)
-    ? errosItensRaiz.flatMap((erro, indice) =>
-        mensagensValidacao(erro).map((mensagem) => `Item ${indice + 1}: ${mensagem}`),
-      )
-    : mensagensValidacao(errosItensRaiz);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" onPointerDownOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => event.preventDefault()}>
-        <DialogHeader>
-          <DialogTitle>{isEdit ? `Editar ${target?.numero}` : "Nova proposta"}</DialogTitle>
-          <DialogDescription>Cabeçalho e itens da proposta comercial</DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          <form
-            onSubmit={form.handleSubmit(
-              (v) => mutation.mutate(v),
-              (erros) => {
-                const mensagens = mensagensValidacao(erros);
-                toast.error(mensagens[0] || "Revise os campos obrigatórios da proposta.");
-              },
-            )}
-            className="space-y-4"
-          >
-            <FormField control={form.control} name="titulo" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Título *</FormLabel>
-                <FormControl><Input {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField control={form.control} name="cliente_id" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cliente *</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      {clientes.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <FormField control={form.control} name="status" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status *</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent>
-                      {statusPropostaEnum.options.map((s) => (
-                        <SelectItem key={s} value={s}>{STATUS_PROPOSTA_LABEL[s]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="data_envio" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Data envio</FormLabel>
-                  <FormControl><Input type="date" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={form.control} name="validade" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Validade</FormLabel>
-                  <FormControl><Input type="date" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-            </div>
-
-            <div className="rounded-md border bg-muted/20 p-4 space-y-3">
-              <div>
-                <h3 className="font-semibold">Etapas do orçamento</h3>
-                <p className="text-sm text-muted-foreground">Escolha a etapa e inclua somente as subetapas necessárias para esta proposta.</p>
-              </div>
-              <div className="rounded-md border bg-background p-3">
-                <p className="mb-2 text-sm font-medium">1. Etapa disponível</p>
-                <Select value={etapaDisponivel} onValueChange={setEtapaDisponivel}>
-                  <SelectTrigger><SelectValue placeholder={catalogoEtapas.length ? "Selecione uma etapa" : "Nenhuma etapa cadastrada"} /></SelectTrigger>
-                  <SelectContent>
-                    {catalogoEtapas.map((etapa) => <SelectItem key={etapa.id} value={etapa.id}>{etapa.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="rounded-md border bg-background p-3">
-                <p className="mb-2 text-sm font-medium">2. Subetapas disponíveis</p>
-                {!etapaAtual ? (
-                  <p className="py-3 text-sm text-muted-foreground">Selecione uma etapa para visualizar suas subetapas.</p>
-                ) : subetapasDisponiveis.length === 0 ? (
-                  <p className="py-3 text-sm text-muted-foreground">Esta etapa ainda não possui subetapas cadastradas.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {subetapasDisponiveis.map((subetapa) => {
-                      const incluida = subetapasSelecionadas.some((selecionada) => selecionada.chave === subetapa.chave);
-                      return (
-                        <div key={subetapa.chave} className="flex flex-col gap-2 rounded-md border p-2 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="min-w-0 text-sm">
-                            <p className="font-medium">{subetapa.itemCodigo} {subetapa.itemNome}</p>
-                            <p className="text-muted-foreground">{subetapa.subitemCodigo} · {subetapa.descricao} · {subetapa.unidade}</p>
-                          </div>
-                          <Button type="button" size="sm" variant={incluida ? "secondary" : "default"} disabled={incluida} onClick={() => incluirSubetapaCatalogo(subetapa)}>
-                            {incluida ? "Incluída" : "Incluir"}
-                          </Button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              <div className="rounded-md border bg-background p-3">
-                <p className="mb-2 text-sm font-medium">3. Subetapas incluídas</p>
-                {subetapasSelecionadas.length === 0 ? (
-                  <p className="py-3 text-sm text-muted-foreground">Nenhuma subetapa incluída nesta proposta.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {Object.entries(subetapasPorEtapa).map(([etapaNome, subetapas]) => (
-                      <div key={etapaNome} className="rounded-md border p-3">
-                        <p className="mb-2 font-semibold">{etapaNome}</p>
-                        <div className="space-y-2">
-                          {subetapas.map((subetapa) => (
-                            <div key={subetapa.chave} className="flex items-center justify-between gap-2 text-sm">
-                              <span>{subetapa.subitemCodigo} · {subetapa.descricao}</span>
-                              <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => removerSubetapaCatalogo(subetapa)}>Remover</Button>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-semibold">Itens *</label>
-                <div className="flex flex-wrap gap-2">
-                  <Button type="button" size="sm" variant="outline" className="gap-1"
-                    onClick={() => setCalculadoraOpen(true)}>
-                    <Calculator className="size-3.5" /> Calculadora
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" className="gap-1"
-                    onClick={() => setReferenciaOpen(true)}>
-                    <Database className="size-3.5" /> SINAPI/SICRO
-                  </Button>
-
-                </div>
-              </div>
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="w-20">Unid.</TableHead>
-                      <TableHead className="w-24">Qtd</TableHead>
-                      <TableHead className="w-32">Vlr unit.</TableHead>
-                      <TableHead className="w-28 text-right">Subtotal</TableHead>
-                      <TableHead className="w-20 text-center">Ordem</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {itens.fields.map((f, idx) => {
-                      const currentItem = watchedItens?.[idx];
-                      const q = Number(currentItem?.quantidade || 0);
-                      const v = Number(currentItem?.valor_unitario || 0);
-                      return (
-                        <TableRow key={f.id}>
-                          <TableCell>
-                            <Input
-                              {...form.register(`itens.${idx}.descricao`)}
-                              placeholder="Descrição"
-                            />
-                            {currentItem?.fonte_referencia && (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {currentItem.fonte_referencia.toUpperCase()} · {currentItem.codigo_referencia} · {currentItem.referencia_uf} · {currentItem.referencia_mes}
-                              </p>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              aria-label="Unidade de medida"
-                              {...form.register(`itens.${idx}.unidade`)}
-                              placeholder="un"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input type="number" step="0.001" min="0"
-                              {...form.register(`itens.${idx}.quantidade`, { valueAsNumber: true })}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <FormField
-                              control={form.control}
-                              name={`itens.${idx}.valor_unitario`}
-                              render={({ field }) => (
-                                <Input
-                                  type="text"
-                                  {...field}
-                                  value={formatBRLInput(field.value)}
-                                  onChange={(e) => {
-                                    const rawVal = e.target.value;
-                                    const cleanDigits = rawVal.replace(/\D/g, "");
-                                    if (!cleanDigits) {
-                                      field.onChange(0);
-                                      return;
-                                    }
-                                    const val = parseInt(cleanDigits, 10) / 100;
-                                    field.onChange(val);
-                                  }}
-                                />
-                              )}
-                            />
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {fmtBRL(q * v)}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex justify-center gap-1">
-                              <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Subir item"
-                                disabled={idx === 0} onClick={() => itens.move(idx, idx - 1)}>
-                                <ArrowUp className="size-3.5" />
-                              </Button>
-                              <Button type="button" size="icon" variant="ghost" className="size-7" aria-label="Descer item"
-                                disabled={idx === itens.fields.length - 1} onClick={() => itens.move(idx, idx + 1)}>
-                                <ArrowDown className="size-3.5" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Button type="button" size="icon" variant="ghost"
-                              className="size-7 text-destructive"
-                              onClick={() => itens.remove(idx)}>
-                              <Trash2 className="size-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              {errosItens.length > 0 && (
-                <div className="space-y-1 text-xs text-destructive">
-                  {errosItens.map((mensagem, indice) => (
-                    <p key={`${mensagem}-${indice}`}>{mensagem}</p>
-                  ))}
-                </div>
-              )}
-              <div className="flex justify-end text-sm font-semibold pr-12">
-                Total: <span className="font-mono ml-2">{fmtBRL(total)}</span>
-              </div>
-            </div>
-
-            <FormField control={form.control} name="condicoes_pagamento" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Condições de pagamento</FormLabel>
-                <FormControl><Textarea rows={2} {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-            <FormField control={form.control} name="observacoes" render={({ field }) => (
-              <FormItem>
-                <FormLabel>Observações</FormLabel>
-                <FormControl><Textarea rows={2} {...field} /></FormControl>
-                <FormMessage />
-              </FormItem>
-            )} />
-
-            <CalculadoraDialog open={calculadoraOpen} onOpenChange={setCalculadoraOpen} />
-            
-            <ReferenciaCustosPicker
-              open={referenciaOpen}
-              onOpenChange={setReferenciaOpen}
-              onSelect={adicionarReferencia}
-              title="Adicionar referência à proposta"
-            />
-
-            <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? "Salvando..." : isEdit ? "Salvar" : "Criar"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-
-function CalculadoraDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const [primeiroValor, setPrimeiroValor] = useState("0");
-  const [segundoValor, setSegundoValor] = useState("0");
-  const [operacao, setOperacao] = useState<"+" | "-" | "*" | "/">("+");
-
-  const resultado = useMemo(() => {
-    const primeiro = Number(primeiroValor.replace(",", ".")) || 0;
-    const segundo = Number(segundoValor.replace(",", ".")) || 0;
-    if (operacao === "+") return primeiro + segundo;
-    if (operacao === "-") return primeiro - segundo;
-    if (operacao === "*") return primeiro * segundo;
-    return segundo === 0 ? null : primeiro / segundo;
-  }, [primeiroValor, segundoValor, operacao]);
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>Calculadora</DialogTitle>
-          <DialogDescription>Use como apoio ao orçamento. O resultado não altera os itens automaticamente.</DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-[1fr_100px_1fr] items-end gap-2">
-          <div className="space-y-2">
-            <label htmlFor="calculadora-primeiro" className="text-sm font-medium">Primeiro valor</label>
-            <Input id="calculadora-primeiro" inputMode="decimal" value={primeiroValor} onChange={(event) => setPrimeiroValor(event.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="calculadora-operacao" className="text-sm font-medium">Operação</label>
-            <Select value={operacao} onValueChange={(value) => setOperacao(value as typeof operacao)}>
-              <SelectTrigger id="calculadora-operacao"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="+">Somar (+)</SelectItem>
-                <SelectItem value="-">Subtrair (−)</SelectItem>
-                <SelectItem value="*">Multiplicar (×)</SelectItem>
-                <SelectItem value="/">Dividir (÷)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="calculadora-segundo" className="text-sm font-medium">Segundo valor</label>
-            <Input id="calculadora-segundo" inputMode="decimal" value={segundoValor} onChange={(event) => setSegundoValor(event.target.value)} />
-          </div>
-        </div>
-        <div className="rounded-md border bg-muted/30 p-4 text-right">
-          <p className="text-xs text-muted-foreground">Resultado</p>
-          <p className="font-mono text-lg font-semibold">{resultado === null ? "Não é possível dividir por zero" : fmtBRL(resultado)}</p>
-        </div>
-        <DialogFooter><Button type="button" onClick={() => onOpenChange(false)}>Fechar</Button></DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
+  )
 }
