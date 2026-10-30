@@ -35,7 +35,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
-  configuracaoPropostaPadrao,
+  normalizarConfiguracaoProposta,
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
 import { supabase as client } from '@/integrations/supabase/client.custom'
@@ -75,6 +75,7 @@ export interface PropostaEditorData {
 
 interface EditorPropostaComercialProps {
   proposta: PropostaEditorData
+  configuracaoInicial?: Partial<ConfiguracaoPropostaComercial> | null
   onSalvarRascunho?: (config: ConfiguracaoPropostaComercial) => Promise<void>
   onPublicarRevisao?: (config: ConfiguracaoPropostaComercial) => Promise<void>
   onVoltar?: () => void
@@ -82,15 +83,24 @@ interface EditorPropostaComercialProps {
 
 export function EditorPropostaComercial({
   proposta,
+  configuracaoInicial,
   onSalvarRascunho,
   onPublicarRevisao,
   onVoltar,
 }: EditorPropostaComercialProps) {
-    const [config, setConfig] = useState<ConfiguracaoPropostaComercial>({
-    ...configuracaoPropostaPadrao,
-    tituloProposta: `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
-    prazoExecucaoTexto: proposta.prazoExecucaoTexto || configuracaoPropostaPadrao.prazoExecucaoTexto,
-  })
+  const configRecebida = useMemo(
+    () => normalizarConfiguracaoProposta({
+      ...configuracaoInicial,
+      tituloProposta: configuracaoInicial?.tituloProposta ?? `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
+      prazoExecucaoTexto: configuracaoInicial?.prazoExecucaoTexto ?? proposta.prazoExecucaoTexto,
+    }),
+    [configuracaoInicial, proposta.obraNome, proposta.prazoExecucaoTexto],
+  )
+  const [config, setConfig] = useState<ConfiguracaoPropostaComercial>(configRecebida)
+
+  useEffect(() => {
+    setConfig(configRecebida)
+  }, [configRecebida])
 
   // Consulta dados e logo da empresa cadastrada em /empresa
   const { data: empresa } = useQuery({

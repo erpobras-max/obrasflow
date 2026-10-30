@@ -74,6 +74,60 @@ export const configuracaoPropostaComercialPadrao: ConfiguracaoPropostaComercial 
   observacoesEtapa: {},
 })
 
+const registroTexto = (valor: unknown): Record<string, string> => {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return {}
+  return Object.fromEntries(
+    Object.entries(valor as Record<string, unknown>)
+      .filter(([, item]) => typeof item === 'string')
+      .map(([chave, item]) => [chave, item as string]),
+  )
+}
+
+export function normalizarConfiguracaoProposta(
+  valor?: Partial<ConfiguracaoPropostaComercial> | null,
+): ConfiguracaoPropostaComercial {
+  const origem = valor && typeof valor === 'object' ? valor : {}
+  const base = configuracaoPropostaComercialPadrao
+  const booleano = (chave: keyof ConfiguracaoPropostaComercial) =>
+    typeof origem[chave] === 'boolean' ? (origem[chave] as boolean) : (base[chave] as boolean)
+  const texto = (chave: keyof ConfiguracaoPropostaComercial) =>
+    typeof origem[chave] === 'string' ? (origem[chave] as string) : (base[chave] as string)
+  const lista = (chave: 'etapasOcultas' | 'atividadesOcultas') =>
+    Array.isArray(origem[chave]) ? origem[chave].filter((item): item is string => typeof item === 'string') : []
+
+  return {
+    mostrarEtapas: booleano('mostrarEtapas'),
+    mostrarAtividades: booleano('mostrarAtividades'),
+    mostrarQuantidades: booleano('mostrarQuantidades'),
+    mostrarUnidades: booleano('mostrarUnidades'),
+    mostrarPrecoUnitario: booleano('mostrarPrecoUnitario'),
+    mostrarComposicoes: booleano('mostrarComposicoes'),
+    mostrarCustosInternos: booleano('mostrarCustosInternos'),
+    mostrarBdi: booleano('mostrarBdi'),
+    mostrarCapa: booleano('mostrarCapa'),
+    mostrarLogo: booleano('mostrarLogo'),
+    mostrarDadosEmpresa: booleano('mostrarDadosEmpresa'),
+    mostrarDadosCliente: booleano('mostrarDadosCliente'),
+    mostrarDadosObra: booleano('mostrarDadosObra'),
+    mostrarApenasEtapa: booleano('mostrarApenasEtapa'),
+    mostrarCondicoesPagamento: booleano('mostrarCondicoesPagamento'),
+    mostrarPrazoExecucao: booleano('mostrarPrazoExecucao'),
+    mostrarValidade: booleano('mostrarValidade'),
+    mostrarObservacoes: booleano('mostrarObservacoes'),
+    mostrarAssinaturas: booleano('mostrarAssinaturas'),
+    tituloProposta: texto('tituloProposta'),
+    textoApresentacao: texto('textoApresentacao'),
+    textoEncerramento: texto('textoEncerramento'),
+    prazoExecucaoTexto: texto('prazoExecucaoTexto'),
+    validadeTexto: texto('validadeTexto'),
+    condicoesPagamentoTexto: texto('condicoesPagamentoTexto'),
+    descricoesComerciais: registroTexto(origem.descricoesComerciais),
+    etapasOcultas: lista('etapasOcultas'),
+    atividadesOcultas: lista('atividadesOcultas'),
+    observacoesEtapa: registroTexto(origem.observacoesEtapa),
+  }
+}
+
 function sanitizarComercial(valor: unknown): any {
   if (Array.isArray(valor)) return valor.map(sanitizarComercial)
   if (!valor || typeof valor !== 'object') return valor
@@ -87,12 +141,9 @@ function sanitizarComercial(valor: unknown): any {
 
 export function criarFotografiaProposta(
   revisao: { id: string; numero: number; fotografia: Record<string, any> },
-  configuracao: Partial<ConfiguracaoPropostaComercial> = configuracaoPropostaPadrao
+  configuracao: Partial<ConfiguracaoPropostaComercial> = configuracaoPropostaComercialPadrao
 ) {
-  const config = {
-    ...configuracaoPropostaComercialPadrao,
-    ...configuracao,
-  }
+  const config = normalizarConfiguracaoProposta(configuracao)
   const origem = sanitizarComercial(structuredClone(revisao.fotografia))
 
   const etapasFiltradas = (origem.etapas ?? [])
