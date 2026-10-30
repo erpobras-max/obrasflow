@@ -79,6 +79,7 @@ interface OrcamentoAnaliticoViewProps {
   bdiInicial?: number
   somenteLeitura?: boolean
   onGerarProposta?: () => void
+  onItensAlterados?: () => void
 }
 
 export function OrcamentoAnaliticoView({
@@ -88,6 +89,7 @@ export function OrcamentoAnaliticoView({
   bdiInicial = 25,
   somenteLeitura = false,
   onGerarProposta,
+  onItensAlterados,
 }: OrcamentoAnaliticoViewProps) {
   const [etapas, setEtapas] = useState<Etapa[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -161,6 +163,15 @@ export function OrcamentoAnaliticoView({
   async function carregarOuMigrar() {
     setCarregando(true)
     try {
+      // Verificar se este orçamento já é analítico
+      const { data: orcData } = await supabase
+        .from('orcamentos')
+        .select('analitico_ativo, bdi_geral')
+        .eq('id', orcamentoId)
+        .maybeSingle()
+
+      const jaAnalitico = Boolean(orcData?.analitico_ativo)
+
       let respEtapas = await supabase
         .from('orcamento_etapas')
         .select('*')
@@ -168,8 +179,8 @@ export function OrcamentoAnaliticoView({
         .order('ordem')
       if (respEtapas.error) throw respEtapas.error
 
-      // Se não há etapas mas há itens legados, migra uma única vez
-      if (!respEtapas.data?.length && itens.length) {
+      // Se NÃO é analítico ainda, não há etapas mas há itens legados, migra uma única vez
+      if (!jaAnalitico && !respEtapas.data?.length && itens.length) {
         await migrarLegado()
         respEtapas = await supabase
           .from('orcamento_etapas')
@@ -177,6 +188,9 @@ export function OrcamentoAnaliticoView({
           .eq('orcamento_id', orcamentoId)
           .order('ordem')
         if (respEtapas.error) throw respEtapas.error
+      } else if (!jaAnalitico && respEtapas.data?.length) {
+        // Marca analítico ativo se já existem etapas
+        void supabase.from('orcamentos').update({ analitico_ativo: true }).eq('id', orcamentoId)
       }
 
       const etapaIds = (respEtapas.data ?? []).map((e: any) => e.id)
@@ -307,6 +321,10 @@ export function OrcamentoAnaliticoView({
       .update({ analitico_ativo: true, bdi_geral: bdiGeral })
       .eq('id', orcamentoId)
     if (r.error) throw r.error
+
+    // Remove os itens legados da tabela antiga para evitar re-importação ou duplicação
+    await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId)
+    onItensAlterados?.()
   }
 
   const atualizarLocal = (e: number, a: number, patch: Partial<Atividade>) =>
@@ -398,6 +416,10 @@ export function OrcamentoAnaliticoView({
     }
     const { error } = await supabase.from('orcamento_etapas').delete().eq('id', etapaId)
     if (error) return toast.error(error.message)
+
+    // Remover itens legados correspondentes a esta etapa
+    await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('etapa', etapa.nome)
+    onItensAlterados?.()
 
     setEtapas((prev) => prev.filter((e) => e.id !== etapaId))
     toast.success('Etapa excluída com sucesso')
@@ -567,6 +589,8 @@ export function OrcamentoAnaliticoView({
   async function excluirAtividade(atividadeId: string) {
     if (!confirm('Deseja realmente remover esta composição/atividade do orçamento?')) return
     try {
+      const atividadeAlvo = etapas.flatMap((e) => e.atividades).find((a) => a.id === atividadeId)
+
       // 1. Deletar memoriais vinculados
       await supabase.from('orcamento_memoriais').delete().eq('atividade_id', atividadeId)
 
@@ -580,8 +604,14 @@ export function OrcamentoAnaliticoView({
         return
       }
 
-      // 4. Se houver item legado correspondente, remove também
+      // 4. Se houver item legado correspondente, remove também (por ID, descrição ou código)
       await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('id', atividadeId)
+      if (atividadeAlvo?.descricao) {
+        await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('descricao', atividadeAlvo.descricao)
+      }
+      if (atividadeAlvo?.codigo) {
+        await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('codigo', atividadeAlvo.codigo)
+      }
 
       // 5. Atualizar estado local imediatamente
       setEtapas((prev) =>
@@ -591,6 +621,7 @@ export function OrcamentoAnaliticoView({
         }))
       )
 
+      onItensAlterados?.()
       toast.success('Composição removida com sucesso!')
     } catch (e: any) {
       toast.error(`Erro ao excluir composição: ${e.message}`)

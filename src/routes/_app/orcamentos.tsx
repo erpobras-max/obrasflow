@@ -409,6 +409,9 @@ function OrcamentosPage() {
     mutationFn: async (row: any) => {
       if (!orcamento) throw new Error("Selecione uma obra antes de adicionar a referência");
       const valorUnitario = Number(refType === "composicoes" ? row.custo_total : row.preco_mediano);
+      const valorUnitarioCentavos = Math.round(valorUnitario * 100);
+
+      // Inserir na tabela orcamento_itens
       const { error } = await supabase.from("orcamento_itens").insert({
         orcamento_id: orcamento.id,
         codigo: row.codigo,
@@ -425,10 +428,79 @@ function OrcamentosPage() {
         etapa: row.tipo_classe || "Geral",
       });
       if (error) throw error;
+
+      // Também sincronizar diretamente com a estrutura analítica
+      try {
+        const nomeEtapa = row.tipo_classe || "Geral";
+        let { data: etapaExistente } = await supabase
+          .from("orcamento_etapas")
+          .select("id, codigo")
+          .eq("orcamento_id", orcamento.id)
+          .eq("nome", nomeEtapa)
+          .maybeSingle();
+
+        if (!etapaExistente) {
+          const { data: todasEtapas } = await supabase
+            .from("orcamento_etapas")
+            .select("id")
+            .eq("orcamento_id", orcamento.id);
+          const ordem = (todasEtapas?.length ?? 0) + 1;
+          const { data: novaEtapa } = await supabase
+            .from("orcamento_etapas")
+            .insert({
+              orcamento_id: orcamento.id,
+              codigo: String(ordem),
+              nome: nomeEtapa,
+              ordem,
+            })
+            .select("id, codigo")
+            .single();
+          etapaExistente = novaEtapa;
+        }
+
+        if (etapaExistente) {
+          const { data: atvsExistentes } = await supabase
+            .from("orcamento_atividades")
+            .select("id")
+            .eq("etapa_id", etapaExistente.id);
+          const ordemAtv = (atvsExistentes?.length ?? 0) + 1;
+
+          const { data: novaAtv } = await supabase
+            .from("orcamento_atividades")
+            .insert({
+              etapa_id: etapaExistente.id,
+              codigo: row.codigo,
+              descricao: row.descricao,
+              unidade: row.unidade,
+              quantidade: 1,
+              ordem: ordemAtv,
+              fonte: refSource === "sinapi" ? "sinapi" : "propria",
+              codigo_referencia: row.codigo,
+            })
+            .select("id")
+            .single();
+
+          if (novaAtv) {
+            await supabase.from("orcamento_atividade_insumos").insert({
+              atividade_id: novaAtv.id,
+              codigo: row.codigo,
+              descricao: row.descricao,
+              unidade: row.unidade,
+              categoria: refType === "composicoes" ? "outros" : "material",
+              coeficiente: 1,
+              preco_unitario_centavos: valorUnitarioCentavos,
+              ordem: 0,
+            });
+          }
+        }
+      } catch (analiticoErr) {
+        console.warn("Aviso ao vincular item à árvore analítica:", analiticoErr);
+      }
     },
     onSuccess: () => {
       toast.success("Referência adicionada ao orçamento da obra");
       qc.invalidateQueries({ queryKey: ["orcamento-itens", orcamento?.id] });
+      qc.invalidateQueries({ queryKey: ["orcamento-for-obra", selectedObraId] });
       setActiveTab("obras");
     },
     onError: (error: Error) => toast.error(error.message),
@@ -928,6 +1000,7 @@ function OrcamentosPage() {
                   valor_unitario: Number(item.valor_unitario),
                 })) ?? []}
                 somenteLeitura={!podeEditar}
+                onItensAlterados={() => qc.invalidateQueries({ queryKey: ["orcamento-itens", orcamento?.id] })}
                 onGerarProposta={async () => {
                   try {
                     const nomeObra = obras?.find((o) => o.id === selectedObraId)?.nome || "Obra";

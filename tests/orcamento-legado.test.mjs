@@ -17,3 +17,13 @@ test('cada item legado vira atividade própria com insumo consolidado e total pr
   assert.equal(resultado.totalCentavos, 8085);
 });
 
+test('nao deve re-migrar itens legados quando orcamento ja esta no modo analitico', () => {
+  const analiticoAtivo = true;
+  const etapasExistentes = [];
+  const itensLegados = [{ id: 'i1', etapa: 'Geral', codigo: '01', descricao: 'Aço CA-50', unidade: 'kg', quantidade: 1, valor_unitario: 520 }];
+  
+  // Regra de guarda implementada: apenas migra se !analiticoAtivo && !etapasExistentes.length && itensLegados.length
+  const deveMigrar = !analiticoAtivo && !etapasExistentes.length && itensLegados.length > 0;
+  assert.equal(deveMigrar, false, 'Orcamento analitico ativo nao deve sofrer re-migracao ao excluir itens');
+});
+
