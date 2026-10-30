@@ -141,6 +141,20 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+
+  /* Garante que inputs e formulários nunca fiquem escuros/ilegíveis pelo navegador */
+  input, textarea, select {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    color-scheme: light !important;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #0284c7 !important;
+  }
 }
 
 @media print {

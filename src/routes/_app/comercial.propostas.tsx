@@ -15,6 +15,7 @@ import {
 import { cn, formatBRLInput } from "@/lib/utils";
 import { CatalogoPropostas } from "@/components/propostas/catalogo-propostas";
 import { PropostaImpressao } from "@/components/propostas/proposta-impressao";
+import { EditorPropostaComercial } from "@/components/propostas/editor-proposta-comercial";
 import {
   ReferenciaCustosPicker,
   type ReferenciaCustoSelecionada,
@@ -151,6 +152,65 @@ function PropostasPage() {
   const [editTarget, setEditTarget] = useState<PropostaRow | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [printTarget, setPrintTarget] = useState<PropostaRow | null>(null);
+  const [editorTarget, setEditorTarget] = useState<PropostaRow | null>(null);
+
+  const { data: editorData, isLoading: editorLoading } = useQuery({
+    queryKey: ["proposta-editor-completo", editorTarget?.id],
+    enabled: !!editorTarget,
+    queryFn: async () => {
+      if (!editorTarget) return null;
+      const [clienteRes, itensRes, obraRes] = await Promise.all([
+        supabase.from("clientes").select("nome,cpf,cnpj,email,logradouro,numero,bairro,cidade,uf").eq("id", editorTarget.cliente_id).maybeSingle(),
+        supabase.from("propostas_itens").select("*").eq("proposta_id", editorTarget.id).order("ordem"),
+        (editorTarget as any).obra_id ? supabase.from("obras").select("nome,endereco").eq("id", (editorTarget as any).obra_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      ]);
+
+      const itens = (itensRes.data ?? []) as any[];
+      const etapasMap = new Map<string, any>();
+      itens.forEach((it: any, idx: number) => {
+        const etapaCod = it.etapa_codigo || "01";
+        const etapaNome = it.etapa_nome || "SERVIÇOS GERAIS";
+        if (!etapasMap.has(etapaCod)) {
+          etapasMap.set(etapaCod, {
+            id: `etapa-${etapaCod}`,
+            codigo: etapaCod,
+            nome: etapaNome,
+            valorTotalCentavos: 0,
+            atividades: [],
+          });
+        }
+        const etapa = etapasMap.get(etapaCod)!;
+        const precoUnitarioCentavos = Math.round(Number(it.valor_unitario ?? 0) * 100);
+        const precoTotalCentavos = Math.round(Number(it.quantidade ?? 0) * precoUnitarioCentavos);
+        etapa.valorTotalCentavos += precoTotalCentavos;
+        etapa.atividades.push({
+          id: it.id,
+          codigo: it.codigo_referencia || `${etapaCod}.${String(idx + 1).padStart(2, "0")}`,
+          descricao: it.descricao,
+          unidade: it.unidade || "un",
+          quantidade: Number(it.quantidade ?? 1),
+          precoUnitarioCentavos,
+          precoTotalCentavos,
+        });
+      });
+
+      const cliente = clienteRes.data as any;
+      const obra = obraRes.data as any;
+
+      return {
+        id: editorTarget.id,
+        numero: editorTarget.numero,
+        clienteNome: cliente?.nome || "Cliente",
+        clienteCpfCnpj: cliente?.cpf || cliente?.cnpj || "",
+        clienteEmail: cliente?.email || "",
+        obraNome: obra?.nome || editorTarget.titulo || "Obra",
+        obraEndereco: obra?.endereco || "",
+        status: editorTarget.status as any,
+        revisaoNumero: 1,
+        etapas: Array.from(etapasMap.values()),
+      };
+    },
+  });
   const [statusFilter, setStatusFilter] = useState<"all" | StatusProposta>("all");
   const [catalogoOpen, setCatalogoOpen] = useState(false);
   const [clienteFilter, setClienteFilter] = useState<string>(searchParams.clienteId ?? "all");
@@ -235,6 +295,23 @@ function PropostasPage() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  if (editorTarget && editorData) {
+    return (
+      <EditorPropostaComercial
+        proposta={editorData}
+        onVoltar={() => setEditorTarget(null)}
+        onSalvarRascunho={async () => {
+          toast.success("Rascunho da proposta comercial salvo!");
+          qc.invalidateQueries({ queryKey: ["propostas"] });
+        }}
+        onPublicarRevisao={async () => {
+          toast.success("Nova revisão comercial publicada e congelada!");
+          qc.invalidateQueries({ queryKey: ["propostas"] });
+        }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -336,6 +413,9 @@ function PropostasPage() {
                           <XCircle className="size-4" />
                         </Button>
                       </>}
+                      <Button size="icon" variant="ghost" className="size-8 text-sky-700 hover:text-sky-800" title="Editor Comercial com Painel Lateral (Split View)" onClick={() => setEditorTarget(p)}>
+                        <Settings2 className="size-3.5" />
+                      </Button>
                       <Button size="icon" variant="ghost" className="size-8" title="Gerar proposta para envio" onClick={() => setPrintTarget(p)}>
                         <Printer className="size-3.5" />
                       </Button>

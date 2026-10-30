@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
@@ -67,6 +67,7 @@ const parseQuantity = (val: any): number => {
 };
 
 function OrcamentosPage() {
+  const navigate = useNavigate();
   const { perfil, user } = useAuth();
   const qc = useQueryClient();
 
@@ -863,24 +864,28 @@ function OrcamentosPage() {
         {/* Tab 1: Orçamento de Obras */}
         <TabsContent value="obras" className="space-y-6">
           {selectedObraId ? (
-            <>
-              {import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 !== "false" && orcamento && orcamentoItens && orcamentoItens.length > 0 && (
-                <OrcamentoAnaliticoView
-                  orcamentoId={orcamento.id}
-                  bdiInicial={Number(orcamento.bdi_geral ?? 25)}
-                  itens={orcamentoItens.map((item) => ({
-                    id: item.id,
-                    etapa: item.etapa,
-                    codigo: item.codigo,
-                    descricao: item.descricao,
-                    unidade: item.unidade,
-                    quantidade: Number(item.quantidade),
-                    valor_unitario: Number(item.valor_unitario),
-                  }))}
-                  somenteLeitura={!podeEditar}
-                />
-              )}
-              {/* Summary KPIs */}
+            import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 !== "false" && orcamento ? (
+              <OrcamentoAnaliticoView
+                orcamentoId={orcamento.id}
+                obraId={selectedObraId}
+                bdiInicial={Number(orcamento.bdi_geral ?? 25)}
+                itens={orcamentoItens?.map((item) => ({
+                  id: item.id,
+                  etapa: item.etapa,
+                  codigo: item.codigo,
+                  descricao: item.descricao,
+                  unidade: item.unidade,
+                  quantidade: Number(item.quantidade),
+                  valor_unitario: Number(item.valor_unitario),
+                })) ?? []}
+                somenteLeitura={!podeEditar}
+                onGerarProposta={() => {
+                  navigate({ to: "/comercial/propostas" });
+                }}
+              />
+            ) : (
+              <>
+                {/* Summary KPIs */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-gradient-to-br from-card to-accent/20 border shadow-sm">
                   <CardHeader className="pb-2">
@@ -1095,7 +1100,8 @@ function OrcamentosPage() {
                   ))}
                 </div>
               )}
-            </>
+              </>
+            )
           ) : (
             <Card className="border p-8 text-center text-muted-foreground">
               Selecione ou cadastre uma Obra para visualizar o orçamento.
