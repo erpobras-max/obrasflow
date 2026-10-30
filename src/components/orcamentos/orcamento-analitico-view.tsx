@@ -38,7 +38,8 @@ import {
 import { calcularComposicao, calcularPrecoAtividade } from '@/lib/orcamento-analitico'
 import { converterItensLegados, type ItemOrcamentoLegado } from '@/lib/orcamento-legado'
 import { supabase as client } from '@/integrations/supabase/client.custom'
-import { ResumoCustosPopover } from './resumo-custos-popover'
+import { ResumoCustosPopover, ResumoCustosHoverCard, type ItemDiscriminacao } from './resumo-custos-popover'
+import { ComposicaoBdiPopover, type BdiValores } from './composicao-bdi-popover'
 import { MemorialCalculoDialog, type LinhaMemorialEdicao } from './memorial-calculo-dialog'
 import { ComposicaoCustoDialog, type InsumoEdicao } from './composicao-custo-dialog'
 import { BdiConfigDialog } from './bdi-config-dialog'
@@ -91,6 +92,38 @@ export function OrcamentoAnaliticoView({
   const [carregando, setCarregando] = useState(true)
   const [abertas, setAbertas] = useState<Set<string>>(new Set())
   const [bdiGeral, setBdiGeral] = useState(bdiInicial)
+  const [bdiValores, setBdiValores] = useState<BdiValores>(() => {
+    const chave = `obrasflow_bdi_${orcamentoId}`
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(chave)
+        if (saved) return JSON.parse(saved)
+      } catch {}
+    }
+    return {
+      geral: bdiInicial || 25,
+      maoDeObra: bdiInicial || 25,
+      material: bdiInicial || 25,
+      equipamento: bdiInicial || 25,
+      outros: bdiInicial || 25,
+    }
+  })
+
+  async function salvarComposicaoBdi(novos: BdiValores) {
+    setBdiValores(novos)
+    setBdiGeral(novos.geral)
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(`obrasflow_bdi_${orcamentoId}`, JSON.stringify(novos))
+      } catch {}
+    }
+    const r = await supabase.from('orcamentos').update({ bdi_geral: novos.geral }).eq('id', orcamentoId)
+    if (r.error) {
+      toast.error(r.error.message)
+    } else {
+      toast.success('Composição do BDI salva com sucesso!')
+    }
+  }
   const [bdiOpen, setBdiOpen] = useState(false)
   const [catalogoOpen, setCatalogoOpen] = useState(false)
   const [novaEtapaOpen, setNovaEtapaOpen] = useState(false)
@@ -573,6 +606,47 @@ export function OrcamentoAnaliticoView({
       )
   }, [etapas, bdiGeral])
 
+  const precoPorCategoria = useMemo(() => {
+    const bdiMo = bdiValores.maoDeObra / 100
+    const bdiMat = bdiValores.material / 100
+    const bdiEq = bdiValores.equipamento / 100
+    const bdiOut = bdiValores.outros / 100
+
+    const moPreco = Math.round(totais.maoDeObraCentavos * (1 + bdiMo))
+    const matPreco = Math.round(totais.materialCentavos * (1 + bdiMat))
+    const eqPreco = Math.round(totais.equipamentoCentavos * (1 + bdiEq))
+    const outPreco = Math.round(totais.outrosCentavos * (1 + bdiOut))
+    const soma = moPreco + matPreco + eqPreco + outPreco
+
+    return {
+      maoDeObraCentavos: moPreco,
+      materialCentavos: matPreco,
+      equipamentoCentavos: eqPreco,
+      outrosCentavos: outPreco,
+      totalCentavos: soma > 0 ? soma : totais.preco,
+    }
+  }, [totais, bdiValores])
+
+  const discriminacaoCusto: ItemDiscriminacao[] = useMemo(
+    () => [
+      { nome: 'Mão de obra', valorCentavos: totais.maoDeObraCentavos },
+      { nome: 'Material', valorCentavos: totais.materialCentavos },
+      { nome: 'Equipamento', valorCentavos: totais.equipamentoCentavos },
+      { nome: 'Outros', valorCentavos: totais.outrosCentavos },
+    ],
+    [totais]
+  )
+
+  const discriminacaoPreco: ItemDiscriminacao[] = useMemo(
+    () => [
+      { nome: 'Mão de obra', valorCentavos: precoPorCategoria.maoDeObraCentavos },
+      { nome: 'Material', valorCentavos: precoPorCategoria.materialCentavos },
+      { nome: 'Equipamento', valorCentavos: precoPorCategoria.equipamentoCentavos },
+      { nome: 'Outros', valorCentavos: precoPorCategoria.outrosCentavos },
+    ],
+    [precoPorCategoria]
+  )
+
   const bdiEfetivo =
     totais.custo > 0 ? (((totais.preco - totais.custo) / totais.custo) * 100).toFixed(2) : '0,00'
 
@@ -608,28 +682,36 @@ export function OrcamentoAnaliticoView({
             <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
               BDI GERAL
             </label>
-            <div className="flex items-center">
-              <Input
-                type="text"
+            <ComposicaoBdiPopover
+              valores={bdiValores}
+              onSalvar={(novos) => void salvarComposicaoBdi(novos)}
+              disabled={somenteLeitura}
+            >
+              <button
+                type="button"
                 disabled={somenteLeitura}
-                value={`${bdiGeral}%`}
-                onClick={() => setBdiOpen(true)}
-                readOnly
-                className="w-28 text-sm font-bold text-slate-900 bg-white border-slate-300 shadow-sm cursor-pointer hover:border-sky-500"
-              />
-            </div>
+                className="w-28 h-9 px-3 text-sm font-bold text-slate-900 bg-white border border-slate-300 rounded shadow-xs cursor-pointer hover:border-emerald-500 flex items-center justify-between transition-colors disabled:opacity-50"
+              >
+                <span>{bdiGeral}%</span>
+                <Pencil className="w-3.5 h-3.5 text-slate-400 hover:text-emerald-600" />
+              </button>
+            </ComposicaoBdiPopover>
           </div>
 
           <div>
             <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1">
               PREÇO AO CLIENTE
             </label>
-            <Input
-              type="text"
-              value={brl(totais.preco)}
-              readOnly
-              className="w-44 text-sm font-black text-slate-900 bg-white border-slate-300 shadow-sm tabular-nums"
-            />
+            <ResumoCustosHoverCard
+              itens={discriminacaoPreco}
+              totalCentavos={totais.preco}
+              side="bottom"
+              align="start"
+            >
+              <div className="w-44 h-9 px-3 flex items-center text-sm font-black text-slate-900 bg-white border border-slate-300 rounded shadow-xs tabular-nums cursor-help hover:border-sky-500 transition-colors">
+                {brl(totais.preco)}
+              </div>
+            </ResumoCustosHoverCard>
           </div>
         </div>
 
@@ -950,9 +1032,23 @@ export function OrcamentoAnaliticoView({
                               />
                             </td>
 
-                            {/* Preço Total ao Cliente */}
+                            {/* Preço Total ao Cliente com Hover Card */}
                             <td className="py-3 px-4 text-right tabular-nums font-bold text-slate-900">
-                              {brl(p.precoTotalCentavos)}
+                              <ResumoCustosHoverCard
+                                itens={[
+                                  { nome: 'Mão de obra', valorCentavos: Math.round(c.maoDeObraCentavos * a.quantidade * (1 + (a.bdi ?? bdiGeral) / 100)) },
+                                  { nome: 'Material', valorCentavos: Math.round(c.materialCentavos * a.quantidade * (1 + (a.bdi ?? bdiGeral) / 100)) },
+                                  { nome: 'Equipamento', valorCentavos: Math.round(c.equipamentoCentavos * a.quantidade * (1 + (a.bdi ?? bdiGeral) / 100)) },
+                                  { nome: 'Outros', valorCentavos: Math.round(c.outrosCentavos * a.quantidade * (1 + (a.bdi ?? bdiGeral) / 100)) },
+                                ]}
+                                totalCentavos={p.precoTotalCentavos}
+                                side="top"
+                                align="end"
+                              >
+                                <span className="cursor-help underline decoration-dotted hover:text-sky-700">
+                                  {brl(p.precoTotalCentavos)}
+                                </span>
+                              </ResumoCustosHoverCard>
                             </td>
 
                             {/* Ações */}
@@ -978,19 +1074,67 @@ export function OrcamentoAnaliticoView({
         </div>
       )}
 
-      {/* RODAPÉ TOTALIZADOR (IDÊNTICO À FOTO 1) */}
-      <div className="flex flex-wrap items-center justify-end gap-10 pt-4 pr-2 text-xs">
+      {/* RODAPÉ TOTALIZADOR (IDÊNTICO ÀS FOTOS 1, 2, 3 E 4) */}
+      <div className="flex flex-wrap items-center justify-end gap-8 pt-5 pr-2 text-xs border-t border-slate-200 mt-6 bg-slate-50/60 p-4 rounded-lg">
+        {/* CUSTO TOTAL COM HOVER CARD (FOTO 2) */}
         <div className="text-right">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">CUSTO TOTAL</div>
-          <div className="text-lg font-bold text-slate-800 tabular-nums">{brl(totais.custo)}</div>
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            CUSTO TOTAL
+          </div>
+          <ResumoCustosHoverCard
+            itens={discriminacaoCusto}
+            totalCentavos={totais.custo}
+            side="top"
+            align="end"
+          >
+            <button
+              type="button"
+              className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded text-lg tabular-nums transition-colors shadow-2xs cursor-help inline-flex items-center gap-1.5"
+            >
+              <span>{brl(totais.custo)}</span>
+            </button>
+          </ResumoCustosHoverCard>
         </div>
+
+        {/* BDI EFETIVO COM POPOVER DE COMPOSIÇÃO EDITÁVEL (FOTO 4) */}
         <div className="text-right">
-          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">BDI EFETIVO</div>
-          <div className="text-lg font-bold text-slate-800 tabular-nums">{bdiEfetivo}%</div>
+          <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            BDI EFETIVO
+          </div>
+          <ComposicaoBdiPopover
+            valores={bdiValores}
+            onSalvar={(novos) => void salvarComposicaoBdi(novos)}
+            disabled={somenteLeitura}
+          >
+            <button
+              type="button"
+              disabled={somenteLeitura}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white border border-slate-300 hover:border-emerald-500 rounded text-slate-800 font-bold text-lg tabular-nums transition-colors shadow-2xs cursor-pointer disabled:opacity-50"
+            >
+              <span>{bdiEfetivo}%</span>
+              <Pencil className="w-4 h-4 text-slate-400 hover:text-emerald-600" />
+            </button>
+          </ComposicaoBdiPopover>
         </div>
+
+        {/* PREÇO AO CLIENTE COM HOVER CARD (FOTO 3) */}
         <div className="text-right">
-          <div className="text-[10px] font-bold text-sky-700 uppercase tracking-wider">PREÇO AO CLIENTE</div>
-          <div className="text-2xl font-black text-sky-700 tabular-nums">{brl(totais.preco)}</div>
+          <div className="text-[10px] font-bold text-sky-700 uppercase tracking-wider mb-1">
+            PREÇO AO CLIENTE
+          </div>
+          <ResumoCustosHoverCard
+            itens={discriminacaoPreco}
+            totalCentavos={totais.preco}
+            side="top"
+            align="end"
+          >
+            <button
+              type="button"
+              className="px-4 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-700 font-black rounded text-2xl tabular-nums transition-colors shadow-2xs cursor-help inline-flex items-center gap-1.5"
+            >
+              <span>{brl(totais.preco)}</span>
+            </button>
+          </ResumoCustosHoverCard>
         </div>
       </div>
 
