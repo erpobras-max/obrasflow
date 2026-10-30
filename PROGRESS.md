@@ -335,3 +335,29 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - Proposta comercial possui configuração versionada e fotografia ligada à revisão, com dados internos ocultos por padrão.
 - A preparação da importação SINAPI permanece em staging; o cron de produção não foi ativado até validação administrativa da primeira competência e definição do segredo operacional.
 - Validação: 28 testes automatizados aprovados e build de produção aprovado.
+
+## Atualização 30/10/2026 — Orçamento Analítico Fiel e Editor da Proposta Comercial (#199)
+
+- **Branch de trabalho**: feat-199-orcamento-analitico-proposta-fiel (baseada em main no commit d9995a2).
+- **Correção global de contraste e inputs pretos**:
+  - Eliminado o problema de fundo preto/cinza escuro em inputs nos navegadores em modo escuro do sistema operacional.
+  - Componentes Input e Textarea do Shadcn UI atualizados para usar bg-white text-slate-900 border-slate-300 em vez de bg-transparent.
+  - src/styles.css reforcado com regras globais color-scheme: light !important, background-color: #ffffff !important, color: #0f172a !important e border-color: #cbd5e1 !important.
+- **Implementação fiel das 4 telas de referência**:
+  - Foto 1 (Orçamento Geral): orcamento-analitico-view.tsx implementado com cabeçalho azul, subtítulo de competência SINAPI congelada, campos de BDI Geral e Preço ao Cliente, botões superiores (Importar Excel, Duplicar orçamento, + Inserir etapa, + Inserir composição), engrenagem com todas as 9 opções solicitadas, linhas sanfonadas por etapa, badges de origem (SINAPI - ADAPTADA, BASE PRÓPRIA), links para insumos e memorial, e rodapé com Custo Total, BDI Efetivo e Preço ao Cliente.
+  - Foto 2 (Resumo de Custos Popover): resumo-custos-popover.tsx apresentando detalhamento de Mão de Obra, Material, Equipamento e Outros com cores dedicadas e barras de proporção relativas ao total.
+  - Foto 3 (Composição do Custo Unitário): composicao-custo-dialog.tsx com 5 cartões de resumo por categoria no topo, banner amarelo instrutivo, tabela de insumos com consumo e preço unitário editáveis, e botão + Adicionar insumo próprio.
+  - Foto 4 (Memorial de Cálculo de Quantidade): memorial-calculo-dialog.tsx com layout em 2 colunas: coluna esquerda com linhas de memorial (descrição, fórmula com suporte a descontos negativos como -(3,00 * 3,00) = -9,00 e resultado automático) e coluna direita com o card instrutivo Como funciona.
+- **Editor de Proposta Comercial em Split-View (Vídeo de referência)**:
+  - src/components/propostas/editor-proposta-comercial.tsx: Painel lateral de configurações à esquerda com alternadores para Capa, Logo, Cliente, Quantidades, Preço Unitário, Modo apenas valor por etapa, Descrição comercial personalizada e independente do orçamento técnico, Condições de Pagamento, Prazo e Assinaturas.
+  - Lado direito com pré-visualização em tempo real em folha A4 idêntica à impressão.
+  - Dados internos técnicos (custo de insumos, coeficientes, BDI e margens) mantidos 100% ocultos do cliente final.
+  - Conectado em src/routes/_app/comercial.propostas.tsx através de botão dedicado na tabela de propostas.
+- **Transição de Obras Novas**:
+  - Removida a exigência orcamentoItens.length > 0 de src/routes/_app/orcamentos.tsx. Qualquer obra selecionada agora carrega imediatamente a interface analítica moderna. Obras com zero etapas exibem o estado inicial com botão de ação direta + Criar primeira etapa.
+- **Procedimento Seguro de Exclusão das Obras Antigas**:
+  - Criado script de auditoria de FKs e contagem de registros relacionados em scripts/auditar_registros_obras.sql para as 5 obras antigas (OBRA-2026-0005 a 0009).
+  - Criado script transacional de exclusão segura com suporte a rollback e desvinculação em scripts/excluir_obras_transacional.sql.
+  - Aguardando confirmação explícita do usuário sobre arquivar (status = 'arquivada') ou excluir definitivamente todos os registros filhos vinculados.
+- **Testes Automatizados**:
+  - 14 testes cobrindo orçamentos analíticos, herança de BDI, memoriais com expressões aritméticas e parênteses, cálculo de insumos, fotografias imutáveis de proposta comercial e regras de visibilidade aprovados sem falhas.
