@@ -1,6 +1,6 @@
 -- ==============================================================================
 -- Script 100% Dinâmico e Seguro para Exclusão das 5 Obras Antigas de Teste
--- Executa em transação única e usa SQL dinâmico para não falhar por coluna ausente
+-- Resolve dependências de Compras (cotações/solicitações) e Orçamento Analítico
 -- ==============================================================================
 
 BEGIN;
@@ -16,7 +16,7 @@ WHERE numero IN (
   'OBRA-2026-0009'
 );
 
--- Tabela de orçamentos vinculados a essas obras
+-- Tabela temporária de orçamentos vinculados
 CREATE TEMP TABLE temp_orcamentos_alvo ON COMMIT DROP AS
 SELECT id, obra_id FROM public.orcamentos
 WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
@@ -64,7 +64,32 @@ BEGIN
   WHERE id IN (SELECT id FROM temp_orcamentos_alvo);
 END $$;
 
--- 3. Limpeza de medições de terceirizados (filhas de servicos_terceirizados)
+-- 3. Limpeza das tabelas de Compras (cotacoes_pedidos -> cotacoes_compra -> solicitacoes_compra)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_pedidos') THEN
+    DELETE FROM public.cotacoes_pedidos 
+    WHERE obra_id IN (SELECT id FROM temp_obras_alvo)
+       OR cotacao_id IN (
+         SELECT c.id FROM public.cotacoes_compra c
+         WHERE c.obra_id IN (SELECT id FROM temp_obras_alvo) 
+            OR c.solicitacao_id IN (SELECT s.id FROM public.solicitacoes_compra s WHERE s.obra_id IN (SELECT id FROM temp_obras_alvo))
+       );
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_compra') THEN
+    DELETE FROM public.cotacoes_compra
+    WHERE obra_id IN (SELECT id FROM temp_obras_alvo)
+       OR solicitacao_id IN (SELECT s.id FROM public.solicitacoes_compra s WHERE s.obra_id IN (SELECT id FROM temp_obras_alvo));
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'solicitacoes_compra') THEN
+    DELETE FROM public.solicitacoes_compra
+    WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
+  END IF;
+END $$;
+
+-- 4. Limpeza de medições de terceirizados (filhas de servicos_terceirizados)
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'medicoes_terceirizados') 
@@ -77,7 +102,7 @@ BEGIN
   END IF;
 END $$;
 
--- 4. Tratamento dinâmico de todas as tabelas públicas que contêm a coluna 'obra_id'
+-- 5. Tratamento dinâmico das demais tabelas públicas que contêm a coluna 'obra_id'
 DO $$
 DECLARE
   rec RECORD;
@@ -90,30 +115,27 @@ BEGIN
     WHERE c.table_schema = 'public'
       AND c.column_name = 'obra_id'
       AND t.table_type = 'BASE TABLE'
-      AND c.table_name NOT IN ('obras', 'orcamentos')
+      AND c.table_name NOT IN ('obras', 'orcamentos', 'solicitacoes_compra', 'cotacoes_compra', 'cotacoes_pedidos')
   ) LOOP
-    -- Se for tabela estritamente operacional da obra (projetos, cronogramas, diários, ordens, medições), remove os registros
     IF rec.table_name IN (
       'obra_projetos_cad', 'obra_cronograma', 'obras_cronogramas', 'obras_equipe', 
       'obra_funcionarios', 'diarios_obra', 'diario_obras', 'ordens_servico', 
       'medicoes', 'servicos_terceirizados', 'documentos', 'estoque_obra'
     ) THEN
       EXECUTE format('DELETE FROM public.%I WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
-    -- Se a coluna permitir NULL (contas a pagar, compras, funcionários, movimentações), desvincula para não violar FK
     ELSIF rec.is_nullable = 'YES' THEN
       EXECUTE format('UPDATE public.%I SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
     ELSE
-      -- Se não for anulável, remove os registros vinculados
       EXECUTE format('DELETE FROM public.%I WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
     END IF;
   END LOOP;
 END $$;
 
--- 5. Exclusão definitiva das 5 obras alvo
+-- 6. Exclusão definitiva das 5 obras alvo
 DELETE FROM public.obras
 WHERE id IN (SELECT id FROM temp_obras_alvo);
 
--- 6. Conferência final: deve retornar 0
+-- 7. Conferência final: deve retornar 0
 SELECT 
   COUNT(*) AS total_obras_restantes_com_esses_numeros
 FROM public.obras
