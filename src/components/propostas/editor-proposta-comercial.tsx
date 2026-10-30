@@ -52,6 +52,7 @@ export interface PropostaEditorData {
   clienteEmail?: string
   obraNome?: string
   obraEndereco?: string
+  prazoExecucaoTexto?: string
   orcamentoRevisaoId?: string
   status?: 'rascunho' | 'enviada' | 'aceita' | 'rejeitada'
   revisaoNumero?: number
@@ -88,6 +89,7 @@ export function EditorPropostaComercial({
     const [config, setConfig] = useState<ConfiguracaoPropostaComercial>({
     ...configuracaoPropostaPadrao,
     tituloProposta: `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
+    prazoExecucaoTexto: proposta.prazoExecucaoTexto || configuracaoPropostaPadrao.prazoExecucaoTexto,
   })
 
   // Consulta dados e logo da empresa cadastrada em /empresa
@@ -211,8 +213,45 @@ export function EditorPropostaComercial({
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-120px)] bg-slate-100 text-slate-900">
+      {/* ESTILOS DE IMPRESSÃO A4 */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm;
+          }
+          html, body {
+            background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .proposta-print-sheet {
+            visibility: visible !important;
+            position: relative !important;
+            display: block !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+            background: #ffffff !important;
+          }
+          .proposta-print-sheet * {
+            visibility: visible !important;
+          }
+        }
+      `}</style>
+
       {/* BARRA SUPERIOR DO EDITOR */}
-      <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30 shadow-sm">
+      <div className="bg-white border-b border-slate-200 px-6 py-3 flex flex-wrap items-center justify-between gap-4 sticky top-0 z-30 shadow-sm no-print">
         <div className="flex items-center gap-3">
           {onVoltar && (
             <Button variant="ghost" size="sm" onClick={onVoltar} className="text-xs text-slate-600">
@@ -278,7 +317,7 @@ export function EditorPropostaComercial({
       {/* ÁREA SPLIT: LADO ESQUERDO (CONFIGURAÇÃO) + LADO DIREITO (PREVIEW A4) */}
       <div className="flex flex-col lg:flex-row flex-1 overflow-hidden">
         {/* PAINEL LATERAL ESQUERDO: CONFIGURAÇÃO */}
-        <aside className="w-full lg:w-[460px] bg-white border-r border-slate-200 p-5 overflow-y-auto space-y-6 shrink-0 text-xs shadow-inner max-h-[calc(100vh-170px)]">
+        <aside className="w-full lg:w-[460px] bg-white border-r border-slate-200 p-5 overflow-y-auto space-y-6 shrink-0 text-xs shadow-inner max-h-[calc(100vh-170px)] no-print">
           <div>
             <h2 className="text-sm font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <Settings2 className="size-4 text-sky-600" />
@@ -506,8 +545,8 @@ export function EditorPropostaComercial({
         </aside>
 
         {/* ÁREA DIREITA: PRÉ-VISUALIZAÇÃO EM TEMPO REAL DA FOLHA A4 */}
-        <main className="flex-1 p-6 lg:p-10 overflow-y-auto bg-slate-200/60 flex justify-center max-h-[calc(100vh-170px)]">
-          <div className="w-full max-w-[820px] bg-white rounded-lg shadow-xl border border-slate-300 p-8 sm:p-12 space-y-8 my-auto">
+        <main className="flex-1 p-6 lg:p-10 overflow-y-auto bg-slate-200/60 flex justify-center max-h-[calc(100vh-170px)] print:p-0 print:m-0 print:max-h-none print:overflow-visible print:bg-white print:block">
+          <div className="proposta-print-sheet w-full max-w-[820px] bg-white rounded-lg shadow-xl border border-slate-300 p-8 sm:p-12 space-y-8 my-auto print:shadow-none print:border-none print:p-0 print:max-w-none print:w-full print:m-0">
             {/* CAPA COMERCIAL OPCIONAL */}
             {config.mostrarCapa && (
               <div className="text-center py-16 border-b-2 border-slate-200 space-y-5">
@@ -562,15 +601,15 @@ export function EditorPropostaComercial({
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
                 <div>
                   <span className="font-bold text-slate-400 uppercase text-[10px]">CONTRATANTE / CLIENTE:</span>
-                  <div className="font-bold text-slate-900 mt-0.5">{proposta.clienteNome ?? 'Cliente'}</div>
-                  <div className="text-slate-600">CPF/CNPJ: {proposta.clienteCpfCnpj ?? '-'}</div>
-                  <div className="text-slate-600">E-mail: {proposta.clienteEmail ?? '-'}</div>
+                  <div className="font-bold text-slate-900 mt-0.5">{proposta.clienteNome || 'Cliente'}</div>
+                  <div className="text-slate-600">CPF/CNPJ: {proposta.clienteCpfCnpj || '-'}</div>
+                  <div className="text-slate-600">E-mail: {proposta.clienteEmail || '-'}</div>
                 </div>
                 <div>
                   <span className="font-bold text-slate-400 uppercase text-[10px]">OBRA / LOCALIZAÇÃO:</span>
                   <div className="font-bold text-slate-900 mt-0.5">{proposta.obraNome ?? 'Obra'}</div>
-                  <div className="text-slate-600">Endereço: {proposta.obraEndereco ?? '-'}</div>
-                  <div className="text-slate-600">Prazo Previsto: {config.prazoExecucaoTexto}</div>
+                  <div className="text-slate-600">Endereço: {proposta.obraEndereco || '-'}</div>
+                  <div className="text-slate-600">Prazo Previsto: {config.prazoExecucaoTexto || '-'}</div>
                 </div>
               </div>
             )}

@@ -13,6 +13,7 @@ import {
   STATUS_PROPOSTA_LABEL, STATUS_PROPOSTA_BADGE, statusPropostaEnum,
 } from "@/lib/clientes.schema";
 import { cn, formatBRLInput } from "@/lib/utils";
+import { formatCpfCnpj } from "@/lib/validacao-documento";
 import { CatalogoPropostas } from "@/components/propostas/catalogo-propostas";
 import { PropostaImpressao } from "@/components/propostas/proposta-impressao";
 import { EditorPropostaComercial } from "@/components/propostas/editor-proposta-comercial";
@@ -162,13 +163,118 @@ function PropostasPage() {
     enabled: !!editorTarget,
     queryFn: async () => {
       if (!editorTarget) return null;
-      const [clienteRes, itensRes, obraRes] = await Promise.all([
-        supabase.from("clientes").select("nome,cpf,cnpj,email,logradouro,numero,bairro,cidade,uf").eq("id", editorTarget.cliente_id).maybeSingle(),
-        supabase.from("propostas_itens").select("*").eq("proposta_id", editorTarget.id).order("ordem"),
-        (editorTarget as any).obra_id ? supabase.from("obras").select("nome,endereco").eq("id", (editorTarget as any).obra_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
-      ]);
 
-      const itens = (itensRes.data ?? []) as any[];
+      // 1. Identificar Obra e Cliente da Proposta
+      let obra: any = null;
+      if ((editorTarget as any).obra_id) {
+        const { data } = await supabase.from("obras").select("*, clientes(*)").eq("id", (editorTarget as any).obra_id).maybeSingle();
+        if (data) obra = data;
+      }
+      if (!obra) {
+        const { data } = await supabase.from("obras").select("*, clientes(*)").eq("proposta_id", editorTarget.id).maybeSingle();
+        if (data) obra = data;
+      }
+      if (!obra && editorTarget.titulo) {
+        const nomeLimpo = editorTarget.titulo.replace(/^Proposta\s+Comercial\s*[-–—:]\s*/i, "").trim();
+        if (nomeLimpo) {
+          const { data } = await supabase.from("obras").select("*, clientes(*)").ilike("nome", nomeLimpo).limit(1).maybeSingle();
+          if (data) obra = data;
+        }
+      }
+
+      // Cliente da obra ou da proposta
+      let cliente = obra?.clientes as any;
+      if (!cliente && editorTarget.cliente_id) {
+        const { data } = await supabase.from("clientes").select("*").eq("id", editorTarget.cliente_id).maybeSingle();
+        if (data) cliente = data;
+      }
+
+      // 2. Itens da proposta
+      const { data: itensDb } = await supabase
+        .from("propostas_itens")
+        .select("*")
+        .eq("proposta_id", editorTarget.id)
+        .order("ordem");
+
+      let itens = (itensDb ?? []) as any[];
+
+      // Se a proposta ainda não tiver itens salvos, busca do orçamento real da obra
+      if (itens.length === 0 && obra?.id) {
+        const { data: orc } = await supabase
+          .from("orcamentos")
+          .select("id, bdi_geral")
+          .eq("obra_id", obra.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (orc?.id) {
+          const bdiGeral = Number(orc.bdi_geral ?? 25);
+          const { data: etapasAnaliticas } = await supabase
+            .from("orcamento_etapas")
+            .select("*")
+            .eq("orcamento_id", orc.id)
+            .order("ordem");
+
+          if (etapasAnaliticas && etapasAnaliticas.length > 0) {
+            const etapaIds = etapasAnaliticas.map((e) => e.id);
+            const { data: ativs } = await supabase
+              .from("orcamento_atividades")
+              .select("*")
+              .in("etapa_id", etapaIds)
+              .order("ordem");
+
+            if (ativs && ativs.length > 0) {
+              const etapaPorId = new Map(etapasAnaliticas.map((e) => [e.id, e]));
+              itens = ativs.map((a, idx) => {
+                const ep = etapaPorId.get(a.etapa_id);
+                const qtd = Number(a.quantidade ?? 1);
+                const bdiAtiv = a.bdi_percentual != null ? Number(a.bdi_percentual) : bdiGeral;
+                let precoTot = Number(a.preco_total_centavos ?? 0);
+                if (!precoTot && a.custo_total_centavos) {
+                  precoTot = Math.round(Number(a.custo_total_centavos) * (1 + bdiAtiv / 100));
+                }
+                const precoUnit = qtd > 0 && precoTot > 0 ? (precoTot / 100) / qtd : 0;
+                return {
+                  id: a.id,
+                  descricao: a.descricao,
+                  unidade: a.unidade || "un",
+                  quantidade: qtd,
+                  valor_unitario: precoUnit,
+                  etapa_codigo: ep?.codigo || "01",
+                  etapa_nome: ep?.nome || "Etapa 1",
+                  codigo_referencia: a.codigo || `${ep?.codigo || "01"}.${String(idx + 1).padStart(2, "0")}`,
+                  ordem: idx,
+                };
+              });
+            }
+          }
+
+          if (itens.length === 0) {
+            const { data: legados } = await supabase
+              .from("orcamento_itens")
+              .select("*")
+              .eq("orcamento_id", orc.id)
+              .order("id");
+
+            if (legados && legados.length > 0) {
+              itens = legados.map((leg, idx) => ({
+                id: leg.id,
+                descricao: leg.descricao,
+                unidade: leg.unidade || "un",
+                quantidade: Number(leg.quantidade ?? 1),
+                valor_unitario: Number(leg.valor_unitario ?? 0),
+                etapa_codigo: leg.etapa ? String(leg.etapa).slice(0, 2) : "01",
+                etapa_nome: leg.etapa || "Geral",
+                codigo_referencia: `${idx + 1}`,
+                ordem: idx,
+              }));
+            }
+          }
+        }
+      }
+
+      // Monta as etapas e atividades
       const etapasMap = new Map<string, any>();
       itens.forEach((it: any, idx: number) => {
         const etapaCod = it.etapa_codigo || "01";
@@ -197,17 +303,23 @@ function PropostasPage() {
         });
       });
 
-      const cliente = clienteRes.data as any;
-      const obra = obraRes.data as any;
+      const enderecoObra = [obra?.logradouro, obra?.numero_endereco, obra?.bairro, obra?.cidade, obra?.uf].filter(Boolean).join(", ") || obra?.endereco || "";
+      let prazoTexto = "30 a 60 dias úteis";
+      if (obra?.prazo_meses) prazoTexto = `${obra.prazo_meses} meses`;
+      else if (obra?.data_fim_prevista) prazoTexto = `Até ${new Date(obra.data_fim_prevista).toLocaleDateString("pt-BR")}`;
+
+      const docCliente = cliente?.cpf_cnpj || cliente?.cnpj || cliente?.cpf || "";
+      const clienteCpfCnpj = docCliente ? formatCpfCnpj(docCliente) : "";
 
       return {
         id: editorTarget.id,
         numero: editorTarget.numero,
         clienteNome: cliente?.nome || "Cliente",
-        clienteCpfCnpj: cliente?.cpf || cliente?.cnpj || "",
+        clienteCpfCnpj,
         clienteEmail: cliente?.email || "",
         obraNome: obra?.nome || editorTarget.titulo || "Obra",
-        obraEndereco: obra?.endereco || "",
+        obraEndereco: enderecoObra,
+        prazoExecucaoTexto: prazoTexto,
         status: editorTarget.status as any,
         revisaoNumero: 1,
         etapas: Array.from(etapasMap.values()),
@@ -226,6 +338,7 @@ function PropostasPage() {
 
   const { data: propostas, isLoading } = useQuery({
     queryKey: ["propostas"],
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("propostas")
@@ -283,14 +396,46 @@ function PropostasPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("propostas").delete().eq("id", id);
+      // 1. Desvincular obras que apontam para esta proposta
+      await supabase.from("obras").update({ proposta_id: null } as any).eq("proposta_id", id);
+
+      // 2. Desvincular contratos que apontam para esta proposta
+      await supabase.from("contratos").update({ proposta_id: null } as any).eq("proposta_id", id);
+
+      // 3. Desvincular cronogramas
+      await supabase.from("obras_cronogramas").update({ proposta_id: null } as any).eq("proposta_id", id);
+
+      // 4. Excluir revisões da proposta
+      await supabase.from("proposta_revisoes").delete().eq("proposta_id", id);
+
+      // 5. Excluir itens da proposta
+      await supabase.from("propostas_itens").delete().eq("proposta_id", id);
+
+      // 6. Excluir a proposta principal com verificação
+      const { data, error } = await supabase.from("propostas").delete().eq("id", id).select("id");
       if (error) throw error;
+      if (!data || data.length === 0) {
+        throw new Error("Não foi possível excluir a proposta do banco de dados.");
+      }
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ["propostas"] });
+      const previous = qc.getQueryData<PropostaRow[]>(["propostas"]);
+      qc.setQueryData<PropostaRow[]>(["propostas"], (old) => (old ?? []).filter((p) => p.id !== id));
+      return { previous };
+    },
+    onError: (e: Error, _, context) => {
+      if (context?.previous) {
+        qc.setQueryData(["propostas"], context.previous);
+      }
+      toast.error(e.message);
     },
     onSuccess: () => {
       toast.success("Proposta excluída");
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["propostas"] });
     },
-    onError: (e: Error) => toast.error(e.message),
   });
 
   const decidirProposta = useMutation({

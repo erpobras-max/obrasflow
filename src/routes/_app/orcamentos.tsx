@@ -1004,7 +1004,8 @@ function OrcamentosPage() {
                 onItensAlterados={() => qc.invalidateQueries({ queryKey: ["orcamento-itens", orcamento?.id] })}
                 onGerarProposta={async () => {
                   try {
-                    const nomeObra = obras?.find((o) => o.id === selectedObraId)?.nome || "Obra";
+                    const obra = obras?.find((o) => o.id === selectedObraId);
+                    const nomeObra = obra?.nome || "Obra";
                     const { data: propsExistentes } = await supabase
                       .from("propostas")
                       .select("id, titulo")
@@ -1016,14 +1017,17 @@ function OrcamentosPage() {
                       return;
                     }
 
-                    const { data: clientes } = await supabase.from("clientes").select("id").limit(1);
-                    const primeiroClienteId = clientes?.[0]?.id;
+                    let clienteId = obra?.cliente_id;
+                    if (!clienteId) {
+                      const { data: clientes } = await supabase.from("clientes").select("id").limit(1);
+                      clienteId = clientes?.[0]?.id;
+                    }
 
-                    if (primeiroClienteId) {
+                    if (clienteId) {
                       const { data: nova, error } = await supabase
                         .from("propostas")
                         .insert({
-                          cliente_id: primeiroClienteId,
+                          cliente_id: clienteId,
                           titulo: `Proposta Comercial - ${nomeObra}`,
                           valor_total: orcamento?.total_estimado ? Number(orcamento.total_estimado) / 100 : 0,
                           status: "rascunho",
@@ -1032,6 +1036,9 @@ function OrcamentosPage() {
                         .single();
 
                       if (!error && nova) {
+                        if (obra?.id) {
+                          await supabase.from("obras").update({ proposta_id: nova.id } as any).eq("id", obra.id);
+                        }
                         toast.success("Proposta comercial iniciada com sucesso!");
                         navigate({ to: "/comercial/propostas", search: { propostaId: nova.id } });
                         return;

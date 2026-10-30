@@ -159,12 +159,24 @@
 
 @media print {
   body * {
-    visibility: hidden !important;
+    visibility: hidden;
   }
 
   .qr-print-sheet,
-  .qr-print-sheet * {
+  .qr-print-sheet *,
+  .proposta-print-sheet,
+  .proposta-print-sheet *,
+  .contract-print-sheet,
+  .contract-print-sheet *,
+  .proposal-print-sheet,
+  .proposal-print-sheet * {
     visibility: visible !important;
+  }
+
+  .no-print,
+  .print-hidden,
+  [data-print-hidden] {
+    display: none !important;
   }
 
   .qr-print-sheet {
