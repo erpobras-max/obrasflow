@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   configuracaoPropostaPadrao,
+  configuracaoPropostaComercialPadrao,
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
 import { supabase as client } from '@/integrations/supabase/client.custom'

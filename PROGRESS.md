@@ -482,3 +482,7 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Exclusão com confirmação visual via `AlertDialog` e validação estrita no servidor: impede a remoção de contratos com medições aprovadas/pagas ou retenções liberadas, protegendo a integridade fiscal e financeira.
   - Ações de Editar e Excluir disponibilizadas no menu de contexto (`DropdownMenu`) da listagem de contratos (`/contratos-empreiteiros`) e nos botões de cabeçalho na tela de detalhes do contrato (`ContratoDetalheView`).
   - 111 testes automatizados aprovados e build SSR verificado com sucesso.
+
+- **Correção no Editor de Propostas Comerciais (Branch fix/202-corrigir-import-editor-proposta)**:
+  - Adicionado o import de `configuracaoPropostaComercialPadrao` em `src/components/propostas/editor-proposta-comercial.tsx`, sanando o erro `ReferenceError: configuracaoPropostaComercialPadrao is not defined` disparado ao abrir a edição da proposta a partir do orçamento.
+  - 111 testes automatizados aprovados e build SSR verificado com sucesso.
