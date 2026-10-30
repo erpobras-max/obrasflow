@@ -864,8 +864,10 @@ function OrcamentosPage() {
         <TabsContent value="obras" className="space-y-6">
           {selectedObraId ? (
             <>
-              {import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 === "true" && orcamentoItens && orcamentoItens.length > 0 && (
+              {import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 !== "false" && orcamento && orcamentoItens && orcamentoItens.length > 0 && (
                 <OrcamentoAnaliticoView
+                  orcamentoId={orcamento.id}
+                  bdiInicial={Number(orcamento.bdi_geral ?? 25)}
                   itens={orcamentoItens.map((item) => ({
                     id: item.id,
                     etapa: item.etapa,
