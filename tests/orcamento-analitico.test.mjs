@@ -15,7 +15,7 @@ test('avalia somente aritmética segura com decimal brasileiro', () => {
   assert.equal(avaliarFormulaMemorial('8 / 4'), 2);
   assert.throws(() => avaliarFormulaMemorial('process.exit()'), /inválid/i);
   assert.throws(() => avaliarFormulaMemorial('1 / 0'), /zero/i);
-  assert.throws(() => avaliarFormulaMemorial('-1'), /negativ/i);
+  assert.equal(avaliarFormulaMemorial('-1'), -1);
   assert.equal(somarMemorial([{ resultado: 2.5 }, { resultado: 7.25 }]), 9.75);
 });
 

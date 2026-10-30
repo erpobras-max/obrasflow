@@ -37,6 +37,7 @@ test('schema analítico valida valores, hierarquia, publicação e revisão acei
   const db = await criarBancoBase();
   try {
     await db.exec(await read('supabase/migrations/20261030000000_orcamento_analitico.sql'));
+    await db.exec("SELECT set_config('request.jwt.claim.role','admin',false)");
 
     const obraId = (await db.query('INSERT INTO obras DEFAULT VALUES RETURNING id')).rows[0].id;
     const orcamentoId = (await db.query('INSERT INTO orcamentos(obra_id) VALUES ($1) RETURNING id', [obraId])).rows[0].id;

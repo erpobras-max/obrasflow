@@ -11,11 +11,20 @@ export const configuracaoPropostaPadrao = Object.freeze({
 
 export type ConfiguracaoProposta = typeof configuracaoPropostaPadrao
 
+function sanitizarComercial(valor: unknown): any {
+  if (Array.isArray(valor)) return valor.map(sanitizarComercial)
+  if (!valor || typeof valor !== 'object') return valor
+  const bloqueados = /^(custo|bdi|insumos?|composi(cao|ções)|coeficiente|precoUnitarioCentavos|precoManual)/i
+  return Object.fromEntries(Object.entries(valor as Record<string, unknown>)
+    .filter(([chave]) => !bloqueados.test(chave))
+    .map(([chave, item]) => [chave, sanitizarComercial(item)]))
+}
+
 export function criarFotografiaProposta(
   revisao: { id: string; numero: number; fotografia: Record<string, any> },
   configuracao: ConfiguracaoProposta,
 ) {
-  const origem = structuredClone(revisao.fotografia)
+  const origem = sanitizarComercial(structuredClone(revisao.fotografia))
   return {
     orcamentoRevisaoId: revisao.id,
     orcamentoRevisaoNumero: revisao.numero,

@@ -30,7 +30,6 @@ class ParserAritmetico {
     this.espacos()
     if (this.pos !== this.texto.length) throw new Error('Fórmula inválida')
     if (!Number.isFinite(valor)) throw new Error('Resultado inválido')
-    if (valor < 0) throw new Error('O resultado do memorial não pode ser negativo')
     return valor
   }
 

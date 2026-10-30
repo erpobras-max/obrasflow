@@ -188,6 +188,9 @@ CREATE OR REPLACE FUNCTION public.publicar_revisao_orcamento(p_orcamento_id uuid
 RETURNS SETOF public.orcamento_revisoes LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE revisao public.orcamento_revisoes;
 BEGIN
+  IF NOT (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'engenharia')) THEN
+    RAISE EXCEPTION 'Sem permissão para publicar revisão';
+  END IF;
   IF trim(coalesce(p_chave_idempotencia, '')) = '' THEN RAISE EXCEPTION 'Chave idempotente obrigatória'; END IF;
   SELECT * INTO revisao FROM public.orcamento_revisoes
     WHERE orcamento_id = p_orcamento_id AND chave_idempotencia = p_chave_idempotencia;
@@ -219,6 +222,10 @@ CREATE OR REPLACE FUNCTION public.duplicar_orcamento_analitico(p_orcamento_id uu
 RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE novo_id uuid; etapa record; nova_etapa uuid; atividade record; nova_atividade uuid;
 BEGIN
+  IF NOT (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'engenharia')) THEN
+    RAISE EXCEPTION 'Sem permissão para duplicar orçamento';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.obras WHERE id = p_nova_obra_id) THEN RAISE EXCEPTION 'Obra de destino não encontrada'; END IF;
   INSERT INTO public.orcamentos(obra_id,total_estimado,nome,uf,competencia,regime,bdi_geral,analitico_ativo)
   SELECT p_nova_obra_id,total_estimado,coalesce(nome,'Orçamento') || ' (cópia)',uf,competencia,regime,bdi_geral,true
   FROM public.orcamentos WHERE id=p_orcamento_id RETURNING id INTO novo_id;
@@ -250,6 +257,20 @@ DO $$ DECLARE t text; BEGIN
     EXECUTE format('GRANT ALL ON public.%I TO service_role', t);
   END LOOP;
 END $$;
+
+-- Revisões e auditoria são append-only para usuários autenticados. Alterações
+-- posteriores ocorrem somente pelas RPCs autorizadas acima.
+DROP POLICY IF EXISTS analitico_gestao ON public.orcamento_revisoes;
+CREATE POLICY analitico_revisoes_leitura ON public.orcamento_revisoes FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(),'admin') OR public.has_role(auth.uid(),'diretor') OR public.has_role(auth.uid(),'engenharia'));
+CREATE POLICY analitico_revisoes_insercao ON public.orcamento_revisoes FOR INSERT TO authenticated
+  WITH CHECK (public.has_role(auth.uid(),'admin') OR public.has_role(auth.uid(),'diretor') OR public.has_role(auth.uid(),'engenharia'));
+REVOKE UPDATE, DELETE ON public.orcamento_revisoes FROM authenticated;
+
+DROP POLICY IF EXISTS analitico_gestao ON public.orcamento_auditoria;
+CREATE POLICY analitico_auditoria_leitura ON public.orcamento_auditoria FOR SELECT TO authenticated
+  USING (public.has_role(auth.uid(),'admin') OR public.has_role(auth.uid(),'diretor') OR public.has_role(auth.uid(),'engenharia'));
+REVOKE INSERT, UPDATE, DELETE ON public.orcamento_auditoria FROM authenticated;
 
 GRANT USAGE, SELECT ON SEQUENCE public.orcamento_auditoria_id_seq TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.publicar_revisao_orcamento(uuid,text) TO authenticated, service_role;

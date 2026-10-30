@@ -864,7 +864,7 @@ function OrcamentosPage() {
         <TabsContent value="obras" className="space-y-6">
           {selectedObraId ? (
             <>
-              {import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 !== "false" && orcamentoItens && orcamentoItens.length > 0 && (
+              {import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 === "true" && orcamentoItens && orcamentoItens.length > 0 && (
                 <OrcamentoAnaliticoView
                   itens={orcamentoItens.map((item) => ({
                     id: item.id,
