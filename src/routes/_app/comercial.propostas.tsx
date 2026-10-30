@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Copy, FileSignature, FileText, HardHat, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
+import { CheckCircle2, Clock3, Copy, FileSignature, FileText, HardHat, Pencil, Plus, Trash2, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { EditorPropostaComercial } from '@/components/propostas/editor-proposta-comercial'
 import { NovaPropostaOrcamentoDialog } from '@/components/propostas/nova-proposta-orcamento-dialog'
@@ -113,7 +113,7 @@ function PropostasPage() {
   })
 
   const decidirMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: 'aceita' | 'rejeitada' }) => {
+    mutationFn: async ({ id, status }: { id: string; status: 'aceita' | 'rejeitada' | 'expirada' }) => {
       const { error } = await supabase.rpc('alterar_status_proposta_editor', {
         p_proposta_id: id,
         p_status: status,
@@ -121,7 +121,7 @@ function PropostasPage() {
       if (error) throw error
     },
     onSuccess: async (_, variaveis) => {
-      toast.success(variaveis.status === 'aceita' ? 'Proposta aceita.' : 'Proposta rejeitada.')
+      toast.success(variaveis.status === 'aceita' ? 'Proposta aceita.' : variaveis.status === 'rejeitada' ? 'Proposta rejeitada.' : 'Proposta expirada.')
       await queryClient.invalidateQueries({ queryKey: ['propostas'] })
     },
     onError: (erro: Error) => toast.error(erro.message),
@@ -132,7 +132,7 @@ function PropostasPage() {
     if (editor.error) return <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 space-y-4"><h1 className="font-semibold">Não foi possível abrir a proposta</h1><p className="text-sm text-muted-foreground">{(editor.error as Error).message}</p><Button variant="outline" onClick={() => abrirEditor(null)}>Voltar à lista</Button></div>
     if (editor.estado?.tipo === 'escolher_revisao') return <div className="max-w-2xl mx-auto rounded-lg border bg-card p-6 space-y-4"><h1 className="text-xl font-semibold">Escolha a revisão de origem</h1><p className="text-sm text-muted-foreground">Esta proposta antiga possui mais de uma revisão possível. Selecione explicitamente qual orçamento deve ser congelado.</p><div className="space-y-2">{editor.estado.candidatas.map((revisao) => <Button key={revisao.id} variant="outline" className="w-full justify-between" onClick={() => editor.selecionarRevisaoLegada(revisao.id)}><span>Revisão {revisao.numero}</span><span>{new Date(revisao.createdAt).toLocaleDateString('pt-BR')}</span></Button>)}</div><Button variant="ghost" onClick={() => abrirEditor(null)}>Cancelar</Button></div>
     if (editor.estado?.tipo === 'sem_origem') return <div className="max-w-xl mx-auto rounded-lg border bg-card p-6 space-y-4"><h1 className="text-xl font-semibold">Proposta sem orçamento de origem</h1><p className="text-sm text-muted-foreground">Este registro legado não pode ser editado até ser vinculado a uma revisão de orçamento.</p><Button variant="outline" onClick={() => abrirEditor(null)}>Voltar à lista</Button></div>
-    if (editor.editorData) return <EditorPropostaComercial proposta={editor.editorData} configuracaoInicial={editor.configuracao} revisoes={editor.revisoes} revisaoSelecionadaId={editor.revisaoSelecionadaId} onSelecionarRevisao={editor.abrirRevisaoHistorica} onVoltar={() => abrirEditor(null)} onSalvarRascunho={async (config) => { await editor.salvarRascunho(config); toast.success('Rascunho salvo.') }} onPublicarRevisao={async (config) => { await editor.publicarRascunho(config); toast.success('Revisão publicada e congelada.') }} />
+    if (editor.editorData) return <EditorPropostaComercial proposta={editor.editorData} configuracaoInicial={editor.configuracao} revisoes={editor.revisoes} revisaoSelecionadaId={editor.revisaoSelecionadaId} onSelecionarRevisao={editor.abrirRevisaoHistorica} somenteLeitura={!podeEditar || editor.somenteLeitura} onVoltar={() => abrirEditor(null)} onSalvarRascunho={async (config) => { await editor.salvarRascunho(config); toast.success('Rascunho salvo.') }} onPublicarRevisao={async (config) => { await editor.publicarRascunho(config); toast.success('Revisão publicada e congelada.') }} />
   }
 
   return (
@@ -146,7 +146,7 @@ function PropostasPage() {
         {propostasQuery.isLoading ? <TableRow><TableCell colSpan={7}><Skeleton className="h-9 w-full" /></TableCell></TableRow> : filtradas.length === 0 ? <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground"><FileText className="size-8 mx-auto mb-2 opacity-50" />Nenhuma proposta encontrada</TableCell></TableRow> : filtradas.map((proposta) => <TableRow key={proposta.id}><TableCell className="font-mono text-xs">{proposta.numero}</TableCell><TableCell><button className="font-medium text-primary hover:underline inline-flex items-center gap-2" onClick={() => abrirEditor(proposta.id)}><FileText className="size-4" />{proposta.titulo}</button></TableCell><TableCell>{clientesMap[proposta.cliente_id] ?? '—'}</TableCell><TableCell><Badge variant="outline" className={cn('text-xs', STATUS_PROPOSTA_BADGE[proposta.status])}>{STATUS_PROPOSTA_LABEL[proposta.status]}</Badge></TableCell><TableCell>{proposta.validade ? new Date(`${proposta.validade}T12:00:00`).toLocaleDateString('pt-BR') : '—'}</TableCell><TableCell className="text-right font-mono">{brl(Number(proposta.valor_total))}</TableCell><TableCell><div className="flex justify-end gap-1">
           <Button size="icon" variant="ghost" title="Abrir editor" onClick={() => abrirEditor(proposta.id)}><Pencil className="size-4" /></Button>
           {proposta.status === 'rascunho' && podeEditar && <Button size="icon" variant="ghost" title="Duplicar de outra revisão" onClick={() => setDuplicarOpen(true)}><Copy className="size-4" /></Button>}
-          {proposta.status === 'enviada' && podeEditar && <><Button size="icon" variant="ghost" title="Aceitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'aceita' })}><CheckCircle2 className="size-4 text-emerald-600" /></Button><Button size="icon" variant="ghost" title="Rejeitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'rejeitada' })}><XCircle className="size-4 text-amber-600" /></Button></>}
+          {proposta.status === 'enviada' && podeEditar && <><Button size="icon" variant="ghost" title="Aceitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'aceita' })}><CheckCircle2 className="size-4 text-emerald-600" /></Button><Button size="icon" variant="ghost" title="Rejeitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'rejeitada' })}><XCircle className="size-4 text-amber-600" /></Button><Button size="icon" variant="ghost" title="Expirar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'expirada' })}><Clock3 className="size-4 text-slate-500" /></Button></>}
           {proposta.status === 'aceita' && <><Button size="icon" variant="ghost" title="Abrir obras" onClick={() => navigate({ to: '/obras', search: { busca: proposta.numero, clienteId: undefined } })}><HardHat className="size-4" /></Button><Button size="icon" variant="ghost" title="Abrir contratos" onClick={() => navigate({ to: '/comercial/contratos', search: { propostaId: proposta.id, clienteId: proposta.cliente_id } })}><FileSignature className="size-4" /></Button></>}
           {proposta.status === 'rascunho' && podeExcluir && <Button size="icon" variant="ghost" title="Excluir rascunho" onClick={() => setDeleteId(proposta.id)}><Trash2 className="size-4 text-destructive" /></Button>}
         </div></TableCell></TableRow>)}

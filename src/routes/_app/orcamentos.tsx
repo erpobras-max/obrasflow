@@ -1003,51 +1003,15 @@ function OrcamentosPage() {
                 somenteLeitura={!podeEditar}
                 onItensAlterados={() => qc.invalidateQueries({ queryKey: ["orcamento-itens", orcamento?.id] })}
                 onGerarProposta={async () => {
-                  try {
-                    const obra = obras?.find((o) => o.id === selectedObraId);
-                    const nomeObra = obra?.nome || "Obra";
-                    const { data: propsExistentes } = await supabase
-                      .from("propostas")
-                      .select("id, titulo")
-                      .ilike("titulo", `%${nomeObra}%`)
-                      .limit(1);
-
-                    if (propsExistentes && propsExistentes.length > 0) {
-                      navigate({ to: "/comercial/propostas", search: { propostaId: propsExistentes[0].id } });
-                      return;
-                    }
-
-                    let clienteId = obra?.cliente_id;
-                    if (!clienteId) {
-                      const { data: clientes } = await supabase.from("clientes").select("id").limit(1);
-                      clienteId = clientes?.[0]?.id;
-                    }
-
-                    if (clienteId) {
-                      const { data: nova, error } = await supabase
-                        .from("propostas")
-                        .insert({
-                          cliente_id: clienteId,
-                          titulo: `Proposta Comercial - ${nomeObra}`,
-                          valor_total: orcamento?.total_estimado ? Number(orcamento.total_estimado) / 100 : 0,
-                          status: "rascunho",
-                        })
-                        .select("id")
-                        .single();
-
-                      if (!error && nova) {
-                        if (obra?.id) {
-                          await supabase.from("obras").update({ proposta_id: nova.id } as any).eq("id", obra.id);
-                        }
-                        toast.success("Proposta comercial iniciada com sucesso!");
-                        navigate({ to: "/comercial/propostas", search: { propostaId: nova.id } });
-                        return;
-                      }
-                    }
-                  } catch (e) {
-                    console.error(e);
-                  }
-                  navigate({ to: "/comercial/propostas" });
+                  const obra = obras?.find((item) => item.id === selectedObraId)
+                  navigate({
+                    to: "/comercial/propostas",
+                    search: {
+                      busca: obra?.nome,
+                      clienteId: obra?.cliente_id,
+                      propostaId: undefined,
+                    },
+                  })
                 }}
               />
             ) : (

@@ -98,8 +98,12 @@ export function adaptarItensLegados(itens: ItemPropostaLegado[]): EtapaEditor[] 
 
 export function resolverCandidatasLegado(
   revisoes: RevisaoOrcamentoResumo[],
+  revisaoSelecionadaId?: string | null,
 ): PropostaLegadaResolucao {
   if (revisoes.length === 0) return { tipo: 'nenhuma' }
+  if (revisaoSelecionadaId && revisoes.some((revisao) => revisao.id === revisaoSelecionadaId)) {
+    return { tipo: 'unica', revisaoId: revisaoSelecionadaId }
+  }
   if (revisoes.length === 1) return { tipo: 'unica', revisaoId: revisoes[0].id }
   return { tipo: 'multipla', candidatas: revisoes.map((revisao) => revisao.id) }
 }

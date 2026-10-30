@@ -55,7 +55,7 @@ export function NovaPropostaOrcamentoDialog({
   const obrasQuery = useQuery({
     queryKey: ['obras-com-orcamento-proposta'],
     enabled: open,
-    queryFn: () => dados(supabase.from('obras').select('id,numero,nome,cliente_id').order('nome')),
+    queryFn: () => dados(supabase.from('obras').select('id,numero,nome,cliente_id,orcamentos!inner(id)').order('nome')),
   })
   const orcamentosQuery = useQuery({
     queryKey: ['orcamentos-proposta', obraId],
@@ -87,15 +87,19 @@ export function NovaPropostaOrcamentoDialog({
     }
     setSalvando(true)
     try {
-      const fotografia = criarFotografiaProposta(revisao, configuracaoPropostaComercialPadrao)
+      const obraSelecionada = obras.find((obra: any) => obra.id === obraId)
+      const configuracaoInicial = {
+        ...configuracaoPropostaComercialPadrao,
+        tituloProposta: `Proposta Comercial - ${obraSelecionada?.nome ?? 'Obra'}`,
+      }
+      const fotografia = criarFotografiaProposta(revisao, configuracaoInicial)
       const { data: propostaCriadaId, error } = await supabase.rpc('criar_proposta_de_revisao', {
         p_orcamento_revisao_id: revisaoId,
-        p_configuracao: configuracaoPropostaComercialPadrao,
+        p_configuracao: configuracaoInicial,
         p_fotografia: fotografia,
         p_duplicar: validacao.duplicar,
       })
       if (error) throw error
-      await supabase.from('obras').update({ proposta_id: propostaCriadaId }).eq('id', obraId)
       toast.success(validacao.duplicar ? 'Variação comercial criada.' : 'Rascunho comercial aberto a partir do orçamento.')
       onOpenChange(false)
       onCriada(propostaCriadaId)

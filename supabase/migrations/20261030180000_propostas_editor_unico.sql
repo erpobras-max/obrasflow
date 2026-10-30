@@ -60,6 +60,109 @@ AS $$
     OR public.has_role(p_usuario, 'financeiro_imobiliaria');
 $$;
 
+CREATE OR REPLACE FUNCTION public.construir_fotografia_comercial(
+  p_orcamento_revisao_id uuid,
+  p_configuracao jsonb
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_origem jsonb;
+  v_config jsonb := COALESCE(p_configuracao, '{}'::jsonb);
+  v_etapa jsonb;
+  v_atividade jsonb;
+  v_insumo jsonb;
+  v_etapas jsonb := '[]'::jsonb;
+  v_atividades jsonb;
+  v_total_geral numeric := 0;
+  v_total_etapa numeric;
+  v_custo_unitario numeric;
+  v_preco_unitario numeric;
+  v_preco_total numeric;
+  v_quantidade numeric;
+  v_bdi numeric;
+  v_bdi_geral numeric;
+  v_descricao text;
+BEGIN
+  SELECT fotografia INTO v_origem
+    FROM public.orcamento_revisoes
+   WHERE id = p_orcamento_revisao_id;
+  IF v_origem IS NULL THEN RAISE EXCEPTION 'Revisão de orçamento não encontrada'; END IF;
+
+  v_bdi_geral := COALESCE(NULLIF(v_origem->'orcamento'->>'bdi_geral', '')::numeric, 0);
+  FOR v_etapa IN SELECT value FROM jsonb_array_elements(COALESCE(v_origem->'etapas', '[]'::jsonb)) LOOP
+    IF COALESCE(v_config->'etapasOcultas', '[]'::jsonb) ? COALESCE(v_etapa->>'id', '')
+       OR COALESCE(v_config->'etapasOcultas', '[]'::jsonb) ? COALESCE(v_etapa->>'codigo', '') THEN
+      CONTINUE;
+    END IF;
+
+    v_atividades := '[]'::jsonb;
+    v_total_etapa := 0;
+    FOR v_atividade IN
+      SELECT value FROM jsonb_array_elements(COALESCE(v_origem->'atividades', '[]'::jsonb))
+       WHERE value->>'etapa_id' = v_etapa->>'id'
+       ORDER BY COALESCE(NULLIF(value->>'ordem', '')::integer, 0)
+    LOOP
+      v_custo_unitario := 0;
+      FOR v_insumo IN
+        SELECT value FROM jsonb_array_elements(COALESCE(v_origem->'insumos', '[]'::jsonb))
+         WHERE value->>'atividade_id' = v_atividade->>'id'
+      LOOP
+        v_custo_unitario := v_custo_unitario + round(
+          COALESCE(NULLIF(v_insumo->>'coeficiente', '')::numeric, 0)
+          * COALESCE(NULLIF(v_insumo->>'preco_unitario_centavos', '')::numeric, 0)
+        );
+      END LOOP;
+      v_quantidade := COALESCE(NULLIF(v_atividade->>'quantidade', '')::numeric, 0);
+      v_bdi := COALESCE(NULLIF(v_atividade->>'bdi_percentual', '')::numeric, v_bdi_geral);
+      v_preco_unitario := round(v_custo_unitario * (1 + v_bdi / 100));
+      v_preco_total := round(v_preco_unitario * v_quantidade);
+      v_total_etapa := v_total_etapa + v_preco_total;
+
+      IF COALESCE(v_config->>'mostrarApenasEtapa', 'false')::boolean
+         OR COALESCE(v_config->'atividadesOcultas', '[]'::jsonb) ? COALESCE(v_atividade->>'id', '')
+         OR COALESCE(v_config->'atividadesOcultas', '[]'::jsonb) ? COALESCE(v_atividade->>'codigo', '') THEN
+        CONTINUE;
+      END IF;
+      v_descricao := COALESCE(
+        (v_config->'descricoesComerciais')->>(v_atividade->>'id'),
+        (v_config->'descricoesComerciais')->>(v_atividade->>'codigo'),
+        v_atividade->>'descricao',
+        'Serviço'
+      );
+      v_atividades := v_atividades || jsonb_build_array(jsonb_build_object(
+        'id', v_atividade->>'id',
+        'codigo', v_atividade->>'codigo',
+        'descricao', v_descricao,
+        'unidade', COALESCE(v_atividade->>'unidade', 'un'),
+        'quantidade', v_quantidade,
+        'precoUnitarioCentavos', v_preco_unitario,
+        'precoTotalCentavos', v_preco_total
+      ));
+    END LOOP;
+
+    v_total_geral := v_total_geral + v_total_etapa;
+    v_etapas := v_etapas || jsonb_build_array(jsonb_build_object(
+      'id', v_etapa->>'id',
+      'codigo', v_etapa->>'codigo',
+      'nome', COALESCE(v_etapa->>'nome', 'Etapa'),
+      'valorTotalCentavos', v_total_etapa,
+      'atividades', v_atividades
+    ));
+  END LOOP;
+
+  RETURN jsonb_build_object(
+    'orcamentoRevisaoId', p_orcamento_revisao_id,
+    'etapas', v_etapas,
+    'totalPrecoCentavos', v_total_geral
+  );
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.criar_proposta_de_revisao(
   p_orcamento_revisao_id uuid,
   p_configuracao jsonb,
@@ -78,6 +181,8 @@ DECLARE
   v_obra_nome text;
   v_titulo text;
   v_valor numeric(14,2);
+  v_fotografia jsonb;
+  v_duplicada_de_id uuid;
 BEGIN
   IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
     RAISE EXCEPTION 'Permissão insuficiente para criar proposta';
@@ -101,25 +206,32 @@ BEGIN
       INTO v_proposta_id
       FROM public.propostas p
      WHERE p.orcamento_revisao_id = p_orcamento_revisao_id
-       AND p.status = 'rascunho'
        AND NOT p.variante_comercial
      ORDER BY p.created_at
      LIMIT 1;
     IF v_proposta_id IS NOT NULL THEN
       RETURN v_proposta_id;
     END IF;
+  ELSE
+    SELECT p.id INTO v_duplicada_de_id
+      FROM public.propostas p
+     WHERE p.orcamento_revisao_id = p_orcamento_revisao_id
+       AND NOT p.variante_comercial
+     ORDER BY p.created_at
+     LIMIT 1;
   END IF;
 
   v_titulo := NULLIF(BTRIM(COALESCE(p_configuracao, '{}'::jsonb)->>'tituloProposta'), '');
   v_titulo := COALESCE(v_titulo, 'Proposta Comercial - ' || v_obra_nome);
-  v_valor := COALESCE(NULLIF(p_fotografia->>'totalPrecoCentavos', '')::numeric, 0) / 100;
+  v_fotografia := public.construir_fotografia_comercial(p_orcamento_revisao_id, p_configuracao);
+  v_valor := COALESCE(NULLIF(v_fotografia->>'totalPrecoCentavos', '')::numeric, 0) / 100;
 
   INSERT INTO public.propostas(
     numero, cliente_id, titulo, valor_total, status, created_by,
-    orcamento_revisao_id, variante_comercial
+    orcamento_revisao_id, variante_comercial, duplicada_de_id
   ) VALUES (
     '', v_cliente_id, v_titulo, v_valor, 'rascunho', v_usuario,
-    p_orcamento_revisao_id, COALESCE(p_duplicar, false)
+    p_orcamento_revisao_id, COALESCE(p_duplicar, false), v_duplicada_de_id
   ) RETURNING id INTO v_proposta_id;
 
   INSERT INTO public.proposta_revisoes(
@@ -127,7 +239,7 @@ BEGIN
   ) VALUES (
     v_proposta_id, p_orcamento_revisao_id, 1, 'rascunho',
     COALESCE(p_configuracao, '{}'::jsonb),
-    public.sanitizar_fotografia_proposta(COALESCE(p_fotografia, '{}'::jsonb))
+    v_fotografia
   );
 
   RETURN v_proposta_id;
@@ -151,6 +263,7 @@ DECLARE
   v_revisao_id uuid;
   v_proximo_numero integer;
   v_valor numeric(14,2);
+  v_fotografia jsonb;
 BEGIN
   IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
     RAISE EXCEPTION 'Permissão insuficiente para salvar proposta';
@@ -167,7 +280,8 @@ BEGIN
    LIMIT 1
    FOR UPDATE;
 
-  v_valor := COALESCE(NULLIF(p_fotografia->>'totalPrecoCentavos', '')::numeric, 0) / 100;
+  v_fotografia := public.construir_fotografia_comercial(v_proposta.orcamento_revisao_id, p_configuracao);
+  v_valor := COALESCE(NULLIF(v_fotografia->>'totalPrecoCentavos', '')::numeric, 0) / 100;
 
   IF NOT FOUND THEN
     IF v_proposta.orcamento_revisao_id IS NULL THEN
@@ -178,12 +292,12 @@ BEGIN
     ) VALUES (
       p_proposta_id, v_proposta.orcamento_revisao_id, 1, 'rascunho',
       COALESCE(p_configuracao, '{}'::jsonb),
-      public.sanitizar_fotografia_proposta(COALESCE(p_fotografia, '{}'::jsonb))
+      v_fotografia
     ) RETURNING id INTO v_revisao_id;
   ELSIF v_revisao.status = 'rascunho' THEN
     UPDATE public.proposta_revisoes
        SET configuracao = COALESCE(p_configuracao, '{}'::jsonb),
-           fotografia = public.sanitizar_fotografia_proposta(COALESCE(p_fotografia, '{}'::jsonb))
+           fotografia = v_fotografia
      WHERE id = v_revisao.id
      RETURNING id INTO v_revisao_id;
   ELSIF v_revisao.status IN ('rejeitada', 'expirada') THEN
@@ -193,7 +307,7 @@ BEGIN
     ) VALUES (
       p_proposta_id, v_proposta.orcamento_revisao_id, v_proximo_numero, 'rascunho',
       COALESCE(p_configuracao, '{}'::jsonb),
-      public.sanitizar_fotografia_proposta(COALESCE(p_fotografia, '{}'::jsonb))
+      v_fotografia
     ) RETURNING id INTO v_revisao_id;
   ELSE
     RAISE EXCEPTION 'A revisão % está %; rejeite ou expire antes de criar novo rascunho', v_revisao.numero, v_revisao.status;
@@ -220,6 +334,8 @@ DECLARE
   v_usuario uuid := auth.uid();
   v_revisao_id uuid;
   v_valor numeric(14,2);
+  v_fotografia jsonb;
+  v_orcamento_revisao_id uuid;
 BEGIN
   IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
     RAISE EXCEPTION 'Permissão insuficiente para publicar proposta';
@@ -228,10 +344,14 @@ BEGIN
   PERFORM 1 FROM public.propostas WHERE id = p_proposta_id AND status = 'rascunho' FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Somente proposta em rascunho pode ser publicada'; END IF;
 
+  SELECT orcamento_revisao_id INTO v_orcamento_revisao_id
+    FROM public.propostas WHERE id = p_proposta_id;
+  v_fotografia := public.construir_fotografia_comercial(v_orcamento_revisao_id, p_configuracao);
+
   UPDATE public.proposta_revisoes
      SET status = 'enviada',
          configuracao = COALESCE(p_configuracao, '{}'::jsonb),
-         fotografia = public.sanitizar_fotografia_proposta(COALESCE(p_fotografia, '{}'::jsonb)),
+         fotografia = v_fotografia,
          enviada_at = now()
    WHERE id = (
      SELECT id FROM public.proposta_revisoes
@@ -242,8 +362,10 @@ BEGIN
    RETURNING id INTO v_revisao_id;
   IF v_revisao_id IS NULL THEN RAISE EXCEPTION 'Revisão em rascunho não encontrada'; END IF;
 
-  v_valor := COALESCE(NULLIF(p_fotografia->>'totalPrecoCentavos', '')::numeric, 0) / 100;
-  UPDATE public.propostas SET status = 'enviada', valor_total = v_valor WHERE id = p_proposta_id;
+  v_valor := COALESCE(NULLIF(v_fotografia->>'totalPrecoCentavos', '')::numeric, 0) / 100;
+  UPDATE public.propostas
+     SET status = 'enviada', valor_total = v_valor, data_envio = CURRENT_DATE
+   WHERE id = p_proposta_id;
   RETURN v_revisao_id;
 END;
 $$;
@@ -272,6 +394,46 @@ BEGIN
 
   DELETE FROM public.propostas WHERE id = p_proposta_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Não foi possível confirmar a exclusão da proposta'; END IF;
+  RETURN true;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.vincular_proposta_legada_revisao(
+  p_proposta_id uuid,
+  p_orcamento_revisao_id uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_usuario uuid := auth.uid();
+  v_cliente_proposta uuid;
+  v_cliente_revisao uuid;
+  v_status public.status_proposta;
+BEGIN
+  IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
+    RAISE EXCEPTION 'Permissão insuficiente para vincular proposta legada';
+  END IF;
+  SELECT cliente_id, status INTO v_cliente_proposta, v_status
+    FROM public.propostas WHERE id = p_proposta_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Proposta não encontrada'; END IF;
+  IF v_status <> 'rascunho' THEN RAISE EXCEPTION 'Somente rascunho legado pode receber uma revisão de origem'; END IF;
+  IF EXISTS (SELECT 1 FROM public.proposta_revisoes WHERE proposta_id = p_proposta_id) THEN
+    RAISE EXCEPTION 'A proposta já possui histórico comercial';
+  END IF;
+  SELECT obra.cliente_id INTO v_cliente_revisao
+    FROM public.orcamento_revisoes revisao
+    JOIN public.orcamentos orcamento ON orcamento.id = revisao.orcamento_id
+    JOIN public.obras obra ON obra.id = orcamento.obra_id
+   WHERE revisao.id = p_orcamento_revisao_id;
+  IF v_cliente_revisao IS NULL OR v_cliente_revisao <> v_cliente_proposta THEN
+    RAISE EXCEPTION 'A revisão selecionada não pertence ao cliente da proposta';
+  END IF;
+  UPDATE public.propostas
+     SET orcamento_revisao_id = p_orcamento_revisao_id
+   WHERE id = p_proposta_id;
   RETURN true;
 END;
 $$;
@@ -325,26 +487,61 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.sanitizar_fotografia_proposta(jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.construir_fotografia_comercial(uuid,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.pode_editar_proposta_editor(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.salvar_rascunho_proposta(uuid,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.publicar_rascunho_proposta(uuid,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.excluir_proposta_rascunho(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.vincular_proposta_legada_revisao(uuid,uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.alterar_status_proposta_editor(uuid,text) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.salvar_rascunho_proposta(uuid,jsonb,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.publicar_rascunho_proposta(uuid,jsonb,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.excluir_proposta_rascunho(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.vincular_proposta_legada_revisao(uuid,uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.alterar_status_proposta_editor(uuid,text) TO authenticated;
+
+-- O ciclo de vida comercial só pode ser alterado pelas RPCs acima. Leituras
+-- continuam disponíveis aos perfis operacionais autorizados.
+REVOKE INSERT, UPDATE, DELETE ON public.propostas FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.proposta_revisoes FROM authenticated;
+GRANT SELECT ON public.propostas, public.proposta_revisoes TO authenticated;
+
+ALTER TABLE public.proposta_revisoes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS analitico_gestao ON public.proposta_revisoes;
+DROP POLICY IF EXISTS proposta_revisoes_editor_leitura ON public.proposta_revisoes;
+CREATE POLICY proposta_revisoes_editor_leitura ON public.proposta_revisoes
+FOR SELECT TO authenticated USING (
+  public.has_role(auth.uid(), 'admin')
+  OR public.has_role(auth.uid(), 'diretor')
+  OR public.has_role(auth.uid(), 'financeiro')
+  OR public.has_role(auth.uid(), 'financeiro_civil')
+  OR public.has_role(auth.uid(), 'financeiro_imobiliaria')
+  OR public.has_role(auth.uid(), 'engenharia')
+);
+
+DROP POLICY IF EXISTS analitico_revisoes_leitura ON public.orcamento_revisoes;
+CREATE POLICY analitico_revisoes_leitura ON public.orcamento_revisoes
+FOR SELECT TO authenticated USING (
+  public.has_role(auth.uid(), 'admin')
+  OR public.has_role(auth.uid(), 'diretor')
+  OR public.has_role(auth.uid(), 'financeiro')
+  OR public.has_role(auth.uid(), 'financeiro_civil')
+  OR public.has_role(auth.uid(), 'financeiro_imobiliaria')
+  OR public.has_role(auth.uid(), 'engenharia')
+);
 
 -- Rollback manual, somente se nenhuma revisão nova precisar ser preservada:
 -- DROP FUNCTION IF EXISTS public.excluir_proposta_rascunho(uuid);
+-- DROP FUNCTION IF EXISTS public.vincular_proposta_legada_revisao(uuid,uuid);
 -- DROP FUNCTION IF EXISTS public.alterar_status_proposta_editor(uuid,text);
 -- DROP FUNCTION IF EXISTS public.publicar_rascunho_proposta(uuid,jsonb,jsonb);
 -- DROP FUNCTION IF EXISTS public.salvar_rascunho_proposta(uuid,jsonb,jsonb);
 -- DROP FUNCTION IF EXISTS public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean);
 -- DROP FUNCTION IF EXISTS public.pode_editar_proposta_editor(uuid);
+-- DROP FUNCTION IF EXISTS public.construir_fotografia_comercial(uuid,jsonb);
 -- DROP FUNCTION IF EXISTS public.sanitizar_fotografia_proposta(jsonb);
 -- DROP TRIGGER IF EXISTS trg_proposta_revisoes_updated_at ON public.proposta_revisoes;
 -- ALTER TABLE public.proposta_revisoes DROP COLUMN IF EXISTS enviada_at, DROP COLUMN IF EXISTS updated_at;

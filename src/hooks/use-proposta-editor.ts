@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase as client } from '@/integrations/supabase/client.custom'
 import {
   adaptarFotografiaParaEditor,
+  adaptarItensLegados,
   resolverCandidatasLegado,
 } from '@/lib/propostas/proposta-editor-adapter'
 import {
@@ -30,6 +31,7 @@ interface CargaEditor {
   configuracao: ConfiguracaoPropostaComercial
   fotografia: Record<string, unknown>
   revisaoSelecionadaId?: string
+  somenteLeitura?: boolean
 }
 
 const enderecoObra = (obra: any) =>
@@ -130,6 +132,7 @@ export function usePropostaEditor(propostaId: string | null) {
           configuracao: normalizarConfiguracaoProposta(ativa.configuracao),
           fotografia: ativa.fotografia,
           revisaoSelecionadaId: ativa.id,
+          somenteLeitura: false,
         }
       }
 
@@ -164,11 +167,35 @@ export function usePropostaEditor(propostaId: string | null) {
         })
       }
 
-      const resolucao = resolverCandidatasLegado(candidatas)
+      const resolucao = resolverCandidatasLegado(candidatas, proposta.orcamento_revisao_id)
       if (resolucao.tipo === 'nenhuma') {
+        const itensLegados = await consultarOuFalhar(
+          supabase
+            .from('propostas_itens')
+            .select('*')
+            .eq('proposta_id', propostaId)
+            .order('ordem'),
+        )
+        if ((itensLegados ?? []).length > 0) {
+          const etapas = adaptarItensLegados(itensLegados)
+          const propostaLegada = {
+            ...contextoBase,
+            status: proposta.status,
+            revisaoNumero: 1,
+            etapas,
+          } as PropostaEditorData
+          return {
+            estado: { tipo: 'pronta', proposta: propostaLegada },
+            revisoesPersistidas: [], revisoesOrcamento: [], contexto: contextoBase,
+            configuracao: normalizarConfiguracaoProposta(),
+            fotografia: { etapas, totalPrecoCentavos: etapas.reduce((total, etapa) => total + etapa.valorTotalCentavos, 0) },
+            somenteLeitura: true,
+          }
+        }
         return {
           estado: { tipo: 'sem_origem' }, revisoesPersistidas: [], revisoesOrcamento: [],
           contexto: contextoBase, configuracao: normalizarConfiguracaoProposta(), fotografia: {},
+          somenteLeitura: true,
         }
       }
       if (resolucao.tipo === 'multipla') {
@@ -176,6 +203,7 @@ export function usePropostaEditor(propostaId: string | null) {
           estado: { tipo: 'escolher_revisao', candidatas }, revisoesPersistidas: [],
           revisoesOrcamento: candidatas, contexto: contextoBase,
           configuracao: normalizarConfiguracaoProposta(), fotografia: {},
+          somenteLeitura: true,
         }
       }
       const origem = candidatas.find((item) => item.id === resolucao.revisaoId)!
@@ -190,6 +218,7 @@ export function usePropostaEditor(propostaId: string | null) {
         estado: { tipo: 'pronta', proposta: editorData }, revisoesPersistidas: [],
         revisoesOrcamento: candidatas, contexto, configuracao: normalizarConfiguracaoProposta(),
         fotografia: origem.fotografia, revisaoSelecionadaId: origem.id,
+        somenteLeitura: false,
       }
     },
   })
@@ -208,7 +237,10 @@ export function usePropostaEditor(propostaId: string | null) {
       const proposta = consulta.data.estado.proposta
       if (consulta.data.revisoesPersistidas.length === 0 && proposta.orcamentoRevisaoId) {
         await consultarOuFalhar(
-          supabase.from('propostas').update({ orcamento_revisao_id: proposta.orcamentoRevisaoId }).eq('id', propostaId),
+          supabase.rpc('vincular_proposta_legada_revisao', {
+            p_proposta_id: propostaId,
+            p_orcamento_revisao_id: proposta.orcamentoRevisaoId,
+          }),
         )
       }
       const fotografia = fotografiaDoEditor(proposta)
@@ -233,7 +265,10 @@ export function usePropostaEditor(propostaId: string | null) {
     mutationFn: async (revisaoId: string) => {
       if (!propostaId) return
       await consultarOuFalhar(
-        supabase.from('propostas').update({ orcamento_revisao_id: revisaoId }).eq('id', propostaId),
+        supabase.rpc('vincular_proposta_legada_revisao', {
+          p_proposta_id: propostaId,
+          p_orcamento_revisao_id: revisaoId,
+        }),
       )
     },
     onSuccess: invalidar,
@@ -268,6 +303,7 @@ export function usePropostaEditor(propostaId: string | null) {
     configuracao: cargaVisual?.configuracao ?? null,
     revisoes: resumirRevisoes(consulta.data?.revisoesPersistidas ?? []),
     revisaoSelecionadaId: cargaVisual?.revisaoSelecionadaId,
+    somenteLeitura: cargaVisual?.somenteLeitura ?? true,
     salvarRascunho: (config: ConfiguracaoPropostaComercial) => persistir.mutateAsync({ publicar: false, config }),
     publicarRascunho: (config: ConfiguracaoPropostaComercial) => persistir.mutateAsync({ publicar: true, config }),
     selecionarRevisaoLegada: selecionar.mutateAsync,

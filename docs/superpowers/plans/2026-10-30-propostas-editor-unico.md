@@ -441,17 +441,17 @@ git commit -m "feat(propostas): sincronizar status e historico comercial"
 - Consumes: fluxo completo das Tasks 1–8.
 - Produces: evidência de aceite, documentação operacional e branch pronta para revisão.
 
-- [ ] **Step 1: Criar cenário Playwright autenticado ou fixture controlada**
+- [x] **Step 1: Criar cenário Playwright autenticado ou fixture controlada**
 
 Cobrir: abrir proposta sem erro no console; criar por obra/orçamento/revisão; salvar e recarregar rascunho; publicar como enviada; abrir histórico; imprimir pelo editor; ausência do formulário/impressão antigos; excluir um rascunho e confirmar que não retorna. Se o ambiente não fornecer autenticação automatizável, manter o cenário marcado por variável de credencial e executar manualmente o mesmo roteiro no preview.
 
-- [ ] **Step 2: Rodar toda a suíte unitária/SQL**
+- [x] **Step 2: Rodar toda a suíte unitária/SQL**
 
 Run: `node --test tests/*.test.mjs`
 
 Expected: todos PASS.
 
-- [ ] **Step 3: Rodar lint e build**
+- [x] **Step 3: Rodar lint e build**
 
 Run: `npm run lint`
 
@@ -467,7 +467,7 @@ Run: `npx playwright test tests/e2e/propostas-editor-unico.spec.ts --project=chr
 
 Expected: PASS; se depender de credenciais externas, anexar evidência do roteiro manual equivalente e não declarar automação aprovada.
 
-- [ ] **Step 5: Atualizar `PROGRESS.md`**
+- [x] **Step 5: Atualizar `PROGRESS.md`**
 
 Registrar Issue/branch, mudança para editor único, migration/RPCs, compatibilidade legada, causa da `PROP-2026-0008`, comandos e resultados reais. Não afirmar deploy antes do workflow de produção concluir.
 

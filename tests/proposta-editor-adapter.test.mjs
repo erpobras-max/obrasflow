@@ -69,3 +69,11 @@ test('resolve nenhuma, uma ou múltiplas revisões legadas sem escolher preço e
     candidatas: ['r1', 'r2'],
   })
 })
+
+test('honra a revisão legada escolhida explicitamente mesmo quando existem múltiplas candidatas', () => {
+  const candidatas = [
+    { id: 'r1', numero: 1, createdAt: '2026-01-01' },
+    { id: 'r2', numero: 2, createdAt: '2026-02-01' },
+  ]
+  assert.deepEqual(resolverCandidatasLegado(candidatas, 'r2'), { tipo: 'unica', revisaoId: 'r2' })
+})

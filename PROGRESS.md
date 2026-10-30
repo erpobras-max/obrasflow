@@ -398,3 +398,17 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - **Testes e Publicação**:
   - 17 testes automatizados de unidade aprovados cobrindo discriminação de BDI/custos, editor de proposta, orçamentos analíticos e legados, fotografias imutáveis e importações SINAPI.
   - Todos os builds e deploys no Cloudflare Workers concluídos com 100% de sucesso.
+
+## Atualização 30/10/2026 — Propostas no Editor Comercial Único (Issue #200)
+
+- **Branch isolada**: `fix/200-consolidar-propostas-editor`; nenhuma publicação ou merge realizados nesta etapa.
+- **Fluxo único**: removidos da interface o formulário manual, o catálogo e a impressão antigos. Título e ação da listagem abrem exclusivamente o Editor Comercial.
+- **Origem obrigatória**: novas propostas seguem `obra → orçamento → revisão`; repetição abre o rascunho existente e duplicação exige ação explícita.
+- **Persistência e histórico**: configuração e fotografia comercial são salvas em `proposta_revisoes`; revisões publicadas ficam congeladas, continuam visualizáveis e imprimíveis.
+- **Segurança comercial**: a RPC sanitiza recursivamente custo, BDI, insumos, coeficientes e margens antes de persistir a fotografia entregue ao cliente.
+- **Ciclo de vida atômico**: criação, salvamento, publicação, aceite/rejeição/expiração e exclusão de rascunho usam RPCs transacionais. A exclusão não remove mais a linha do cache antes da confirmação do banco.
+- **Compatibilidade legada**: proposta antiga com uma revisão possível é adaptada; múltiplas revisões exigem escolha explícita; sem origem fica bloqueada até vinculação.
+- **PROP-2026-0008**: a causa mais provável no código era a exclusão otimista somada a falhas ignoradas nas desvinculações/deletes; a confirmação sobre o registro de produção ainda depende da execução autorizada de `scripts/diagnosticar_proposta_0008.sql`. A rota agora usa somente `excluir_proposta_rascunho`.
+- **Banco**: migration `20261030180000_propostas_editor_unico.sql`, com rollback manual documentado. Os tipos Supabase devem ser regenerados pelo CLI após aplicação no schema publicado.
+- **Revisão de segurança**: fotografia comercial passou a ser reconstruída no servidor, por lista branca, diretamente da fotografia analítica plana congelada. Valores enviados pelo navegador são ignorados; DML direto nas tabelas comerciais foi revogado para `authenticated`; finanças e engenharia receberam leitura coerente, com engenharia em modo somente leitura na interface.
+- **Validação**: `node --test tests/*.test.mjs` aprovou 117/117 testes; o build Vite/Nitro/Cloudflare foi concluído com sucesso após as correções da revisão. O lint focado dos arquivos alterados passou, exceto por uma ocorrência `prefer-const` preexistente em `orcamentos.tsx`; o lint global permanece bloqueado por 72.609 ocorrências preexistentes, principalmente CRLF/Prettier. O cenário Playwright autenticado está em `tests/e2e/propostas-editor-unico.spec.ts`, foi carregado corretamente e ficou ignorado por ausência de `E2E_EMAIL`, `E2E_PASSWORD` e `E2E_PROPOSTAS_MUTATION=true` em ambiente controlado.

@@ -131,7 +131,7 @@ export function normalizarConfiguracaoProposta(
 function sanitizarComercial(valor: unknown): any {
   if (Array.isArray(valor)) return valor.map(sanitizarComercial)
   if (!valor || typeof valor !== 'object') return valor
-  const bloqueados = /^(custo|bdi|insumos?|composi(cao|ções)|coeficiente|precoUnitarioCentavos|precoManual)/i
+  const bloqueados = /^(custo|bdi|insumos?|composi(cao|ções)|coeficiente|precoManual)/i
   return Object.fromEntries(
     Object.entries(valor as Record<string, unknown>)
       .filter(([chave]) => !bloqueados.test(chave))
@@ -144,7 +144,51 @@ export function criarFotografiaProposta(
   configuracao: Partial<ConfiguracaoPropostaComercial> = configuracaoPropostaComercialPadrao
 ) {
   const config = normalizarConfiguracaoProposta(configuracao)
-  const origem = sanitizarComercial(structuredClone(revisao.fotografia))
+  const fotografiaOriginal = structuredClone(revisao.fotografia)
+  const fotografiaPlana = Array.isArray(fotografiaOriginal.atividades)
+  const origem = sanitizarComercial(fotografiaOriginal)
+
+  if (fotografiaPlana) {
+    const atividadesOrigem = Array.isArray(fotografiaOriginal.atividades) ? fotografiaOriginal.atividades : []
+    const insumosOrigem = Array.isArray(fotografiaOriginal.insumos) ? fotografiaOriginal.insumos : []
+    const bdiGeral = Number(fotografiaOriginal.orcamento?.bdi_geral ?? 0)
+    origem.etapas = (Array.isArray(fotografiaOriginal.etapas) ? fotografiaOriginal.etapas : []).map((etapa: any) => {
+      const atividades = atividadesOrigem
+        .filter((atividade: any) => atividade.etapa_id === etapa.id)
+        .sort((a: any, b: any) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+        .map((atividade: any) => {
+          const custoUnitarioCentavos = insumosOrigem
+            .filter((insumo: any) => insumo.atividade_id === atividade.id)
+            .reduce(
+              (total: number, insumo: any) =>
+                total + Math.round(Number(insumo.coeficiente ?? 0) * Number(insumo.preco_unitario_centavos ?? 0)),
+              0,
+            )
+          const bdi = Number(atividade.bdi_percentual ?? bdiGeral)
+          const quantidade = Number(atividade.quantidade ?? 0)
+          const precoUnitarioCentavos = Math.round(custoUnitarioCentavos * (1 + bdi / 100))
+          return {
+            id: atividade.id,
+            codigo: atividade.codigo,
+            descricao: atividade.descricao,
+            unidade: atividade.unidade,
+            quantidade,
+            precoUnitarioCentavos,
+            precoTotalCentavos: Math.round(precoUnitarioCentavos * quantidade),
+          }
+        })
+      return {
+        id: etapa.id,
+        codigo: etapa.codigo,
+        nome: etapa.nome,
+        valorTotalCentavos: atividades.reduce(
+          (total: number, atividade: any) => total + atividade.precoTotalCentavos,
+          0,
+        ),
+        atividades,
+      }
+    })
+  }
 
   const etapasFiltradas = (origem.etapas ?? [])
     .filter((e: any) => !config.etapasOcultas?.includes(e.id) && !config.etapasOcultas?.includes(e.codigo))
@@ -164,13 +208,18 @@ export function criarFotografiaProposta(
             })),
     }))
 
+  const totalPrecoCentavos = etapasFiltradas.reduce(
+    (total: number, etapa: any) => total + Number(etapa.valorTotalCentavos ?? 0),
+    0,
+  )
+
   return {
     orcamentoRevisaoId: revisao.id,
     orcamentoRevisaoNumero: revisao.numero,
     configuracao: structuredClone(config),
     etapas: etapasFiltradas,
-    atividades: config.mostrarAtividades ? (origem.atividades ?? []) : [],
-    totalPrecoCentavos: origem.totalPrecoCentavos ?? 0,
+    atividades: config.mostrarAtividades && !fotografiaPlana ? (origem.atividades ?? []) : [],
+    totalPrecoCentavos: totalPrecoCentavos || origem.totalPrecoCentavos || 0,
   }
 }
 

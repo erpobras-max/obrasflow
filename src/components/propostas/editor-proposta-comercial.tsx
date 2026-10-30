@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { Fragment, useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { EmpresaLogo } from '@/components/empresa-logo'
 import { formatCpfCnpj, formatTelefone } from '@/lib/validacao-documento'
@@ -20,6 +20,7 @@ import {
   User,
   Calendar,
   DollarSign,
+  RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -53,6 +54,7 @@ interface EditorPropostaComercialProps {
   revisoes?: PropostaRevisaoResumo[]
   revisaoSelecionadaId?: string
   onSelecionarRevisao?: (id: string) => void
+  somenteLeitura?: boolean
   onSalvarRascunho?: (config: ConfiguracaoPropostaComercial) => Promise<void>
   onPublicarRevisao?: (config: ConfiguracaoPropostaComercial) => Promise<void>
   onVoltar?: () => void
@@ -64,6 +66,7 @@ export function EditorPropostaComercial({
   revisoes = [],
   revisaoSelecionadaId,
   onSelecionarRevisao,
+  somenteLeitura = false,
   onSalvarRascunho,
   onPublicarRevisao,
   onVoltar,
@@ -111,7 +114,9 @@ export function EditorPropostaComercial({
   const [salvando, setSalvando] = useState(false)
 
   // Status da proposta
-  const isEditavel = proposta.status === 'rascunho'
+  const isEditavel = proposta.status === 'rascunho' && !somenteLeitura
+  const podeCriarNovaRevisao =
+    !somenteLeitura && (proposta.status === 'rejeitada' || proposta.status === 'expirada')
 
   // Atualizador de campo individual
   const updateConfig = (patch: Partial<ConfiguracaoPropostaComercial>) => {
@@ -222,7 +227,7 @@ export function EditorPropostaComercial({
           }
           .proposta-print-sheet {
             visibility: visible !important;
-            position: relative !important;
+            position: absolute !important;
             display: block !important;
             left: 0 !important;
             top: 0 !important;
@@ -292,6 +297,18 @@ export function EditorPropostaComercial({
             <CheckCircle2 className="mr-1.5 size-3.5" />
             Publicar Nova Revisão
           </Button>
+
+          {podeCriarNovaRevisao && (
+            <Button
+              size="sm"
+              onClick={salvarRascunho}
+              disabled={salvando}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-sm"
+            >
+              <RefreshCw className="mr-1.5 size-3.5" />
+              Criar nova revisão
+            </Button>
+          )}
 
           <Button
             size="sm"
@@ -635,7 +652,7 @@ export function EditorPropostaComercial({
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-slate-800">
                     {etapasVisiveis.map((etapa) => (
-                      <div key={etapa.id} className="contents">
+                      <Fragment key={etapa.id}>
                         {/* Linha da Etapa */}
                         <tr className="bg-slate-100 font-bold text-slate-900">
                           <td className="py-2.5 px-3 text-center">{etapa.codigo}</td>
@@ -683,7 +700,7 @@ export function EditorPropostaComercial({
                               </tr>
                             )
                           })}
-                      </div>
+                      </Fragment>
                     ))}
                   </tbody>
 

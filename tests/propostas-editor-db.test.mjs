@@ -41,7 +41,7 @@ async function criarBanco() {
       cliente_id uuid NOT NULL REFERENCES clientes(id), titulo text NOT NULL,
       valor_total numeric(14,2) NOT NULL DEFAULT 0, status status_proposta NOT NULL DEFAULT 'rascunho',
       created_by uuid, orcamento_revisao_id uuid REFERENCES orcamento_revisoes(id),
-      created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
+      data_envio date, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
     );
     CREATE FUNCTION gerar_numero_proposta_teste() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN
@@ -83,13 +83,20 @@ async function criarOrigem(db) {
   const revisao = (await db.query(
     `INSERT INTO orcamento_revisoes(orcamento_id,numero,fotografia)
      VALUES ($1,1,$2) RETURNING id`,
-    [orcamentoId, JSON.stringify({ totalPrecoCentavos: 125050, etapas: [{ id: 'e1', custoTotalCentavos: 90000 }] })],
+    [orcamentoId, JSON.stringify({
+      orcamento: { bdi_geral: 25 },
+      etapas: [{ id: 'e1', codigo: '01', nome: 'Fundação', ordem: 0 }],
+      atividades: [{ id: 'a1', etapa_id: 'e1', codigo: '01.01', descricao: 'Concreto', unidade: 'm³', quantidade: 2, ordem: 0 }],
+      insumos: [{ atividade_id: 'a1', categoria: 'material', coeficiente: 1, preco_unitario_centavos: 1000 }],
+      memoriais: [],
+    })],
   )).rows[0].id
   return { clienteId, obraId, orcamentoId, revisao }
 }
 
 const fotografiaComercial = {
-  totalPrecoCentavos: 125050,
+  totalPrecoCentavos: 99999999,
+  preco_custo: 99999999,
   etapas: [{
     id: 'e1',
     nome: 'Fundação',
@@ -114,6 +121,16 @@ test('cria um único rascunho comum e permite variante explícita', async () => 
     assert.equal(primeira, repetida)
     assert.notEqual(variante, primeira)
     assert.equal(Number((await db.query('SELECT count(*) AS total FROM propostas')).rows[0].total), 2)
+    await db.query('SELECT publicar_rascunho_proposta($1,$2,$3)', [primeira, '{}', '{}'])
+    const aposPublicacao = (await db.query(
+      'SELECT criar_proposta_de_revisao($1,$2,$3,false) AS id',
+      [revisao, '{}', '{}'],
+    )).rows[0].id
+    assert.equal(aposPublicacao, primeira)
+    assert.equal(
+      (await db.query('SELECT duplicada_de_id FROM propostas WHERE id=$1', [variante])).rows[0].duplicada_de_id,
+      primeira,
+    )
   } finally {
     await db.close()
   }
@@ -129,8 +146,11 @@ test('sanitiza campos técnicos no servidor e publica a mesma revisão', async (
     )).rows[0].id
     const antes = (await db.query('SELECT id,fotografia FROM proposta_revisoes WHERE proposta_id=$1', [propostaId])).rows[0]
     const textoFoto = JSON.stringify(antes.fotografia).toLowerCase()
-    assert.doesNotMatch(textoFoto, /custototalcentavos|"bdi"|"insumos"|coeficiente|margem/)
+    assert.doesNotMatch(textoFoto, /custo|"bdi"|"insumos"|coeficiente|margem|preco_custo|preco_unitario_centavos/)
     assert.match(textoFoto, /precototalcentavos/)
+    assert.equal(antes.fotografia.totalPrecoCentavos, 2500)
+    assert.equal(antes.fotografia.etapas[0].atividades[0].precoUnitarioCentavos, 1250)
+    assert.equal(antes.fotografia.etapas[0].atividades[0].precoTotalCentavos, 2500)
 
     const revisaoId = (await db.query(
       'SELECT publicar_rascunho_proposta($1,$2,$3) AS id',
@@ -146,6 +166,23 @@ test('sanitiza campos técnicos no servidor e publica a mesma revisão', async (
       db.query('SELECT salvar_rascunho_proposta($1,$2,$3)', [propostaId, '{}', '{}']),
       /enviada|rascunho/i,
     )
+  } finally {
+    await db.close()
+  }
+})
+
+test('nega DML direto nas tabelas comerciais ao papel authenticated', async () => {
+  const db = await criarBanco()
+  try {
+    for (const tabela of ['propostas', 'proposta_revisoes']) {
+      for (const privilegio of ['INSERT', 'UPDATE', 'DELETE']) {
+        const permitido = (await db.query(
+          'SELECT has_table_privilege($1,$2,$3) AS permitido',
+          ['authenticated', tabela, privilegio],
+        )).rows[0].permitido
+        assert.equal(permitido, false, `${tabela} não deve permitir ${privilegio} direto`)
+      }
+    }
   } finally {
     await db.close()
   }
