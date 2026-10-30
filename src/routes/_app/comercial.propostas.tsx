@@ -335,9 +335,11 @@ function PropostasPage() {
       return {
         id: editorTarget.id,
         numero: editorTarget.numero,
+        clienteId: cliente?.id || editorTarget.cliente_id,
         clienteNome: cliente?.nome || cliente?.nome_fantasia || "Cliente",
         clienteCpfCnpj,
         clienteEmail: cliente?.email || "",
+        obraId: obra?.id,
         obraNome: obra?.nome || editorTarget.titulo || "Obra",
         obraEndereco: enderecoObra,
         prazoExecucaoTexto: prazoTexto,
@@ -509,13 +511,110 @@ function PropostasPage() {
       <EditorPropostaComercial
         proposta={editorData}
         onVoltar={() => setEditorTarget(null)}
-        onSalvarRascunho={async () => {
-          toast.success("Rascunho da proposta comercial salvo!");
-          qc.invalidateQueries({ queryKey: ["propostas"] });
+        onSalvarRascunho={async ({ config, valorTotalCentavos, clienteId, etapas }) => {
+          try {
+            const valorTotal = Number(valorTotalCentavos || 0) / 100;
+            const updatePayload: any = {
+              valor_total: valorTotal,
+              titulo: config.tituloProposta || editorTarget.titulo,
+              condicoes_pagamento: config.condicoesPagamentoTexto || null,
+            };
+            if (clienteId) {
+              updatePayload.cliente_id = clienteId;
+            }
+            const { error: errProp } = await supabase
+              .from("propostas")
+              .update(updatePayload)
+              .eq("id", editorTarget.id);
+            if (errProp) throw errProp;
+
+            if (etapas && etapas.length > 0) {
+              await supabase.from("propostas_itens").delete().eq("proposta_id", editorTarget.id);
+              const itensPayload: any[] = [];
+              etapas.forEach((ep: any, eIdx: number) => {
+                (ep.atividades ?? []).forEach((at: any) => {
+                  itensPayload.push({
+                    proposta_id: editorTarget.id,
+                    descricao: config.descricoesComerciais?.[at.id] || at.descricao,
+                    quantidade: Number(at.quantidade ?? 1),
+                    valor_unitario: Number(at.precoUnitarioCentavos ?? 0) / 100,
+                    unidade: at.unidade || "un",
+                    etapa_codigo: ep.codigo || String(eIdx + 1).padStart(2, "0"),
+                    etapa_nome: ep.nome || "Etapa",
+                    codigo_referencia: at.codigo || null,
+                    ordem: itensPayload.length,
+                  });
+                });
+              });
+              if (itensPayload.length > 0) {
+                const { error: errItens } = await supabase.from("propostas_itens").insert(itensPayload);
+                if (errItens) console.warn("Aviso ao salvar itens da proposta:", errItens);
+              }
+            }
+
+            if (editorData?.obraId && clienteId) {
+              await supabase.from("obras").update({ cliente_id: clienteId }).eq("id", editorData.obraId);
+            }
+
+            toast.success("Rascunho da proposta comercial salvo com sucesso!");
+            qc.invalidateQueries({ queryKey: ["propostas"] });
+            qc.invalidateQueries({ queryKey: ["editor-proposta", editorTarget.id] });
+          } catch (err: any) {
+            toast.error("Erro ao salvar rascunho: " + (err.message || "Erro desconhecido"));
+          }
         }}
-        onPublicarRevisao={async () => {
-          toast.success("Nova revisão comercial publicada e congelada!");
-          qc.invalidateQueries({ queryKey: ["propostas"] });
+        onPublicarRevisao={async ({ config, valorTotalCentavos, clienteId, etapas }) => {
+          try {
+            const valorTotal = Number(valorTotalCentavos || 0) / 100;
+            const updatePayload: any = {
+              valor_total: valorTotal,
+              status: "enviada",
+              titulo: config.tituloProposta || editorTarget.titulo,
+              condicoes_pagamento: config.condicoesPagamentoTexto || null,
+            };
+            if (clienteId) {
+              updatePayload.cliente_id = clienteId;
+            }
+            const { error: errProp } = await supabase
+              .from("propostas")
+              .update(updatePayload)
+              .eq("id", editorTarget.id);
+            if (errProp) throw errProp;
+
+            if (etapas && etapas.length > 0) {
+              await supabase.from("propostas_itens").delete().eq("proposta_id", editorTarget.id);
+              const itensPayload: any[] = [];
+              etapas.forEach((ep: any, eIdx: number) => {
+                (ep.atividades ?? []).forEach((at: any) => {
+                  itensPayload.push({
+                    proposta_id: editorTarget.id,
+                    descricao: config.descricoesComerciais?.[at.id] || at.descricao,
+                    quantidade: Number(at.quantidade ?? 1),
+                    valor_unitario: Number(at.precoUnitarioCentavos ?? 0) / 100,
+                    unidade: at.unidade || "un",
+                    etapa_codigo: ep.codigo || String(eIdx + 1).padStart(2, "0"),
+                    etapa_nome: ep.nome || "Etapa",
+                    codigo_referencia: at.codigo || null,
+                    ordem: itensPayload.length,
+                  });
+                });
+              });
+              if (itensPayload.length > 0) {
+                const { error: errItens } = await supabase.from("propostas_itens").insert(itensPayload);
+                if (errItens) console.warn("Aviso ao salvar itens da proposta:", errItens);
+              }
+            }
+
+            if (editorData?.obraId && clienteId) {
+              await supabase.from("obras").update({ cliente_id: clienteId }).eq("id", editorData.obraId);
+            }
+
+            toast.success("Nova revisão comercial publicada e congelada!");
+            qc.invalidateQueries({ queryKey: ["propostas"] });
+            qc.invalidateQueries({ queryKey: ["editor-proposta", editorTarget.id] });
+          } catch (err: any) {
+            toast.error("Erro ao publicar revisão: " + (err.message || "Erro desconhecido"));
+          }
         }}
       />
     );
@@ -533,7 +632,7 @@ function PropostasPage() {
       <div className="space-y-4">
         <div className="flex items-center gap-3 justify-between">
           <div className="flex items-center gap-2">
-            {podeEditar && <Button variant="outline" onClick={() => setCatalogoOpen(true)}><Settings2 className="size-4" /> Catálogo</Button>}
+            
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
               <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -888,6 +987,7 @@ function PropostaFormDialog({
         data_envio: values.data_envio || null,
         condicoes_pagamento: values.condicoes_pagamento || null,
         observacoes: values.observacoes || null,
+        valor_total: total,
       };
       let propostaId = target?.id;
       if (isEdit && target) {

@@ -506,3 +506,17 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Sanada a falha `TypeError: Cannot read properties of null (reading 'url')` no componente `EmpresaLogo` (`src/components/empresa-logo.tsx`), garantindo checagem estrita de `loaded` e repassando `value={empresa?.logo_url}` em `MedicaoRelatorioImprimir` e na rota pública de medições.
   - Disponibilizados botões visíveis de **Editar** (ícone Lápis) e **Excluir** (ícone Lixeira) diretamente em cada linha da tabela de contratos em `/contratos-empreiteiros`, além dos botões de ação no cabeçalho dos detalhes do contrato (`ContratoDetalheView`), ambos com diálogo de confirmação via `AlertDialog` e edição pelo `ContratoEditorDialog`.
   - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
+
+
+- **Correção ao Salvar Rascunho da Proposta Comercial, Seleção de Cliente e Remoção do Botão Catálogo (Branch fix/205-proposta-salvar-rascunho-cliente-valor)**:
+  - **Identificação da causa raiz do cliente divergente e valor R$ 0,00**:
+    1. Em `src/routes/_app/orcamentos.tsx`, a consulta de obras omitia a coluna `cliente_id`, fazendo com que `obra?.cliente_id` ficasse `undefined` e caísse no fallback que buscava o primeiro cliente da base (`clientes?.[0]`), associando arbitrariamente "Francisco Rodrigues de Souza" à proposta.
+    2. Além disso, o callback `onSalvarRascunho` em `src/routes/_app/comercial.propostas.tsx` apenas emitia um toast visual, sem persistir nenhuma alteração em `propostas` nem em `propostas_itens`, mantendo o valor zerado (`R$ 0,00`) e os dados desatualizados no banco de dados.
+  - **Correções aplicadas**:
+    1. Inclusão de `cliente_id` no `.select()` da query de obras em `src/routes/_app/orcamentos.tsx` e busca direta dos dados da obra no Supabase para garantir que o cliente correto da obra seja sempre vinculado à proposta.
+    2. Cálculo antecipado e preciso do valor total estimado ao gerar a proposta a partir do orçamento analítico (com BDI e insumos) ou de itens orçados.
+    3. No `EditorPropostaComercial` (`src/components/propostas/editor-proposta-comercial.tsx`), adição de seletor dinâmico de clientes vinculados no painel de configuração comercial, permitindo conferir e trocar o cliente a qualquer momento, atualizando em tempo real o cabeçalho, bloco de contratante e assinaturas da proposta A4.
+    4. Implementação completa de `onSalvarRascunho` e `onPublicarRevisao` em `src/routes/_app/comercial.propostas.tsx`: atualiza no Supabase `propostas.valor_total` (em reais), `propostas.cliente_id`, `titulo`, `condicoes_pagamento`, sincroniza os itens em `propostas_itens` e atualiza `obras.cliente_id` quando aplicável.
+    5. Remoção do botão "Catálogo" da tela de propostas comerciais (`src/routes/_app/comercial.propostas.tsx`), conforme solicitado pelo usuário.
+    6. Atualização de `PropostaFormDialog` para também salvar `valor_total` explicitamente na criação ou edição rápida da proposta.
+  - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
