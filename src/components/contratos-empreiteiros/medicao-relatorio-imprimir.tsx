@@ -1,7 +1,11 @@
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { EmpresaLogo } from "@/components/empresa-logo";
+import { supabase as client } from "@/integrations/supabase/client.custom";
 import { Printer, X } from "lucide-react";
+
+const supabase = client as any;
 
 interface MedicaoRelatorioImprimirProps {
   open: boolean;
@@ -30,9 +34,118 @@ export function MedicaoRelatorioImprimir({
   const retencao = Number(medicao?.valor_retencao_centavos || 0) / 100;
   const liquido = Number(medicao?.valor_liquido_centavos || 0) / 100;
 
+  // Carregar dados reais das medições deste boletim e histórico acumulado
+  const { data: itensCompletos } = useQuery({
+    queryKey: ["itens-relatorio-medicao", medicao?.id, contrato?.id],
+    enabled: Boolean(open && medicao?.id),
+    queryFn: async () => {
+      // 1. Itens medidos deste boletim
+      const { data: itensDesteBoletim } = await supabase
+        .from("medicoes_terceirizados")
+        .select("*")
+        .eq("medicao_empreiteiro_id", medicao.id);
+
+      const mapMedidos = new Map(
+        (itensDesteBoletim || []).map((m: any) => [m.servico_id, m])
+      );
+
+      // 2. Acumulado de boletins anteriores aprovados
+      const { data: anteriores } = await supabase
+        .from("medicoes_empreiteiros")
+        .select("id")
+        .eq("contrato_empreiteiro_id", contrato.id)
+        .lt("numero", medicao.numero)
+        .in("status", ["aprovada", "paga"]);
+
+      const idsAnt = (anteriores || []).map((m: any) => m.id);
+      const mapQtdAnt = new Map<string, number>();
+      if (idsAnt.length > 0) {
+        const { data: itensAnt } = await supabase
+          .from("medicoes_terceirizados")
+          .select("servico_id, quantidade_executada")
+          .in("medicao_empreiteiro_id", idsAnt);
+        (itensAnt || []).forEach((ia: any) => {
+          const prev = mapQtdAnt.get(ia.servico_id) || 0;
+          mapQtdAnt.set(ia.servico_id, prev + Number(ia.quantidade_executada || 0));
+        });
+      }
+
+      return (itens || []).map((it: any) => {
+        const qtdContratada = Number(it.quantidadeContratada || it.quantidade_total || it.quantidade || 0);
+        const precoUnitCentavos = Number(it.precoUnitarioCentavos || Math.round(Number(it.valor_unitario || 0) * 100));
+        const precoUnit = precoUnitCentavos / 100;
+        const regMed = mapMedidos.get(it.id);
+        const qtdAtual = regMed ? Number(regMed.quantidade_executada || 0) : Number(it.quantidadeAtual || it.quantidadeMedida || 0);
+        const qtdAnterior = mapQtdAnt.get(it.id) || Number(it.quantidadeAnterior || 0);
+        const qtdAcumulada = qtdAnterior + qtdAtual;
+        const saldoQtd = Math.max(0, qtdContratada - qtdAcumulada);
+        const medidoValor = regMed && regMed.valor_centavos != null
+          ? Number(regMed.valor_centavos) / 100
+          : (qtdAtual * precoUnit);
+
+        return {
+          ...it,
+          quantidadeContratada: qtdContratada,
+          precoUnitarioCentavos: precoUnitCentavos,
+          quantidadeAnterior: qtdAnterior,
+          quantidadeAtual: qtdAtual,
+          quantidadeAcumulada: qtdAcumulada,
+          saldoQuantidade: saldoQtd,
+          medidoValor,
+        };
+      });
+    },
+  });
+
+  const listaItensExibir = itensCompletos || itens;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[92vh] flex flex-col p-6 overflow-hidden">
+        {/* ESTILOS DE IMPRESSÃO A4 */}
+        <style>{`
+          @media print {
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm;
+            }
+            html, body {
+              background: #ffffff !important;
+              color: #0f172a !important;
+              height: auto !important;
+              min-height: 0 !important;
+              max-height: none !important;
+              overflow: visible !important;
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            body * {
+              visibility: hidden !important;
+            }
+            .printable-sheet,
+            .printable-sheet * {
+              visibility: visible !important;
+            }
+            .printable-sheet {
+              position: fixed !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              border: none !important;
+              box-shadow: none !important;
+              overflow: visible !important;
+              z-index: 999999 !important;
+            }
+            .no-print,
+            button,
+            [role="dialog"] > button {
+              display: none !important;
+            }
+          }
+        `}</style>
         <DialogHeader className="flex flex-row items-center justify-between border-b pb-3 no-print">
           <DialogTitle className="text-base flex items-center gap-2">
             <Printer className="h-4 w-4 text-blue-600" />
@@ -113,9 +226,9 @@ export function MedicaoRelatorioImprimir({
               </tr>
             </thead>
             <tbody>
-              {itens.map((it, idx) => {
+              {listaItensExibir.map((it, idx) => {
                 const preco = Number(it.precoUnitarioCentavos || 0) / 100;
-                const medidoValor = (Number(it.quantidadeMedida || it.quantidade || 0) * preco);
+                const medidoValor = it.medidoValor !== undefined ? it.medidoValor : (Number(it.quantidadeAtual || it.quantidadeMedida || it.quantidade || 0) * preco);
                 return (
                   <tr key={idx} className="border-b border-slate-200">
                     <td className="py-1.5 px-2 text-slate-400 font-mono text-[10px]">{idx + 1}</td>

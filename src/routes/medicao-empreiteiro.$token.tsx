@@ -76,6 +76,49 @@ function MedicaoEmpreiteiroPublicaPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 py-8 px-4 sm:px-6 lg:px-8">
+      {/* ESTILOS DE IMPRESSÃO A4 */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm 12mm;
+          }
+          html, body {
+            background: #ffffff !important;
+            color: #0f172a !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          body * {
+            visibility: hidden !important;
+          }
+          .printable-sheet,
+          .printable-sheet * {
+            visibility: visible !important;
+          }
+          .printable-sheet {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            border: none !important;
+            box-shadow: none !important;
+            overflow: visible !important;
+            z-index: 999999 !important;
+          }
+          .no-print,
+          button {
+            display: none !important;
+          }
+        }
+      `}</style>
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Barra superior de ações */}
         <div className="flex justify-between items-center no-print">
@@ -92,7 +135,7 @@ function MedicaoEmpreiteiroPublicaPage() {
         </div>
 
         {/* Cartão Principal do Boletim */}
-        <div className="bg-white border rounded-xl shadow-xs overflow-hidden">
+        <div className="bg-white border rounded-xl shadow-xs overflow-hidden printable-sheet medicao-print-sheet">
           {/* Header */}
           <div className="p-6 border-b bg-slate-900 text-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>

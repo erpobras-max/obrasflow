@@ -179,7 +179,11 @@
   .contract-print-sheet,
   .contract-print-sheet *,
   .proposal-print-sheet,
-  .proposal-print-sheet * {
+  .proposal-print-sheet *,
+  .printable-sheet,
+  .printable-sheet *,
+  .medicao-print-sheet,
+  .medicao-print-sheet * {
     visibility: visible !important;
   }
 
@@ -196,18 +200,21 @@
 
   .proposta-print-sheet,
   .proposal-print-sheet,
-  .contract-print-sheet {
+  .contract-print-sheet,
+  .printable-sheet,
+  .medicao-print-sheet {
     position: absolute !important;
     left: 0 !important;
     top: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 10mm 15mm !important;
+    padding: 8mm 10mm !important;
     background: #ffffff !important;
     color: #0f172a !important;
     box-shadow: none !important;
     border: none !important;
+    z-index: 999999 !important;
   }
 
   .qr-print-sheet {

@@ -64,6 +64,8 @@ interface LinhaMedicaoState {
   quantidadeAcumulada: number;
   saldoQuantidade: number;
   estouro: boolean;
+  rawQtd?: string;
+  rawPct?: string;
 }
 
 interface AjusteState {
@@ -154,7 +156,7 @@ export function MedicaoEditorSheet({
           : Math.round(qtdAtual * precoUnit);
         const pctAtual = qtdContratada > 0 ? (qtdAtual / qtdContratada) * 100 : 0;
 
-        const saldo = calcularSaldoItem(qtdContratada, qtdAnterior, qtdAtual);
+        const saldo = calcularSaldoItem(qtdContratada, qtdAnterior, qtdAtual, precoUnit);
 
         return {
           itemServicoId: item.id,
@@ -217,7 +219,8 @@ export function MedicaoEditorSheet({
   const atualizarLinhaInput = (
     index: number,
     tipoAlteracao: "quantidade" | "percentual" | "valor",
-    valorDigitado: number
+    valorDigitado: number,
+    rawText?: string
   ) => {
     setLinhas((prev) => {
       const clone = [...prev];
@@ -233,7 +236,8 @@ export function MedicaoEditorSheet({
       const saldo = calcularSaldoItem(
         linha.quantidadeContratada,
         linha.quantidadeAnterior,
-        conv.quantidade
+        conv.quantidade,
+        linha.precoUnitarioCentavos
       );
 
       clone[index] = {
@@ -242,9 +246,11 @@ export function MedicaoEditorSheet({
         quantidadeAtual: conv.quantidade,
         percentualAtual: conv.percentual,
         valorCentavosAtual: conv.valorCentavos,
-        quantidadeAcumulada: saldo.quantidadeAcumulada,
+        quantidadeAcumulada: saldo.acumuladoQuantidade,
         saldoQuantidade: saldo.saldoQuantidade,
-        estouro: saldo.estouro,
+        estouro: saldo.estouroSaldo,
+        rawQtd: tipoAlteracao === "quantidade" ? rawText : linha.rawQtd,
+        rawPct: tipoAlteracao === "percentual" ? rawText : linha.rawPct,
       };
 
       return clone;
@@ -534,25 +540,59 @@ export function MedicaoEditorSheet({
                         <TableCell className="bg-blue-50/30 border-x border-blue-100 p-1">
                           <div className="flex items-center gap-1">
                             <Input
-                              type="number"
-                              step="any"
+                              type="text"
+                              inputMode="decimal"
                               disabled={isAprovadaOuPaga}
-                              value={linha.quantidadeAtual === 0 ? "" : linha.quantidadeAtual}
-                              onChange={(e) =>
-                                atualizarLinhaInput(idx, "quantidade", parseFloat(e.target.value) || 0)
+                              value={
+                                linha.rawQtd !== undefined
+                                  ? linha.rawQtd
+                                  : linha.quantidadeAtual === 0
+                                  ? ""
+                                  : String(linha.quantidadeAtual)
                               }
+                              onChange={(e) => {
+                                const txt = e.target.value;
+                                const num = parseFloat(txt.replace(",", ".")) || 0;
+                                atualizarLinhaInput(idx, "quantidade", num, txt);
+                              }}
+                              onBlur={() => {
+                                setLinhas((prev) => {
+                                  const clone = [...prev];
+                                  if (clone[idx]) {
+                                    clone[idx] = { ...clone[idx], rawQtd: undefined };
+                                  }
+                                  return clone;
+                                });
+                              }}
                               placeholder="Qtd"
                               className="h-7 text-xs text-right font-semibold bg-white border-blue-300"
                             />
                             <div className="relative w-16">
                               <Input
-                                type="number"
-                                step="any"
+                                type="text"
+                                inputMode="decimal"
                                 disabled={isAprovadaOuPaga}
-                                value={linha.percentualAtual === 0 ? "" : linha.percentualAtual}
-                                onChange={(e) =>
-                                  atualizarLinhaInput(idx, "percentual", parseFloat(e.target.value) || 0)
+                                value={
+                                  linha.rawPct !== undefined
+                                    ? linha.rawPct
+                                    : linha.percentualAtual === 0
+                                    ? ""
+                                    : String(linha.percentualAtual)
                                 }
+                                onChange={(e) => {
+                                  const txt = e.target.value;
+                                  const num = parseFloat(txt.replace(",", ".")) || 0;
+                                  atualizarLinhaInput(idx, "percentual", num, txt);
+                                }}
+                                onBlur={() => {
+                                  setLinhas((prev) => {
+                                    const clone = [...prev];
+                                    if (clone[idx]) {
+                                      clone[idx] = { ...clone[idx], rawPct: undefined };
+                                    }
+                                    return clone;
+                                  });
+                                }}
                                 placeholder="%"
                                 className="h-7 text-[11px] text-right bg-white pr-4"
                               />

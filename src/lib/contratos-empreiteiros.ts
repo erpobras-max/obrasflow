@@ -42,11 +42,13 @@ export interface ItemMedicaoComSaldo {
   atualCentavos: number;
   atualPercentual: number;
   acumuladoQuantidade: number;
+  quantidadeAcumulada?: number;
   acumuladoCentavos: number;
   acumuladoPercentual: number;
   saldoQuantidade: number;
   saldoCentavos: number;
   estouroSaldo: boolean;
+  estouro?: boolean;
 }
 
 export interface ResumoMedicaoCalculo {
@@ -76,9 +78,31 @@ function roundToDecimals(num: number, decimals: number): number {
  * 4 casas no percentual e centavos inteiros.
  */
 export function converterEntradaMedicao(
-  item: ItemContratoCalculo,
-  entrada: EntradaMedicaoItem
+  arg1: ItemContratoCalculo | "quantidade" | "percentual" | "valor",
+  arg2: EntradaMedicaoItem | number,
+  arg3?: number,
+  arg4?: number
 ): ResultadoConversaoMedicao {
+  let item: ItemContratoCalculo;
+  let entrada: EntradaMedicaoItem;
+
+  if (typeof arg1 === "string") {
+    const modo = arg1 as "quantidade" | "percentual" | "valor";
+    const valor = Number(arg2 || 0);
+    item = {
+      quantidadeContratada: Number(arg3 || 0),
+      precoUnitarioCentavos: Number(arg4 || 0),
+    };
+    entrada = {
+      modo,
+      quantidade: modo === "quantidade" ? valor : undefined,
+      percentual: modo === "percentual" ? valor : undefined,
+      valorCentavos: modo === "valor" ? valor : undefined,
+    };
+  } else {
+    item = arg1;
+    entrada = arg2 as EntradaMedicaoItem;
+  }
   const totalContratadoCentavos = Math.round(
     item.quantidadeContratada * item.precoUnitarioCentavos
   );
@@ -139,23 +163,48 @@ export function converterEntradaMedicao(
  * Calcula o saldo físico e financeiro do item considerando histórico anterior e valor atual.
  */
 export function calcularSaldoItem(
-  item: ItemContratoCalculo,
-  medidoAnterior: { quantidade: number; centavos: number },
-  medidoAtual: { quantidade: number; centavos: number }
+  arg1: ItemContratoCalculo | number,
+  arg2: { quantidade: number; centavos: number } | number,
+  arg3: { quantidade: number; centavos: number } | number,
+  arg4?: number
 ): ItemMedicaoComSaldo {
+  let item: ItemContratoCalculo;
+  let anterior: { quantidade: number; centavos: number };
+  let atual: { quantidade: number; centavos: number };
+
+  if (typeof arg1 === "number") {
+    const preco = Number(arg4 || 0);
+    item = {
+      quantidadeContratada: arg1,
+      precoUnitarioCentavos: preco,
+    };
+    anterior = {
+      quantidade: Number(arg2 || 0),
+      centavos: Math.round(Number(arg2 || 0) * preco),
+    };
+    atual = {
+      quantidade: Number(arg3 || 0),
+      centavos: Math.round(Number(arg3 || 0) * preco),
+    };
+  } else {
+    item = arg1;
+    anterior = arg2 as { quantidade: number; centavos: number };
+    atual = arg3 as { quantidade: number; centavos: number };
+  }
+
   const totalContratadoCentavos = Math.round(
     item.quantidadeContratada * item.precoUnitarioCentavos
   );
 
-  const anteriorQtd = Math.max(0, roundToDecimals(medidoAnterior.quantidade, 6));
-  const anteriorCentavos = Math.max(0, Math.round(medidoAnterior.centavos));
+  const anteriorQtd = Math.max(0, roundToDecimals(anterior?.quantidade || 0, 6));
+  const anteriorCentavos = Math.max(0, Math.round(anterior?.centavos || 0));
   const anteriorPct =
     totalContratadoCentavos > 0
       ? roundToDecimals((anteriorCentavos / totalContratadoCentavos) * 100, 4)
       : 0;
 
-  const atualQtd = Math.max(0, roundToDecimals(medidoAtual.quantidade, 6));
-  const atualCentavos = Math.max(0, Math.round(medidoAtual.centavos));
+  const atualQtd = Math.max(0, roundToDecimals(atual?.quantidade || 0, 6));
+  const atualCentavos = Math.max(0, Math.round(atual?.centavos || 0));
   const atualPct =
     totalContratadoCentavos > 0
       ? roundToDecimals((atualCentavos / totalContratadoCentavos) * 100, 4)
@@ -177,8 +226,8 @@ export function calcularSaldoItem(
 
   return {
     servicoTerceirizadoId: (item as any).servicoTerceirizadoId || item.id || "",
-    descricao: item.descricao,
-    unidade: item.unidade,
+    descricao: item.descricao || "",
+    unidade: item.unidade || "un",
     quantidadeContratada: item.quantidadeContratada,
     precoUnitarioCentavos: item.precoUnitarioCentavos,
     totalContratadoCentavos,
@@ -189,11 +238,13 @@ export function calcularSaldoItem(
     atualCentavos,
     atualPercentual: atualPct,
     acumuladoQuantidade: acumuladoQtd,
+    quantidadeAcumulada: acumuladoQtd,
     acumuladoCentavos,
     acumuladoPercentual: acumuladoPct,
     saldoQuantidade: saldoQtd,
     saldoCentavos,
     estouroSaldo,
+    estouro: estouroSaldo,
   };
 }
 
