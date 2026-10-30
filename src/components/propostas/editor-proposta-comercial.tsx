@@ -20,7 +20,9 @@ import {
   User,
   Calendar,
   DollarSign,
+  RefreshCw,
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -87,6 +89,7 @@ interface EditorPropostaComercialProps {
   proposta: PropostaEditorData
   onSalvarRascunho?: (params: SalvarPropostaParams) => Promise<void>
   onPublicarRevisao?: (params: SalvarPropostaParams) => Promise<void>
+  onSincronizarOrcamento?: () => Promise<void>
   onVoltar?: () => void
 }
 
@@ -94,6 +97,7 @@ export function EditorPropostaComercial({
   proposta,
   onSalvarRascunho,
   onPublicarRevisao,
+  onSincronizarOrcamento,
   onVoltar,
 }: EditorPropostaComercialProps) {
   // Consulta dados e logo da empresa cadastrada em /empresa
@@ -176,6 +180,20 @@ export function EditorPropostaComercial({
   const [modoImpressao, setModoImpressao] = useState(false)
   const [historicoOpen, setHistoricoOpen] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [sincronizando, setSincronizando] = useState(false)
+
+  const sincronizarOrcamento = async () => {
+    if (!onSincronizarOrcamento) return
+    setSincronizando(true)
+    try {
+      await onSincronizarOrcamento()
+    } catch (e) {
+      toast.error((e as Error).message)
+    } finally {
+      setSincronizando(false)
+    }
+  }
+
 
   // Status da proposta
   const isAceita = proposta.status === 'aceita'
@@ -353,6 +371,20 @@ export function EditorPropostaComercial({
             Revisões
           </Button>
 
+          {onSincronizarOrcamento && !isAceita && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={sincronizarOrcamento}
+              disabled={salvando || sincronizando}
+              className="text-xs bg-white text-blue-700 border-blue-300 hover:bg-blue-50 flex items-center gap-1.5"
+              title="Atualizar os itens, quantidades e preços com o orçamento mais recente da obra"
+            >
+              <RefreshCw className={cn("size-3.5", sincronizando && "animate-spin text-blue-600")} />
+              Atualizar do Orçamento
+            </Button>
+          )}
+
           <Button
             variant="outline"
             size="sm"
@@ -397,6 +429,26 @@ export function EditorPropostaComercial({
               Personalize a apresentação comercial sem alterar o orçamento técnico original. As mudanças refletem instantaneamente no preview à direita.
             </p>
           </div>
+
+          {onSincronizarOrcamento && !isAceita && (
+            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
+              <div>
+                <span className="font-semibold text-blue-900 block text-[11px]">Sincronização com Orçamento</span>
+                <span className="text-[10px] text-blue-700 block">Atualize etapas e itens conforme alterações no orçamento da obra.</span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={sincronizarOrcamento}
+                disabled={salvando || sincronizando}
+                className="h-7 text-[11px] bg-white text-blue-700 border-blue-300 hover:bg-blue-100 shrink-0"
+              >
+                <RefreshCw className={cn("size-3 mr-1", sincronizando && "animate-spin text-blue-600")} />
+                Sincronizar
+              </Button>
+            </div>
+          )}
 
           {/* 1. APRESENTAÇÃO & IDENTIFICAÇÃO */}
           <div className="border border-slate-200 rounded-lg p-4 space-y-3 bg-slate-50/50">

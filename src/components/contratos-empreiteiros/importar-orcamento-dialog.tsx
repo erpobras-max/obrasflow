@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Calculator, Search } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Loader2, Calculator, Search, Building2, Layers } from "lucide-react";
 import { mapearAtividadesParaItensContrato } from "@/lib/contratos-empreiteiros-importacao";
 import type { ContratoItem } from "@/lib/contratos-empreiteiros.schema";
 
@@ -25,6 +26,7 @@ interface ItemImportacao {
   unidade: string;
   quantidade: number;
   etapaNome: string;
+  obraNome?: string;
   orcamentoId?: string;
   preco_unitario_centavos: number;
   custoTotalCentavos: number;
@@ -40,231 +42,274 @@ export function ImportarOrcamentoDialog({
 }: ImportarOrcamentoDialogProps) {
   const [selecionados, setSelecionados] = useState<Record<string, boolean>>({});
   const [busca, setBusca] = useState("");
+  const [selectedObraId, setSelectedObraId] = useState<string>(obraId || "todas");
+
+  // Atualiza a obra selecionada ao abrir ou mudar prop
+  useEffect(() => {
+    if (obraId) {
+      setSelectedObraId(obraId);
+    } else {
+      setSelectedObraId("todas");
+    }
+  }, [obraId, open]);
+
+  // Lista de todas as obras cadastradas
+  const { data: listaObras = [] } = useQuery<{ id: string; nome: string; numero: string | null }[]>({
+    queryKey: ["obras-lista-importar-orcamento"],
+    enabled: open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("obras")
+        .select("id, nome, numero")
+        .order("nome");
+      if (error) return [];
+      return data ?? [];
+    },
+  });
+
+  const obrasMap = useMemo(() => {
+    return new Map(listaObras.map((o) => [o.id, o.nome]));
+  }, [listaObras]);
 
   // Buscar itens do orçamento ou propostas/escopo da obra
   const { data: itensOrcamento = [], isLoading } = useQuery<ItemImportacao[]>({
-    queryKey: ["orcamento-analitico-itens-importacao", obraId],
-    enabled: open && Boolean(obraId),
+    queryKey: ["orcamento-analitico-itens-importacao", selectedObraId],
+    enabled: open,
     queryFn: async () => {
-      if (!obraId) return [];
+      const itensResultado: ItemImportacao[] = [];
 
-      // 1. Tentar buscar orçamentos cadastrados para esta obra
-      const { data: orcamentos } = await supabase
+      // 1. Tentar buscar orçamentos cadastrados
+      let orcamentosQuery = supabase
         .from("orcamentos")
-        .select("id, bdi_padrao_percentual")
-        .eq("obra_id", obraId)
+        .select("id, obra_id, bdi_geral")
         .order("created_at", { ascending: false });
 
+      if (selectedObraId && selectedObraId !== "todas") {
+        orcamentosQuery = orcamentosQuery.eq("obra_id", selectedObraId);
+      }
+
+      const { data: orcamentos, error: errOrc } = await orcamentosQuery;
+      if (errOrc) {
+        console.warn("Aviso ao buscar orçamentos:", errOrc);
+      }
+
       const orcamentoIds = (orcamentos || []).map((o) => o.id);
-      const bdiPadrao = orcamentos?.[0]?.bdi_padrao_percentual || 0;
+      const orcamentoObraMap = new Map((orcamentos || []).map((o) => [o.id, o.obra_id]));
+      const bdiPadrao = Number(orcamentos?.[0]?.bdi_geral || 25);
 
       if (orcamentoIds.length > 0) {
         // 1a. Buscar etapas e atividades do orçamento analítico
-        const { data: etapas } = await supabase
-          .from("orcamento_etapas")
-          .select("id, orcamento_id, nome, ordem")
-          .in("orcamento_id", orcamentoIds)
-          .order("ordem");
-
-        if (etapas && etapas.length > 0) {
-          const etapaMap = new Map(etapas.map((et) => [et.id, et.nome]));
-          const etapaOrcamentoMap = new Map(etapas.map((et) => [et.id, et.orcamento_id]));
-          const etapaIds = etapas.map((e) => e.id);
-
-          const { data: atividades } = await supabase
-            .from("orcamento_atividades")
-            .select("id, etapa_id, codigo, descricao, unidade, quantidade, custo_total_centavos, bdi_percentual")
-            .in("etapa_id", etapaIds)
+        try {
+          const { data: etapas } = await supabase
+            .from("orcamento_etapas")
+            .select("id, orcamento_id, nome, ordem, codigo")
+            .in("orcamento_id", orcamentoIds)
             .order("ordem");
 
-          if (atividades && atividades.length > 0) {
-            return atividades.map((atv: any) => {
-              const qtd = Number(atv.quantidade || 1);
-              const custoTot = Number(atv.custo_total_centavos || 0);
-              const bdi = Number(atv.bdi_percentual || bdiPadrao);
-              const custoUnit = qtd > 0 && custoTot > 0 ? Math.round(custoTot / qtd) : 0;
-              const precoUnit = Math.round(custoUnit * (1 + bdi / 100));
+          if (etapas && etapas.length > 0) {
+            const etapaMap = new Map(etapas.map((et) => [et.id, et.nome]));
+            const etapaOrcamentoMap = new Map(etapas.map((et) => [et.id, et.orcamento_id]));
+            const etapaIds = etapas.map((e) => e.id);
 
-              return {
-                id: atv.id,
-                codigo: atv.codigo || null,
-                descricao: atv.descricao,
-                unidade: atv.unidade || "un",
-                quantidade: qtd,
-                etapaNome: etapaMap.get(atv.etapa_id) || "Geral",
-                orcamentoId: etapaOrcamentoMap.get(atv.etapa_id) || orcamentoIds[0],
-                custoTotalCentavos: custoTot,
-                preco_unitario_centavos: precoUnit,
-                bdiPercentual: bdi,
-                origemTipo: "orcamento_analitico",
-              };
-            });
+            const { data: atividades } = await supabase
+              .from("orcamento_atividades")
+              .select("id, etapa_id, codigo, descricao, unidade, quantidade, bdi_percentual")
+              .in("etapa_id", etapaIds)
+              .order("ordem");
+
+            if (atividades && atividades.length > 0) {
+              const ativIds = atividades.map((a) => a.id);
+              const { data: insumos } = await supabase
+                .from("orcamento_atividade_insumos")
+                .select("atividade_id, preco_unitario_centavos, coeficiente")
+                .in("atividade_id", ativIds);
+
+              const insumosMap = new Map<string, number>();
+              (insumos || []).forEach((ins) => {
+                const prev = insumosMap.get(ins.atividade_id) || 0;
+                const custo = Math.round(Number(ins.coeficiente || 1) * Number(ins.preco_unitario_centavos || 0));
+                insumosMap.set(ins.atividade_id, prev + custo);
+              });
+
+              atividades.forEach((atv: any) => {
+                const qtd = Number(atv.quantidade || 1);
+                const bdi = Number(atv.bdi_percentual != null ? atv.bdi_percentual : bdiPadrao);
+                const custoUnit = insumosMap.get(atv.id) || 0;
+                const precoUnit = Math.round(custoUnit * (1 + bdi / 100));
+                const orcId = etapaOrcamentoMap.get(atv.etapa_id) || orcamentoIds[0];
+                const obId = orcamentoObraMap.get(orcId) || "";
+
+                itensResultado.push({
+                  id: atv.id,
+                  codigo: atv.codigo || null,
+                  descricao: atv.descricao,
+                  unidade: atv.unidade || "un",
+                  quantidade: qtd,
+                  etapaNome: etapaMap.get(atv.etapa_id) || "Geral",
+                  obraNome: obrasMap.get(obId) || (selectedObraId !== "todas" ? obrasMap.get(selectedObraId) : undefined),
+                  orcamentoId: orcId,
+                  custoTotalCentavos: Math.round(precoUnit * qtd),
+                  preco_unitario_centavos: precoUnit,
+                  bdiPercentual: bdi,
+                  origemTipo: "orcamento_analitico",
+                });
+              });
+            }
+          }
+        } catch (errAnalitico) {
+          console.warn("Aviso ao buscar etapas analíticas:", errAnalitico);
+        }
+
+        // 1b. Se não tem atividades analíticas ou como complemento, buscar de orcamento_itens
+        if (itensResultado.length === 0) {
+          try {
+            const { data: orcamentoItens } = await supabase
+              .from("orcamento_itens")
+              .select("id, orcamento_id, codigo, descricao, unidade, quantidade, valor_unitario, valor_total, etapa")
+              .in("orcamento_id", orcamentoIds)
+              .order("etapa", { ascending: true })
+              .order("created_at", { ascending: true });
+
+            if (orcamentoItens && orcamentoItens.length > 0) {
+              orcamentoItens.forEach((it: any) => {
+                const qtd = Number(it.quantidade || 1);
+                const precoUnit = Number(it.valor_unitario || 0);
+                const custoTot = Number(it.valor_total || Math.round(qtd * precoUnit));
+                const obId = orcamentoObraMap.get(it.orcamento_id) || "";
+
+                itensResultado.push({
+                  id: it.id,
+                  codigo: it.codigo || null,
+                  descricao: it.descricao,
+                  unidade: it.unidade || "un",
+                  quantidade: qtd,
+                  etapaNome: it.etapa || "Geral",
+                  obraNome: obrasMap.get(obId) || (selectedObraId !== "todas" ? obrasMap.get(selectedObraId) : undefined),
+                  orcamentoId: it.orcamento_id,
+                  preco_unitario_centavos: precoUnit,
+                  custoTotalCentavos: custoTot,
+                  bdiPercentual: 0,
+                  origemTipo: "orcamento_legado",
+                });
+              });
+            }
+          } catch (errLegado) {
+            console.warn("Aviso ao buscar itens de orcamento_itens:", errLegado);
           }
         }
-
-        // 1b. Se não tem atividades analíticas, buscar itens padrão de orcamento_itens
-        const { data: orcamentoItens } = await supabase
-          .from("orcamento_itens")
-          .select("id, orcamento_id, codigo, descricao, unidade, quantidade, valor_unitario, valor_total, etapa")
-          .in("orcamento_id", orcamentoIds)
-          .order("etapa", { ascending: true })
-          .order("created_at", { ascending: true });
-
-        if (orcamentoItens && orcamentoItens.length > 0) {
-          return orcamentoItens.map((it: any) => {
-            const qtd = Number(it.quantidade || 1);
-            const precoUnit = Number(it.valor_unitario || 0);
-            const custoTot = Number(it.valor_total || Math.round(qtd * precoUnit));
-
-            return {
-              id: it.id,
-              codigo: it.codigo || null,
-              descricao: it.descricao,
-              unidade: it.unidade || "un",
-              quantidade: qtd,
-              etapaNome: it.etapa || "Geral",
-              orcamentoId: it.orcamento_id,
-              preco_unitario_centavos: precoUnit,
-              custoTotalCentavos: custoTot,
-              bdiPercentual: 0,
-              origemTipo: "orcamento_legado",
-            };
-          });
-        }
       }
 
-      // 2. Tentar buscar escopo da obra via RPC escopo_obra
-      try {
-        const { data: escopoRpc } = await (supabase as any).rpc("escopo_obra", { p_obra_id: obraId });
-        if (escopoRpc && escopoRpc.length > 0) {
-          return escopoRpc.map((e: any) => {
-            const qtd = Number(e.quantidade || 1);
-            const precoUnit = Math.round(Number(e.valor_unitario || 0) * 100);
-            return {
-              id: e.proposta_item_id || String(Math.random()),
-              codigo: e.item_codigo || e.subitem_codigo || null,
-              descricao: e.descricao || e.item_nome || "Item de Escopo",
-              unidade: e.unidade || "un",
-              quantidade: qtd,
-              etapaNome: e.etapa_nome || "Geral",
-              preco_unitario_centavos: precoUnit,
-              custoTotalCentavos: Math.round(qtd * precoUnit),
-              bdiPercentual: 0,
-              origemTipo: "escopo_obra",
-            };
-          });
-        }
-      } catch (errRpc) {
-        console.warn("RPC escopo_obra indisponível ou falhou:", errRpc);
+      if (itensResultado.length > 0) {
+        return itensResultado;
       }
 
-      // 3. Tentar buscar propostas comerciais da obra
-      const { data: obraRow } = await supabase
-        .from("obras")
-        .select("proposta_id")
-        .eq("id", obraId)
-        .maybeSingle();
-
-      let propostaId = obraRow?.proposta_id;
-      if (!propostaId) {
-        const { data: props } = await (supabase as any)
-          .from("propostas")
-          .select("id")
-          .eq("obra_id", obraId)
-          .order("created_at", { ascending: false })
-          .limit(1);
-        propostaId = props?.[0]?.id;
-      }
-
-      if (propostaId) {
-        // 3a. Itens diretos de proposta
-        const { data: pItens } = await (supabase as any)
-          .from("propostas_itens")
-          .select("id, item_codigo, descricao, unidade, quantidade, valor_unitario, valor_total, etapa_nome")
-          .eq("proposta_id", propostaId)
-          .order("ordem");
-
-        if (pItens && pItens.length > 0) {
-          return pItens.map((pi: any) => {
-            const qtd = Number(pi.quantidade || 1);
-            const precoUnit = Math.round(Number(pi.valor_unitario || 0) * 100);
-            const total = Number(pi.valor_total || (qtd * Number(pi.valor_unitario || 0)));
-            return {
-              id: pi.id,
-              codigo: pi.item_codigo || null,
-              descricao: pi.descricao,
-              unidade: pi.unidade || "un",
-              quantidade: qtd,
-              etapaNome: pi.etapa_nome || "Geral",
-              preco_unitario_centavos: precoUnit,
-              custoTotalCentavos: Math.round(total * 100),
-              bdiPercentual: 0,
-              origemTipo: "escopo_obra",
-            };
-          });
-        }
-
-        // 3b. Itens hierárquicos de proposta
-        const { data: pEtapas } = await (supabase as any)
-          .from("propostas_etapas")
-          .select("id, nome, ordem")
-          .eq("proposta_id", propostaId)
-          .order("ordem");
-
-        if (pEtapas && pEtapas.length > 0) {
-          const etapaHMap = new Map(pEtapas.map((pe: any) => [pe.id, pe.nome]));
-          const peIds = pEtapas.map((pe: any) => pe.id);
-
-          const { data: pItensH } = await (supabase as any)
-            .from("propostas_itens_hierarquia")
-            .select("id, proposta_etapa_id, codigo, descricao, unidade, quantidade, valor_unitario, valor_total")
-            .in("proposta_etapa_id", peIds);
-
-          if (pItensH && pItensH.length > 0) {
-            return pItensH.map((pi: any) => {
-              const qtd = Number(pi.quantidade || 1);
-              const precoUnit = Math.round(Number(pi.valor_unitario || 0) * 100);
-              const total = Number(pi.valor_total || (qtd * Number(pi.valor_unitario || 0)));
+      // 2. Tentar buscar escopo da obra via RPC escopo_obra (se uma obra específica estiver selecionada)
+      if (selectedObraId && selectedObraId !== "todas") {
+        try {
+          const { data: escopoRpc } = await (supabase as any).rpc("escopo_obra", { p_obra_id: selectedObraId });
+          if (escopoRpc && escopoRpc.length > 0) {
+            return escopoRpc.map((e: any) => {
+              const qtd = Number(e.quantidade || 1);
+              const precoUnit = Math.round(Number(e.valor_unitario || 0) * 100);
               return {
-                id: pi.id,
-                codigo: pi.codigo || null,
-                descricao: pi.descricao,
-                unidade: pi.unidade || "un",
+                id: e.proposta_item_id || String(Math.random()),
+                codigo: e.item_codigo || e.subitem_codigo || null,
+                descricao: e.descricao || e.item_nome || "Item de Escopo",
+                unidade: e.unidade || "un",
                 quantidade: qtd,
-                etapaNome: etapaHMap.get(pi.proposta_etapa_id) || "Geral",
+                etapaNome: e.etapa_nome || "Geral",
+                obraNome: obrasMap.get(selectedObraId),
                 preco_unitario_centavos: precoUnit,
-                custoTotalCentavos: Math.round(total * 100),
+                custoTotalCentavos: Math.round(qtd * precoUnit),
                 bdiPercentual: 0,
                 origemTipo: "escopo_obra",
               };
             });
           }
+        } catch (errRpc) {
+          console.warn("RPC escopo_obra indisponível ou falhou:", errRpc);
+        }
+
+        // 3. Tentar buscar propostas comerciais vinculadas à obra
+        try {
+          const { data: obraRow } = await supabase
+            .from("obras")
+            .select("proposta_id")
+            .eq("id", selectedObraId)
+            .maybeSingle();
+
+          let propostaId = obraRow?.proposta_id;
+          if (!propostaId) {
+            const { data: props } = await (supabase as any)
+              .from("propostas")
+              .select("id")
+              .eq("obra_id", selectedObraId)
+              .order("created_at", { ascending: false })
+              .limit(1);
+            propostaId = props?.[0]?.id;
+          }
+
+          if (propostaId) {
+            const { data: pItens } = await (supabase as any)
+              .from("propostas_itens")
+              .select("id, item_codigo, descricao, unidade, quantidade, valor_unitario, valor_total, etapa_nome")
+              .eq("proposta_id", propostaId)
+              .order("ordem");
+
+            if (pItens && pItens.length > 0) {
+              return pItens.map((pi: any) => {
+                const qtd = Number(pi.quantidade || 1);
+                const precoUnit = Math.round(Number(pi.valor_unitario || 0) * 100);
+                const total = Number(pi.valor_total || (qtd * Number(pi.valor_unitario || 0)));
+                return {
+                  id: pi.id,
+                  codigo: pi.item_codigo || null,
+                  descricao: pi.descricao,
+                  unidade: pi.unidade || "un",
+                  quantidade: qtd,
+                  etapaNome: pi.etapa_nome || "Geral",
+                  obraNome: obrasMap.get(selectedObraId),
+                  preco_unitario_centavos: precoUnit,
+                  custoTotalCentavos: Math.round(total * 100),
+                  bdiPercentual: 0,
+                  origemTipo: "escopo_obra",
+                };
+              });
+            }
+          }
+        } catch (errProp) {
+          console.warn("Aviso ao buscar itens de proposta:", errProp);
+        }
+
+        // 4. Fallback final: cronograma da obra
+        try {
+          const { data: cronograma } = await (supabase as any)
+            .from("obra_cronograma")
+            .select("id, nome, ordem")
+            .eq("obra_id", selectedObraId)
+            .order("ordem");
+
+          if (cronograma && cronograma.length > 0) {
+            return cronograma.map((c: any, idx: number) => ({
+              id: c.id,
+              codigo: `${idx + 1}`,
+              descricao: c.nome,
+              unidade: "un",
+              quantidade: 1,
+              etapaNome: "Cronograma",
+              obraNome: obrasMap.get(selectedObraId),
+              preco_unitario_centavos: 0,
+              custoTotalCentavos: 0,
+              bdiPercentual: 0,
+              origemTipo: "orcamento_legado",
+            }));
+          }
+        } catch (errCrono) {
+          console.warn("Aviso ao buscar cronograma:", errCrono);
         }
       }
 
-      // 4. Fallback final: cronograma da obra
-      const { data: cronograma } = await (supabase as any)
-        .from("obra_cronograma")
-        .select("id, nome, ordem")
-        .eq("obra_id", obraId)
-        .order("ordem");
-
-      if (cronograma && cronograma.length > 0) {
-        return cronograma.map((c: any, idx: number) => ({
-          id: c.id,
-          codigo: `${idx + 1}`,
-          descricao: c.nome,
-          unidade: "un",
-          quantidade: 1,
-          etapaNome: "Cronograma",
-          preco_unitario_centavos: 0,
-          custoTotalCentavos: 0,
-          bdiPercentual: 0,
-          origemTipo: "orcamento_legado",
-        }));
-      }
-
-      return [];
+      return itensResultado;
     },
   });
 
@@ -275,7 +320,8 @@ export function ImportarOrcamentoDialog({
       (it) =>
         it.descricao.toLowerCase().includes(termo) ||
         (it.codigo && it.codigo.toLowerCase().includes(termo)) ||
-        (it.etapaNome && it.etapaNome.toLowerCase().includes(termo))
+        (it.etapaNome && it.etapaNome.toLowerCase().includes(termo)) ||
+        (it.obraNome && it.obraNome.toLowerCase().includes(termo))
     );
   }, [itensOrcamento, busca]);
 
@@ -322,29 +368,52 @@ export function ImportarOrcamentoDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Calculator className="h-5 w-5 text-blue-600" />
-            Importar Itens do Orçamento da Obra
-          </DialogTitle>
-          <DialogDescription>
-            Selecione os itens do orçamento da obra ou da proposta comercial para compor o escopo do contrato com o empreiteiro.
-          </DialogDescription>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <DialogTitle className="flex items-center gap-2">
+                <Calculator className="h-5 w-5 text-blue-600" />
+                Importar Itens do Orçamento da Obra
+              </DialogTitle>
+              <DialogDescription>
+                Selecione os itens do orçamento da obra ou da proposta comercial para compor o escopo do contrato com o empreiteiro.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        {!obraId ? (
-          <div className="py-8 text-center text-sm text-slate-500">
-            Selecione uma obra no contrato antes de importar itens do orçamento.
+        {/* Barra de Filtro de Obra */}
+        <div className="flex flex-col sm:flex-row items-center gap-3 p-2 bg-slate-50 border rounded-md">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700 shrink-0">
+            <Building2 className="h-4 w-4 text-blue-600" />
+            <span>Obra de Origem:</span>
           </div>
-        ) : isLoading ? (
+          <div className="w-full sm:w-80">
+            <Select value={selectedObraId} onValueChange={setSelectedObraId}>
+              <SelectTrigger className="h-8 text-xs bg-white">
+                <SelectValue placeholder="Selecione a obra..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todas">Todas as Obras (Orçamentos Globais)</SelectItem>
+                {listaObras.map((ob) => (
+                  <SelectItem key={ob.id} value={ob.id}>
+                    {ob.nome} {ob.numero ? `(${ob.numero})` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {isLoading ? (
           <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-500">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
             <span className="text-sm">Buscando itens no orçamento e escopo da obra...</span>
           </div>
         ) : itensOrcamento.length === 0 ? (
           <div className="py-8 text-center text-sm text-slate-500 space-y-2">
-            <p>Nenhum item de orçamento, proposta comercial ou cronograma encontrado para esta obra.</p>
+            <p>Nenhum item de orçamento encontrado para esta seleção.</p>
             <p className="text-xs text-slate-400">
-              Você pode cadastrar itens manualmente no contrato ou importar via planilha Excel.
+              Você pode selecionar outra obra no seletor acima, escolher &quot;Todas as Obras&quot; ou cadastrar itens manualmente via planilha Excel.
             </p>
           </div>
         ) : (
@@ -413,7 +482,18 @@ export function ImportarOrcamentoDialog({
                         </TableCell>
                         <TableCell>
                           <div className="font-medium text-xs text-slate-900">{item.descricao}</div>
-                          <div className="text-[11px] text-slate-500">{item.etapaNome}</div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-slate-100 rounded text-slate-600">
+                              <Layers className="h-3 w-3 text-slate-400" />
+                              {item.etapaNome}
+                            </span>
+                            {item.obraNome && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded font-medium">
+                                <Building2 className="h-3 w-3 text-blue-500" />
+                                {item.obraNome}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-center text-xs">{item.unidade}</TableCell>
                         <TableCell className="text-right text-xs font-medium">

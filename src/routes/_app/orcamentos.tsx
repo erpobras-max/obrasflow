@@ -35,6 +35,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { OrcamentoAnaliticoView } from "@/components/orcamentos/orcamento-analitico-view";
+import { sincronizarPropostaComOrcamento } from "@/lib/proposta-orcamento-sync";
 
 export const Route = createFileRoute("/_app/orcamentos")({
   component: OrcamentosPage,
@@ -259,11 +260,42 @@ function OrcamentosPage() {
         .from("obras")
         .update({ orcamento: Number(totalCents) / 100 })
         .eq("id", selectedObraId);
+
+      // Sincroniza valor da proposta em status rascunho com o total do orçamento
+      try {
+        const { data: obraRow } = await supabase
+          .from("obras")
+          .select("proposta_id, nome")
+          .eq("id", selectedObraId)
+          .maybeSingle();
+
+        let propId = obraRow?.proposta_id;
+        if (!propId && obraRow?.nome) {
+          const { data: pExist } = await supabase
+            .from("propostas")
+            .select("id")
+            .ilike("titulo", `%${obraRow.nome}%`)
+            .eq("status", "rascunho")
+            .limit(1);
+          propId = pExist?.[0]?.id;
+        }
+
+        if (propId) {
+          await supabase
+            .from("propostas")
+            .update({ valor_total: Number(totalCents) / 100 })
+            .eq("id", propId)
+            .eq("status", "rascunho");
+        }
+      } catch (errSync) {
+        console.warn("Aviso ao sincronizar proposta com orçamento:", errSync);
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["obras"] });
       qc.invalidateQueries({ queryKey: ["obras-select-orc"] });
       qc.invalidateQueries({ queryKey: ["orcamento-for-obra"] });
+      qc.invalidateQueries({ queryKey: ["propostas"] });
     }
   });
 
@@ -1017,12 +1049,21 @@ function OrcamentosPage() {
                     const nomeObra = obra?.nome || "Obra";
                     const { data: propsExistentes } = await supabase
                       .from("propostas")
-                      .select("id, titulo")
+                      .select("id, titulo, status")
                       .ilike("titulo", `%${nomeObra}%`)
                       .limit(1);
 
                     if (propsExistentes && propsExistentes.length > 0) {
-                      navigate({ to: "/comercial/propostas", search: { propostaId: propsExistentes[0].id } });
+                      const prop = propsExistentes[0];
+                      if (prop.status === "rascunho") {
+                        try {
+                          await sincronizarPropostaComOrcamento(prop.id, selectedObraId);
+                          toast.success("Proposta comercial sincronizada com o orçamento atualizado!");
+                        } catch (errSync) {
+                          console.warn("Aviso ao sincronizar proposta:", errSync);
+                        }
+                      }
+                      navigate({ to: "/comercial/propostas", search: { propostaId: prop.id } });
                       return;
                     }
 

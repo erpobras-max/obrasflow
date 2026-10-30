@@ -531,3 +531,23 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     3. **Visibilidade e layout de impressão no CSS global (`src/styles.css`)**: Adicionados seletores `.printable-sheet, .printable-sheet *, .medicao-print-sheet, .medicao-print-sheet *` com `visibility: visible !important`, posicionamento absoluto `top: 0; left: 0; width: 100%`, remoção de sombras e `z-index: 999999 !important` para renderizar perfeitamente no preview de impressão e exportação em PDF.
     4. **Relatório de Medição (`medicao-relatorio-imprimir.tsx` e `medicao-empreiteiro.$token.tsx`)**: Estilos dedicados `@media print` no próprio componente, folha A4 com paginação tratada e consulta retroativa de medições executadas para preencher com precisão o histórico e saldo de cada item na via impressa.
   - 112 testes automatizados aprovados e build verificado com sucesso.
+
+- **Importação de Itens do Orçamento para Contratos de Empreiteiros e Sincronização Automática com Propostas Comerciais (Branch fix/207-importar-orcamento-contrato-e-sincronizacao-propostas)**:
+  - **Diagnóstico das causas raízes**:
+    1. *Busca de itens vazia em Contratos de Empreiteiros*: A consulta em `importar-orcamento-dialog.tsx` utilizava nomes de colunas inexistentes no banco (`bdi_padrao_percentual` em `orcamentos` e `custo_total_centavos` em `orcamento_atividades`). No Supabase/PostgREST, isso gerava HTTP 400 Bad Request (`PGRST204`), anulando o resultado e impedindo a execução dos passos analíticos e legados subsequentes. Além disso, o diálogo não disponibilizava seletor de obra para alternar entre obras ou visualizar itens globais.
+    2. *Descompasso entre Orçamento e Proposta Comercial*: Propostas geradas a partir do orçamento mantinham um snapshot estático ou itens vazios. Alterações em quantitativos, inclusões de itens, BDI ou preços unitários no orçamento não eram propagadas para a proposta em rascunho, e o editor comercial não possuía ação para sincronizar/atualizar as etapas e itens diretamente da obra.
+  - **Correções aplicadas**:
+    1. **Correção das Consultas no Diálogo de Importação (`importar-orcamento-dialog.tsx`)**:
+       - Coluna de BDI corrigida para a oficial `bdi_geral`.
+       - Em atividades analíticas, cálculo dinâmico e preciso do preço unitário com BDI a partir de `orcamento_atividade_insumos` (coeficiente x preço unitário centavos).
+       - Fallback progressivo e tolerante a falhas: Orçamento Analítico com Insumos -> Orçamento Padrão (`orcamento_itens`) -> RPC `escopo_obra` -> Propostas Comerciais -> Cronograma da Obra.
+       - Adicionado **Seletor de Obra de Origem** integrado no diálogo, permitindo alternar instantaneamente entre a obra atual, qualquer outra obra cadastrada ou "Todas as Obras (Orçamentos Globais)", com indicação visual da obra em cada linha da tabela.
+    2. **Mecanismo de Sincronização Proposta-Orçamento (`proposta-orcamento-sync.ts`)**:
+       - Criada função `sincronizarPropostaComOrcamento(propostaId, obraId)` que recalcula e atualiza as etapas, atividades, quantitativos e `valor_total` da proposta em rascunho a partir do orçamento mais recente da obra (analítico ou legado).
+       - Proteção de integridade: bloqueia alteração automática de propostas aprovadas ou formalmente enviadas.
+    3. **Botão "Atualizar do Orçamento" no Editor Comercial (`editor-proposta-comercial.tsx` e `comercial.propostas.tsx`)**:
+       - Adicionado botão de ação na barra superior e banner no painel lateral esquerdo com ícone `RefreshCw`, permitindo ao usuário sincronizar os itens com 1 clique a qualquer momento durante a elaboração do rascunho.
+    4. **Sincronização Integrada na Página de Orçamentos (`orcamentos.tsx`)**:
+       - No cálculo e persistência de totais (`syncTotalsMutation`), o valor total de propostas vinculadas em status rascunho é atualizado automaticamente.
+       - Ao clicar em "Iniciar/Editar Proposta Comercial" para uma obra com rascunho já existente, os itens e o valor da proposta são automaticamente sincronizados com o orçamento mais recente antes de abrir o editor.
+  - 115 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.

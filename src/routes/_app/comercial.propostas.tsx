@@ -17,6 +17,7 @@ import { formatCpfCnpj } from "@/lib/validacao-documento";
 import { CatalogoPropostas } from "@/components/propostas/catalogo-propostas";
 import { PropostaImpressao } from "@/components/propostas/proposta-impressao";
 import { EditorPropostaComercial } from "@/components/propostas/editor-proposta-comercial";
+import { sincronizarPropostaComOrcamento } from "@/lib/proposta-orcamento-sync";
 import {
   ReferenciaCustosPicker,
   type ReferenciaCustoSelecionada,
@@ -511,6 +512,16 @@ function PropostasPage() {
       <EditorPropostaComercial
         proposta={editorData}
         onVoltar={() => setEditorTarget(null)}
+        onSincronizarOrcamento={async () => {
+          try {
+            const res = await sincronizarPropostaComOrcamento(editorTarget.id, editorData.obraId);
+            toast.success(res.mensagem);
+            await qc.invalidateQueries({ queryKey: ["propostas"] });
+            await qc.invalidateQueries({ queryKey: ["proposta-editor-completo", editorTarget.id] });
+          } catch (err: any) {
+            toast.error("Erro ao sincronizar com orçamento: " + (err.message || "Erro desconhecido"));
+          }
+        }}
         onSalvarRascunho={async ({ config, valorTotalCentavos, clienteId, etapas }) => {
           try {
             const valorTotal = Number(valorTotalCentavos || 0) / 100;
