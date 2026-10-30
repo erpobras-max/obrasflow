@@ -93,7 +93,7 @@ git commit -m "fix(propostas): normalizar configuracao do editor comercial"
   - `public.excluir_proposta_rascunho(p_proposta_id uuid) RETURNS boolean`;
   - `public.sanitizar_fotografia_proposta(p_valor jsonb) RETURNS jsonb` privada ao papel authenticated.
 
-- [ ] **Step 1: Criar banco mínimo e testes SQL falhos**
+- [x] **Step 1: Criar banco mínimo e testes SQL falhos**
 
 Em PGlite, criar papéis, enums e tabelas mínimas de cliente, obra, orçamento, revisões, propostas, revisões de proposta, itens, contratos e cronogramas. Testar:
 
@@ -108,31 +108,31 @@ Em PGlite, criar papéis, enums e tabelas mínimas de cliente, obra, orçamento,
 - financeiro pode criar/salvar/publicar, mas somente admin/diretor pode excluir;
 - duas criações comuns para a mesma revisão convergem no mesmo rascunho.
 
-- [ ] **Step 2: Executar e confirmar falha**
+- [x] **Step 2: Executar e confirmar falha**
 
 Run: `node --test tests/propostas-editor-db.test.mjs`
 
 Expected: FAIL porque a migration/RPCs não existem.
 
-- [ ] **Step 3: Implementar schema complementar**
+- [x] **Step 3: Implementar schema complementar**
 
 Adicionar `updated_at` e `enviada_at` a `proposta_revisoes`, com trigger de atualização. Usar bloqueio transacional por revisão na criação comum para impedir duplicata concorrente; a duplicação explícita ignora a reutilização do rascunho.
 
-- [ ] **Step 4: Implementar sanitização e RPCs**
+- [x] **Step 4: Implementar sanitização e RPCs**
 
 Todas as funções usam `SECURITY DEFINER SET search_path = public`, validam `auth.uid()`, papel, status e origem. `salvar` atualiza o rascunho atual ou cria o próximo número somente se a revisão anterior estiver `rejeitada`/`expirada`; nunca abre novo rascunho sobre uma revisão ainda `enviada` ou `aceita`. `salvar`/`publicar` aplicam `sanitizar_fotografia_proposta` no servidor. `publicar` atualiza a linha rascunho existente, nunca insere uma cópia silenciosa. `excluir` verifica `rascunho`, executa em uma transação e confirma `FOUND`.
 
-- [ ] **Step 5: Restringir permissões e documentar rollback no SQL**
+- [x] **Step 5: Restringir permissões e documentar rollback no SQL**
 
 Revogar execução pública; conceder somente a `authenticated`. Incluir bloco de rollback comentado para funções, trigger e colunas novas, sem remover tabelas/dados legados.
 
-- [ ] **Step 6: Executar os testes SQL**
+- [x] **Step 6: Executar os testes SQL**
 
 Run: `node --test tests/propostas-editor-db.test.mjs tests/orcamento-analitico-db.test.mjs`
 
 Expected: todos PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add supabase/migrations/20261030180000_propostas_editor_unico.sql tests/propostas-editor-db.test.mjs src/integrations/supabase/types.ts
