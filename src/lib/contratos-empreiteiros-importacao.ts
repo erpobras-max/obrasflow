@@ -61,7 +61,8 @@ export function converterParaQuantidade(valor: unknown): number {
 }
 
 /**
- * Mapeia atividades da árvore do orçamento analítico para itens de contrato de empreiteiro.
+ * Mapeia atividades da árvore do orçamento analítico ou itens de orçamento/escopo
+ * para itens de contrato de empreiteiro.
  */
 export function mapearAtividadesParaItensContrato(
   atividades: Array<{
@@ -74,24 +75,30 @@ export function mapearAtividadesParaItensContrato(
     orcamentoId?: string;
     insumos?: Array<{ coeficiente: number; preco_unitario_centavos: number }>;
     custoTotalCentavos?: number;
+    preco_unitario_centavos?: number;
     bdiPercentual?: number;
+    origemTipo?: "orcamento_analitico" | "escopo_obra" | "orcamento_legado" | string;
   }>,
   bdiPadrao: number = 0
 ): ContratoItem[] {
   return atividades.map((atv, idx) => {
-    let custoUnitCentavos = 0;
-    if (atv.insumos && atv.insumos.length > 0) {
-      custoUnitCentavos = atv.insumos.reduce(
+    let precoUnitCentavos = 0;
+
+    if (atv.preco_unitario_centavos != null && atv.preco_unitario_centavos > 0) {
+      precoUnitCentavos = atv.preco_unitario_centavos;
+    } else if (atv.insumos && atv.insumos.length > 0) {
+      const custoUnitCentavos = atv.insumos.reduce(
         (acc, ins) =>
           acc + Math.round(Number(ins.coeficiente ?? 1) * Number(ins.preco_unitario_centavos ?? 0)),
         0
       );
+      const bdi = atv.bdiPercentual != null ? atv.bdiPercentual : bdiPadrao;
+      precoUnitCentavos = Math.round(custoUnitCentavos * (1 + bdi / 100));
     } else if (atv.custoTotalCentavos && atv.quantidade > 0) {
-      custoUnitCentavos = Math.round(atv.custoTotalCentavos / atv.quantidade);
+      const custoUnitCentavos = Math.round(atv.custoTotalCentavos / atv.quantidade);
+      const bdi = atv.bdiPercentual != null ? atv.bdiPercentual : bdiPadrao;
+      precoUnitCentavos = Math.round(custoUnitCentavos * (1 + bdi / 100));
     }
-
-    const bdi = atv.bdiPercentual != null ? atv.bdiPercentual : bdiPadrao;
-    const precoUnitCentavos = Math.round(custoUnitCentavos * (1 + bdi / 100));
 
     return {
       codigo: atv.codigo || null,
@@ -102,7 +109,7 @@ export function mapearAtividadesParaItensContrato(
       precoUnitarioCentavos: precoUnitCentavos,
       origemOrcamentoId: atv.orcamentoId || null,
       origemAtividadeId: atv.id,
-      origemTipo: "orcamento_analitico",
+      origemTipo: atv.origemTipo || "orcamento_analitico",
       ordem: idx,
     };
   });
@@ -193,4 +200,3 @@ export function processarPlanilhaExcelContrato(bufferOuArray: ArrayBuffer | Uint
     };
   }
 }
-

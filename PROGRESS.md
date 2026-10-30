@@ -486,3 +486,15 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - **Correção no Editor de Propostas Comerciais (Branch fix/202-corrigir-import-editor-proposta)**:
   - Adicionado o import de `configuracaoPropostaComercialPadrao` em `src/components/propostas/editor-proposta-comercial.tsx`, sanando o erro `ReferenceError: configuracaoPropostaComercialPadrao is not defined` disparado ao abrir a edição da proposta a partir do orçamento.
   - 111 testes automatizados aprovados e build SSR verificado com sucesso.
+
+
+- **Importação Unificada de Itens do Orçamento da Obra (`ImportarOrcamentoDialog`) (Branch fix/203-importar-orcamento-itens)**:
+  - Corrigida a busca de itens para contratos de empreiteiros: em vez de limitar-se exclusivamente às etapas analíticas (que retornava lista vazia quando o orçamento da obra utilizava itens padrão em `orcamento_itens`), o diálogo agora realiza busca em múltiplas fontes com fallback progressivo e transparente:
+    1. Orçamento Analítico da Obra (`orcamento_etapas` + `orcamento_atividades` com cálculo dinâmico de BDI).
+    2. Orçamento Padrão/Legado da Obra (`orcamento_itens` com valor unitário e total em centavos).
+    3. Escopo Contratado da Obra via RPC oficial `public.escopo_obra(obra_id)`.
+    4. Propostas Comerciais da Obra (`propostas` + `propostas_itens` e `propostas_itens_hierarquia`).
+    5. Cronograma da Obra (`obra_cronograma`).
+  - Atualizada a função `mapearAtividadesParaItensContrato` para preservar preços unitários diretos em centavos e registrar a procedência dos itens (`origemTipo`).
+  - Adicionado campo de busca instantânea no diálogo por descrição, código ou etapa, exibição de preços unitários e valor total estimado, seleção/desmarcação dos itens visíveis e somatório em tempo real dos itens selecionados no rodapé.
+  - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
