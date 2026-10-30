@@ -261,6 +261,7 @@ function OrcamentosPage() {
         .eq("id", selectedObraId);
     },
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["obras"] });
       qc.invalidateQueries({ queryKey: ["obras-select-orc"] });
       qc.invalidateQueries({ queryKey: ["orcamento-for-obra"] });
     }

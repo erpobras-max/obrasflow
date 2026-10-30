@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Calculator,
   ChevronDown,
@@ -91,6 +92,7 @@ export function OrcamentoAnaliticoView({
   onGerarProposta,
   onItensAlterados,
 }: OrcamentoAnaliticoViewProps) {
+  const qc = useQueryClient()
   const [etapas, setEtapas] = useState<Etapa[]>([])
   const [carregando, setCarregando] = useState(true)
   const [abertas, setAbertas] = useState<Set<string>>(new Set())
@@ -709,7 +711,7 @@ export function OrcamentoAnaliticoView({
 
   // Sincronizar automaticamente o valor do orçamento com a tabela de Obras
   useEffect(() => {
-    if (!obraId || !orcamentoId || carregando || totais.preco === 0) return
+    if (!obraId || !orcamentoId || carregando) return
 
     const timer = setTimeout(async () => {
       const valorReais = totais.preco / 100
@@ -718,13 +720,15 @@ export function OrcamentoAnaliticoView({
           supabase.from('obras').update({ orcamento: valorReais }).eq('id', obraId),
           supabase.from('orcamentos').update({ total_estimado: totais.preco }).eq('id', orcamentoId),
         ])
+        qc.invalidateQueries({ queryKey: ['obras'] })
+        qc.invalidateQueries({ queryKey: ['obras-select-orc'] })
       } catch (err) {
         console.warn('Erro ao sincronizar valor do orçamento com a obra:', err)
       }
-    }, 400)
+    }, 250)
 
     return () => clearTimeout(timer)
-  }, [obraId, orcamentoId, totais.preco, carregando])
+  }, [obraId, orcamentoId, totais.preco, carregando, qc])
 
   if (carregando) {
     return (

@@ -128,8 +128,7 @@ function ObrasPage() {
 
   const { data: obras, isLoading } = useQuery({
     queryKey: ["obras"],
-    staleTime: 1000 * 60 * 3,
-    refetchOnWindowFocus: false,
+    refetchOnMount: "always",
     queryFn: async () => {
       const { data, error } = await supabase
         .from("obras").select("*").order("created_at", { ascending: false });
