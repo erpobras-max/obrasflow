@@ -463,3 +463,9 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - **Verificação e Testes**:
   - 107 testes automatizados aprovados no total (100% de sucesso), cobrindo regras de conversão, limites de saldo, retenções, deduções, importação de planilhas e integridade do banco de dados em memória.
   - Compilação do projeto (`npm run build`) validada com 0 erros no Vite e no Nitro SSR.
+
+- **Evidências Fotográficas e Link Público para o Empreiteiro (Task 7)**:
+  - Componente `MedicaoAnexos`: Permite anexar fotos do avanço físico diretamente no Cloudflare R2 por medição, com visualização em galeria e lightbox ampliado.
+  - Geração de link público instantâneo com token aleatório criptográfico de 32 caracteres hex em `medicao_empreiteiro_links`, com cópia em 1 clique para WhatsApp/e-mail.
+  - Rota pública `/medicao-empreiteiro/$token` (`src/routes/medicao-empreiteiro.$token.tsx`): Permite ao empreiteiro visualizar o boletim de medição completo com dados da obra, status, itens medidos, deduções, fotos de comprovação e botão de impressão/PDF no celular ou computador, sem necessidade de login.
+  - Manual Operacional `docs/CONTRATOS_EMPREITEIROS_OPERACAO.md` criado com fluxo detalhado passo a passo para engenheiros, gestores e fiscais de obra.

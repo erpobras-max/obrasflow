@@ -21,7 +21,9 @@ import {
   Plus,
   Trash2,
   FileText,
+  Camera,
 } from "lucide-react";
+import { MedicaoAnexos } from "./medicao-anexos";
 import { MedicaoStatusBadge } from "./contrato-status-badge";
 import {
   converterEntradaMedicao,
@@ -92,6 +94,7 @@ export function MedicaoEditorSheet({
   const [dialogAprovarOpen, setDialogAprovarOpen] = useState(false);
   const [dialogCancelarOpen, setDialogCancelarOpen] = useState(false);
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
+  const [dialogAnexosOpen, setDialogAnexosOpen] = useState(false);
 
   // Inicializar estado ao carregar medição
   useEffect(() => {
@@ -404,6 +407,15 @@ export function MedicaoEditorSheet({
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setDialogAnexosOpen(true)}
+              >
+                <Camera className="h-3.5 w-3.5 mr-1 text-blue-600" />
+                Fotos & Link
+              </Button>
               {onAbrirImpressao && (
                 <Button
                   variant="outline"
@@ -832,6 +844,14 @@ export function MedicaoEditorSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog de Fotos e Link Compartilhável */}
+      <MedicaoAnexos
+        open={dialogAnexosOpen}
+        onOpenChange={setDialogAnexosOpen}
+        medicaoId={medicao?.id}
+        numeroMedicao={medicao?.numero || 1}
+      />
     </>
   );
 }

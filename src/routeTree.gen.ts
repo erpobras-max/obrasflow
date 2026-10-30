@@ -23,6 +23,7 @@ import { Route as PortalFotosRouteImport } from './routes/portal/fotos'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro'
 import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
 import { Route as PortalContratosRouteImport } from './routes/portal/contratos'
+import { Route as MedicaoEmpreiteiroTokenRouteImport } from './routes/medicao-empreiteiro.$token'
 import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
 import { Route as CotacaoTokenRouteImport } from './routes/cotacao.$token'
 import { Route as AssinarTokenRouteImport } from './routes/assinar.$token'
@@ -139,6 +140,11 @@ const PortalContratosRoute = PortalContratosRouteImport.update({
   id: '/contratos',
   path: '/contratos',
   getParentRoute: () => PortalRoute,
+} as any)
+const MedicaoEmpreiteiroTokenRoute = MedicaoEmpreiteiroTokenRouteImport.update({
+  id: '/medicao-empreiteiro/$token',
+  path: '/medicao-empreiteiro/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ImovelPublicoTokenRoute = ImovelPublicoTokenRouteImport.update({
   id: '/imovel-publico/$token',
@@ -415,6 +421,7 @@ export interface FileRoutesByFullPath {
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
+  '/medicao-empreiteiro/$token': typeof MedicaoEmpreiteiroTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
@@ -476,6 +483,7 @@ export interface FileRoutesByTo {
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
+  '/medicao-empreiteiro/$token': typeof MedicaoEmpreiteiroTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
@@ -540,6 +548,7 @@ export interface FileRoutesById {
   '/assinar/$token': typeof AssinarTokenRoute
   '/cotacao/$token': typeof CotacaoTokenRoute
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
+  '/medicao-empreiteiro/$token': typeof MedicaoEmpreiteiroTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
@@ -604,6 +613,7 @@ export interface FileRouteTypes {
     | '/assinar/$token'
     | '/cotacao/$token'
     | '/imovel-publico/$token'
+    | '/medicao-empreiteiro/$token'
     | '/portal/contratos'
     | '/portal/documentos'
     | '/portal/financeiro'
@@ -665,6 +675,7 @@ export interface FileRouteTypes {
     | '/assinar/$token'
     | '/cotacao/$token'
     | '/imovel-publico/$token'
+    | '/medicao-empreiteiro/$token'
     | '/portal/contratos'
     | '/portal/documentos'
     | '/portal/financeiro'
@@ -728,6 +739,7 @@ export interface FileRouteTypes {
     | '/assinar/$token'
     | '/cotacao/$token'
     | '/imovel-publico/$token'
+    | '/medicao-empreiteiro/$token'
     | '/portal/contratos'
     | '/portal/documentos'
     | '/portal/financeiro'
@@ -769,6 +781,7 @@ export interface RootRouteChildren {
   AssinarTokenRoute: typeof AssinarTokenRoute
   CotacaoTokenRoute: typeof CotacaoTokenRoute
   ImovelPublicoTokenRoute: typeof ImovelPublicoTokenRoute
+  MedicaoEmpreiteiroTokenRoute: typeof MedicaoEmpreiteiroTokenRoute
   ReservarTokenRoute: typeof ReservarTokenRoute
   ApiSinapiCronRoute: typeof ApiSinapiCronRoute
 }
@@ -872,6 +885,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/portal/contratos'
       preLoaderRoute: typeof PortalContratosRouteImport
       parentRoute: typeof PortalRoute
+    }
+    '/medicao-empreiteiro/$token': {
+      id: '/medicao-empreiteiro/$token'
+      path: '/medicao-empreiteiro/$token'
+      fullPath: '/medicao-empreiteiro/$token'
+      preLoaderRoute: typeof MedicaoEmpreiteiroTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/imovel-publico/$token': {
       id: '/imovel-publico/$token'
@@ -1367,6 +1387,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssinarTokenRoute: AssinarTokenRoute,
   CotacaoTokenRoute: CotacaoTokenRoute,
   ImovelPublicoTokenRoute: ImovelPublicoTokenRoute,
+  MedicaoEmpreiteiroTokenRoute: MedicaoEmpreiteiroTokenRoute,
   ReservarTokenRoute: ReservarTokenRoute,
   ApiSinapiCronRoute: ApiSinapiCronRoute,
 }
