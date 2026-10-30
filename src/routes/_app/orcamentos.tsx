@@ -34,6 +34,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { OrcamentoAnaliticoView } from "@/components/orcamentos/orcamento-analitico-view";
 
 export const Route = createFileRoute("/_app/orcamentos")({
   component: OrcamentosPage,
@@ -863,6 +864,20 @@ function OrcamentosPage() {
         <TabsContent value="obras" className="space-y-6">
           {selectedObraId ? (
             <>
+              {import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 !== "false" && orcamentoItens && orcamentoItens.length > 0 && (
+                <OrcamentoAnaliticoView
+                  itens={orcamentoItens.map((item) => ({
+                    id: item.id,
+                    etapa: item.etapa,
+                    codigo: item.codigo,
+                    descricao: item.descricao,
+                    unidade: item.unidade,
+                    quantidade: Number(item.quantidade),
+                    valor_unitario: Number(item.valor_unitario),
+                  }))}
+                  somenteLeitura={!podeEditar}
+                />
+              )}
               {/* Summary KPIs */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card className="bg-gradient-to-br from-card to-accent/20 border shadow-sm">
@@ -2071,3 +2086,4 @@ function ManualItemFormDialog({
     </Dialog>
   );
 }
+
