@@ -1,17 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 29/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
-
-## Atualização 29/10/2026 — orçamento analítico e proposta integrada (Issue #197)
-
-- Criado backup recuperável pré-implementação em `backups/issue-197`, com manifesto SHA-256 e instruções de restauração.
-- Adicionada migration reversível `20261030000000_orcamento_analitico.sql`: etapas, atividades, insumos/consumos, memoriais, revisões, auditoria, revisões comerciais e staging SINAPI; a migration ainda precisa ser aplicada no Supabase do ambiente.
-- Publicação de revisão é transacional/idempotente; revisão ligada a proposta aceita é imutável; duplicação analítica possui RPC própria e RLS de admin/diretor/engenharia.
-- Novo motor de cálculo usa centavos, parser aritmético sem `eval`, detecção de ciclos em composições auxiliares, custos por categoria e precedência exclusiva de BDI atividade → categoria → geral.
-- `/orcamentos` contém a planilha analítica sobre os itens existentes: edição de nome, quantidade e BDI, memorial estruturado, detalhamento de insumos, custo derivado e popovers por categoria. Como a persistência analítica ainda será ligada às RPCs, o rollout é opt-in com `VITE_ORCAMENTO_ANALITICO_V1=true`; o fluxo legado continua sendo o padrão seguro.
-- Proposta comercial ganhou modelo de fotografia ligada à revisão e configuração segura (custos internos, BDI e insumos ocultos por padrão), além do bloqueio após aceite.
-- Rotina SINAPI inclui descoberta somente em domínio oficial da Caixa, parser/normalização, bloqueio de competência com preço zero e cron diário. Antes do deploy deve ser definido `SINAPI_CRON_SECRET`; a publicação automática da competência permanece deliberadamente em staging até a primeira validação administrativa.
-- Validação local: 28 testes aprovados e build de produção aprovado. O `tsc` global ainda acusa erros antigos em módulos fora deste escopo; não houve erro focado nos arquivos novos.
+Atualizado em 30/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.nhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -73,6 +62,7 @@ As entregas mais recentes são:
 - `20261013000004_cotacoes_compra.sql`: cria o módulo completo de cotações, convites por fornecedor, respostas públicas por token, anexos, comparação, seleção vencedora, pedidos, recebimentos, integração com contas a pagar, notificações e RLS.
 - `20261014000001_almoxarifado_base_recuperacao.sql`: recria de forma aditiva as tabelas-base `depositos`, `produto_estoque` e `movimentacoes_estoque` quando ausentes, configura leitura/RLS e semeia o depósito geral; foi aplicada no projeto de produção para corrigir o erro de cadastro.
 - `20261019120000_create_obra_projetos_cad.sql`: cria a tabela `obra_projetos_cad` para armazenar o projeto CAD/BIM paramétrico, imagem de capa 3D, quantitativos e configurações de BDI por obra, com índices e políticas de RLS completas para equipe interna e clientes no portal.
+- `20261027000001_onesignal_omnichannel.sql`: prepara o histórico de notificações por canal para push, e-mail e SMS e restringe o processamento agendado ao `service_role`; aplicada no Supabase de produção em 27/10/2026.
 
 As melhorias de nome, inclusão, exclusão individual e ordenação das etapas não exigem nova migration; usam `obra_cronograma.ordem` e as colunas já existentes.
 
@@ -114,6 +104,7 @@ Não há Edge Functions versionadas em `supabase/functions` neste checkout. A ap
 - O service worker foi ajustado para ignorar requisições de extensões do navegador e não tentar gravá-las no cache.
 - A tabela `notificacoes_usuario` foi criada no Supabase publicado. Os alertas de estoque agora consultam `produto_estoque`, em vez do estoque legado por obra.
 - O ambiente local pode mostrar avisos de versão do Node e vulnerabilidades do `npm audit`; devem ser tratados separadamente para não misturar atualização de dependências com regras de negócio.
+- A publicação das cotas associativas do CAD foi confirmada em 26/10/2026 no Cloudflare Worker `obrasflow`, versão `d1574cad`, com 100% do tráfego.
 - A migration `20261013000004_cotacoes_compra.sql` foi aplicada no projeto Supabase publicado pelo SQL Editor em 13/10/2026, com retorno `Success. No rows returned`.
 - Consultas antigas de estoque/financeiro ainda exigem atenção se forem reintroduzidas: o schema publicado usa `produto_estoque` como fonte do saldo atual.
 - Verificação direta no Supabase em 14/10/2026 encontrou inicialmente as tabelas-base, mas faltavam `estoque_prateleiras`, a RPC e o trigger. A migration `20261013000006_almoxarifado_qr.sql` foi aplicada pelo SQL Editor com sucesso; consulta posterior confirmou todos esses objetos. O teste como `authenticated` registrou saldo 10 dentro de transação e o `ROLLBACK` deixou o banco sem a posição criada. A migration foi aplicada manualmente e ainda não consta em `supabase_migrations.schema_migrations`, assim como a recuperação da base; reconciliar o histórico do CLI antes de depender de `supabase db push`.
@@ -249,6 +240,14 @@ Entregue e publicado em 19/10/2026. Transforma cada obra do ObrasFlow em um ambi
    - **Auto-Save / Backup Local (`localStorage`)**: rascunho salvo continuamente no navegador com restauração automática em caso de fechamento acidental.
    - **Aviso `beforeunload`**: alerta nativo se o usuário tentar sair da tela com alterações não salvas.
    - **Badge de Pendência**: indicador visual `● Alterações não salvas`.
+7. **Navegação, Seleção e Organização CAD**:
+   - Pan independente pelo modo **Arrastar planta**, zoom mantendo o ponto focal e **Zoom Total** para enquadrar plantas deslocadas.
+   - Seleção múltipla por janela, com seleção por contenção da esquerda para a direita e por cruzamento no sentido inverso.
+   - Transformações numéricas de deslocamento e rotação, duplicação de elementos e exclusão definitiva da seleção.
+   - Layers CAD editáveis com criação, renomeação, exclusão segura, associação de elementos, visibilidade e bloqueio compartilhados entre 2D e 3D.
+   - Seis comandos de alinhamento da seleção: esquerda, centro horizontal, direita, topo, meio vertical e base.
+   - Cotas lineares persistentes, vinculadas aos extremos das paredes para atualização automática, com exclusão, histórico e suporte a layers.
+   - Entregas publicadas pelas PRs #142, #143, #144, #145, #146 e #149; a PR #149 encerrou a Issue #148 e iniciou a execução separada da Issue #132.
 
 ## 20. Módulo de Ponto Eletrônico & Gestão de Canteiro (Perfil Mestre de Obras)
 
@@ -301,18 +300,38 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 
 ## 22. Última entrega publicada
 
-- **Commit**: `fix(fluxo): integracao completa ponta a ponta de cliente, proposta, contrato, obras, cronograma, medicoes e diario`
-- **Branch**: `main` (enviado com sucesso para `origin/main`).
-- **Validação de Build**: `npm run build` concluído com código 0 e tempo de 16.98s.
-- **Deploy**: Publicação automática em andamento via Cloudflare Worker `obrasflow`.
+- **Commit**: `053a7f48eae79f535b14e9f8b2c67e40f7d65c41` — atualização do PWA ao abrir ou retomar (PR #191, Issue #190).
+- **Branch**: `main`, após merge da branch `fix/190-atualizacao-pwa`.
+- **Validação**: 10 testes focados e lint dos novos arquivos aprovados, build local e preview Cloudflare aprovados. O job de build do GitHub demorou na instalação de dependências; o preview validou o build completo antes do merge.
+- **Deploy**: workflow `Deploy to Cloudflare Workers` #40672831201 concluído com sucesso em 28/10/2026; worker raiz publicado com identificador de build, CSP corrigida e bundle com eventos de atualização automática verificados.
+- **Atualização PWA**: registro imediato, verificação ao voltar para o app, recuperar conexão ou foco, e identificador de worker derivado dos assets a cada build. Versão nova provoca uma recarga; primeira instalação não. Formulários, diálogos e editor CAD apresentam opção de atualizar para permitir salvar antes. Instalações antigas devem fechar/reabrir uma vez para carregar esta rotina.
+- **Push**: a PR #189 corrigiu o bloqueio CSP de `importScripts`, permitindo o CDN e a API oficiais do OneSignal. Deploy #40672118577 concluído; recebimento do alerta no Chrome confirmado pelo usuário. A validação final do Android segue pendente. O teste por aparelho da PR #188 permanece ativo.
+- **Ativação externa**: migration aplicada no Supabase; chave OneSignal rotacionada; `ONESIGNAL_REST_KEY` e `CRON_SECRET` cadastrados como secrets e configuração publicada no Worker em 27/10/2026; Web Push ativo no domínio do sistema e gatilhos agendados mantidos.
+- **E-mail**: `notificacoes@graficaimplotter.com.br` foi configurado como remetente padrão; os registros de `mail.graficaimplotter.com.br` foram adicionados na Hostinger e todos estão autenticados no OneSignal. A verificação automática da conta não foi aprovada pelo OneSignal, que enviou por e-mail as instruções para solicitar nova análise.
+- **SMS**: o MFA do Twilio foi concluído e a conta vinculada ao OneSignal foi confirmada. A conta permanece em modo trial e não possui número remetente; o envio depende de upgrade/compra e da inclusão do número no Sender Pool.
+- **Observação de CI**: o job `dependency-audit` continua falhando por vulnerabilidades preexistentes e deve ser tratado em uma Issue/PR própria.
 
 ---
 
 ## 23. Pendências prioritárias após esta atualização
 
 - Executar testes de aceitação visual com os usuários engenheiros desenhando plantas reais de casas no estúdio 2D.
-- Adicionar opção de salvar templates de cômodos frequentes (ex: banheiro padrão 1.5x2.5m).
+- Implementar anotações, layouts A4/A3 e impressão em escala como próximos incrementos separados da Issue #132.
+- Ampliar a importação DXF real com arcos, bulges, blocos, unidades, relatório de importação e testes com arquivos reais (Issue #133).
+- Corrigir as vulnerabilidades apontadas pelo job `dependency-audit` sem misturar essa atualização às funcionalidades CAD.
+- Confirmar o recebimento de Web Push no Android após reabrir o PWA; no Chrome o usuário confirmou recebimento. E-mail e SMS permanecem adiados por decisão de escopo.
 - Regenerar `src/integrations/supabase/types.ts` a partir do schema publicado com o Supabase CLI quando disponível.
 
 
 
+
+
+## Atualização 30/10/2026 — orçamento analítico e proposta integrada (Issue #197)
+
+- Backup recuperável anterior à implementação: `backups/issue-197/pre-implementation-2026-10-29.zip` (SHA-256 `61F9CE3ED20E4515A65EBE941D1105FE27B35BE23D15A7A2463BB77343E2410E`).
+- Migração `20261030000000_orcamento_analitico.sql` aplicada no Supabase de produção e verificada: etapas, atividades, insumos/consumos, memoriais, revisões, auditoria e colunas de BDI/ativação analítica presentes.
+- `/orcamentos` passa a usar a grade analítica persistente: edição de nome, quantidade e BDI; memorial em linhas; composição por insumos; custo derivado; totais e detalhamento por categoria.
+- Orçamentos legados são adaptados para a estrutura analítica ao primeiro carregamento, preservando o fluxo existente.
+- Proposta comercial possui configuração versionada e fotografia ligada à revisão, com dados internos ocultos por padrão.
+- A preparação da importação SINAPI permanece em staging; o cron de produção não foi ativado até validação administrativa da primeira competência e definição do segredo operacional.
+- Validação: 28 testes automatizados aprovados e build de produção aprovado.
