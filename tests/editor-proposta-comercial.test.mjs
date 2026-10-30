@@ -100,3 +100,4 @@ test('modo apenas etapa omite atividades da visualizacao', () => {
   const foto = criarFotografiaProposta(revisao, config)
   assert.equal(foto.etapas[0].atividades.length, 0)
 })
+

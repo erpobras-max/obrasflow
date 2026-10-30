@@ -166,13 +166,13 @@ function OrcamentosPage() {
 
       if (error) throw error;
 
-      if (!data && podeEditar) {
+      if (!data) {
         // Auto-create budget entry if it doesn't exist
         const { data: newOrc, error: insertErr } = await supabase
           .from("orcamentos")
-          .insert({ obra_id: selectedObraId, total_estimado: 0 })
+          .insert({ obra_id: selectedObraId, total_estimado: 0, analitico_ativo: true, bdi_geral: 25.00 })
           .select("*")
-          .single();
+          .maybeSingle();
         if (insertErr) throw insertErr;
         data = newOrc;
       }
