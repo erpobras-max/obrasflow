@@ -46,3 +46,4 @@ test('calculo da discriminacao por categoria de custo e preco com BDI', () => {
   assert.equal(pctPrecoEq, 0) // 0% na Foto 3
   assert.equal(pctPrecoOut, 13) // 13% na Foto 3
 })
+

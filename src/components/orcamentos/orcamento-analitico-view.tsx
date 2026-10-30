@@ -15,6 +15,7 @@ import {
   History,
   Layers,
   Sparkles,
+  Database,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
