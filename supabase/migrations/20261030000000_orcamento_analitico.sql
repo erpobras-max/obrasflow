@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS public.orcamento_memoriais (
   atividade_id uuid NOT NULL REFERENCES public.orcamento_atividades(id) ON DELETE CASCADE,
   descricao text NOT NULL,
   formula text NOT NULL,
-  resultado numeric(18,6) NOT NULL CHECK (resultado >= 0),
+  resultado numeric(18,6) NOT NULL,
   ordem integer NOT NULL DEFAULT 0 CHECK (ordem >= 0),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()

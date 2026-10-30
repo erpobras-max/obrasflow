@@ -59,6 +59,10 @@ test('schema analítico valida valores, hierarquia, publicação e revisão acei
       "INSERT INTO orcamento_atividades(etapa_id,descricao,unidade,quantidade) VALUES ($1,'Concreto','m3',2) RETURNING id",
       [etapa],
     )).rows[0].id;
+    await db.query(
+      "INSERT INTO orcamento_memoriais(atividade_id,descricao,formula,resultado) VALUES ($1,'Desconto de vão','-1,20',-1.2)",
+      [atividade],
+    );
     await assert.rejects(db.query(
       "INSERT INTO orcamento_atividade_insumos(atividade_id,descricao,unidade,categoria,coeficiente,preco_unitario_centavos) VALUES ($1,'Cimento','kg','material',-1,100)",
       [atividade],
