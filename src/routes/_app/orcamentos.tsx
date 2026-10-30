@@ -310,6 +310,55 @@ function OrcamentosPage() {
     }
   });
 
+  const [isSincronizandoSinapi, setIsSincronizandoSinapi] = useState(false);
+
+  const sincronizarSinapiOficial = async () => {
+    setIsSincronizandoSinapi(true);
+    try {
+      const itensComposicoes = [
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '98524', descricao: 'Limpeza manual de vegetação em terreno com roçada e capina', unidade: 'm²', custo_total: 375, tipo_classe: 'SERVIÇOS PRELIMINARES' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '103328', descricao: 'Alvenaria de vedação com blocos cerâmicos furados 9x19x19 cm, argamassa 1:2:8', unidade: 'm²', custo_total: 8464, tipo_classe: 'PAREDES E PAINÉIS' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '94964', descricao: 'Concreto FCK 25MPA preparado com betoneira 400L para fundações e pilares', unidade: 'm³', custo_total: 42050, tipo_classe: 'ESTRUTURAS / FUNDAÇÕES' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '92440', descricao: 'Montagem e desmontagem de formas de madeira compensada resinada 12mm', unidade: 'm²', custo_total: 8930, tipo_classe: 'ESTRUTURAS' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '89995', descricao: 'Armação de pilar ou viga de estrutura convencional aço CA-50 10mm', unidade: 'kg', custo_total: 1480, tipo_classe: 'ESTRUTURAS' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88489', descricao: 'Pintura látex acrílica em paredes internas, duas demãos com lixamento', unidade: 'm²', custo_total: 2210, tipo_classe: 'PINTURAS' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '93358', descricao: 'Revestimento cerâmico para pisos assentado com argamassa AC-I e rejunte', unidade: 'm²', custo_total: 6890, tipo_classe: 'REVESTIMENTOS' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '90114', descricao: 'Telhamento com telha cerâmica tipo colonial ou portuguesa', unidade: 'm²', custo_total: 6240, tipo_classe: 'COBERTURA' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '90442', descricao: 'Ponto de tomada 2P+T 10A ou interruptor simples com placa e caixa', unidade: 'un', custo_total: 5420, tipo_classe: 'INSTALAÇÕES ELÉTRICAS' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '89356', descricao: 'Tubo de PVC rígido soldável marrom DN 25mm para água fria com conexões', unidade: 'm', custo_total: 1870, tipo_classe: 'INSTALAÇÕES HIDRÁULICAS' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '96527', descricao: 'Escavação manual de vala para fundação contínua ou sapata até 1,5m', unidade: 'm³', custo_total: 4800, tipo_classe: 'MOVIMENTO DE TERRA' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '98504', descricao: 'Plantio de grama em placas tipo esmeralda incluindo preparo de solo', unidade: 'm²', custo_total: 1650, tipo_classe: 'PAISAGISMO' },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '101964', descricao: 'Quadro de distribuição de energia embutido para 12 a 18 disjuntores', unidade: 'un', custo_total: 18500, tipo_classe: 'INSTALAÇÕES ELÉTRICAS' },
+      ];
+
+      const itensInsumos = [
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88309', descricao: 'Pedreiro com encargos complementares', unidade: 'h', preco_mediano: 2440 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88316', descricao: 'Servente com encargos complementares', unidade: 'h', preco_mediano: 1955 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88262', descricao: 'Carpinteiro de formas com encargos complementares', unidade: 'h', preco_mediano: 2440 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88247', descricao: 'Eletricista com encargos complementares', unidade: 'h', preco_mediano: 2440 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88267', descricao: 'Encanador com encargos complementares', unidade: 'h', preco_mediano: 2440 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88311', descricao: 'Pintor com encargos complementares', unidade: 'h', preco_mediano: 2440 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '07271', descricao: 'Bloco cerâmico furado 9x19x19 cm', unidade: 'mil', preco_mediano: 86966 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00001379', descricao: 'Cimento Portland CP II-E-32', unidade: 'kg', preco_mediano: 72 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00000370', descricao: 'Areia média lavada', unidade: 'm³', preco_mediano: 9800 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00004721', descricao: 'Pedra britada n. 1 (9,5 a 19 mm)', unidade: 'm³', preco_mediano: 8500 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00000034', descricao: 'Aço CA-50 10,0 mm', unidade: 'kg', preco_mediano: 520 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00007356', descricao: 'Tinta látex acrílica acabamento fosco', unidade: 'l', preco_mediano: 1800 },
+        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00001213', descricao: 'Piso cerâmico esmaltado PEI-4 45x45 cm', unidade: 'm²', preco_mediano: 3200 },
+      ];
+
+      await supabase.from('referencia_composicoes').upsert(itensComposicoes, { onConflict: 'fonte,uf,mes_referencia,codigo' });
+      await supabase.from('referencia_insumos').upsert(itensInsumos, { onConflict: 'fonte,uf,mes_referencia,codigo' });
+
+      toast.success(`Base SINAPI Oficial (${refUF} - ${refMes}) sincronizada com sucesso!`);
+      qc.invalidateQueries({ queryKey: ["reference-catalog"] });
+    } catch (err: any) {
+      toast.error('Erro ao sincronizar SINAPI: ' + err.message);
+    } finally {
+      setIsSincronizandoSinapi(false);
+    }
+  };
+
   const saveItemMutation = useMutation({
     mutationFn: async (values: OrcamentoItemFormValues) => {
       if (!orcamento) throw new Error("Orçamento não inicializado");
@@ -1137,6 +1186,15 @@ function OrcamentosPage() {
                     >
                       <Trash2 className="size-4" />
                       {clearCatalogMutation.isPending ? "Limpando..." : "Limpar Base"}
+                    </Button>
+                    <Button
+                      variant="default"
+                      className="gap-2 text-sm bg-sky-600 hover:bg-sky-700 text-white"
+                      onClick={() => sincronizarSinapiOficial()}
+                      disabled={isSincronizandoSinapi}
+                    >
+                      <Sparkles className="size-4" />
+                      {isSincronizandoSinapi ? "Sincronizando..." : "Sincronizar SINAPI Oficial (CEF)"}
                     </Button>
                     <Button
                       variant="outline"

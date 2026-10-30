@@ -9,6 +9,7 @@ import {
   Settings2,
   Plus,
   Trash2,
+  Pencil,
   Download,
   Copy,
   History,
@@ -102,6 +103,11 @@ export function OrcamentoAnaliticoView({
   // Formulário de Nova Etapa
   const [novoCodigoEtapa, setNovoCodigoEtapa] = useState('')
   const [novoNomeEtapa, setNovoNomeEtapa] = useState('')
+
+  // Estados para Edição de Etapa
+  const [etapaEmEdicao, setEtapaEmEdicao] = useState<Etapa | null>(null)
+  const [editCodigoEtapa, setEditCodigoEtapa] = useState('')
+  const [editNomeEtapa, setEditNomeEtapa] = useState('')
 
   // Formulário de Nova Atividade
   const [novaDescricaoAtividade, setNovaDescricaoAtividade] = useState('')
@@ -334,6 +340,54 @@ export function OrcamentoAnaliticoView({
     setBdiGeral(v)
     const r = await supabase.from('orcamentos').update({ bdi_geral: v }).eq('id', orcamentoId)
     r.error ? toast.error(r.error.message) : toast.success('BDI salvo com sucesso')
+  }
+
+  // Excluir Etapa
+  async function excluirEtapa(etapaId: string) {
+    const etapa = etapas.find((e) => e.id === etapaId)
+    if (!etapa) return
+    const msg = etapa.atividades.length > 0
+      ? `Deseja realmente excluir a etapa "${etapa.nome}" e todas as suas ${etapa.atividades.length} atividades vinculadas? Esta ação é irreversível.`
+      : `Deseja excluir a etapa "${etapa.nome}"?`
+    if (!confirm(msg)) return
+
+    const atvIds = etapa.atividades.map((a) => a.id)
+    if (atvIds.length > 0) {
+      await supabase.from('orcamento_memoriais').delete().in('atividade_id', atvIds)
+      await supabase.from('orcamento_atividade_insumos').delete().in('atividade_id', atvIds)
+      await supabase.from('orcamento_atividades').delete().in('id', atvIds)
+    }
+    const { error } = await supabase.from('orcamento_etapas').delete().eq('id', etapaId)
+    if (error) return toast.error(error.message)
+
+    setEtapas((prev) => prev.filter((e) => e.id !== etapaId))
+    toast.success('Etapa excluída com sucesso')
+  }
+
+  // Salvar Edição de Etapa
+  async function salvarEdicaoEtapa() {
+    if (!etapaEmEdicao) return
+    if (!editNomeEtapa.trim()) return toast.error('O nome da etapa é obrigatório.')
+
+    const { error } = await supabase
+      .from('orcamento_etapas')
+      .update({
+        codigo: editCodigoEtapa.trim(),
+        nome: editNomeEtapa.trim(),
+      })
+      .eq('id', etapaEmEdicao.id)
+
+    if (error) return toast.error(error.message)
+
+    setEtapas((prev) =>
+      prev.map((e) =>
+        e.id === etapaEmEdicao.id
+          ? { ...e, codigo: editCodigoEtapa.trim(), nome: editNomeEtapa.trim() }
+          : e
+      )
+    )
+    toast.success('Etapa atualizada com sucesso')
+    setEtapaEmEdicao(null)
   }
 
   // Criar Etapa
@@ -753,16 +807,40 @@ export function OrcamentoAnaliticoView({
                       <td className="py-3 px-4 text-right tabular-nums text-slate-900 font-bold">
                         {brl(valoresEtapa.p)}
                       </td>
-                      <td className="py-3 px-2 text-center">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-[11px] text-sky-700 hover:text-sky-900 hover:bg-sky-50 h-7 px-2"
-                          onClick={() => setNovaAtividadeEtapaId(etapa.id)}
-                          title="Adicionar atividade nesta etapa"
-                        >
-                          + Ativ.
-                        </Button>
+                      <td className="py-3 px-2 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="text-[11px] text-sky-700 hover:text-sky-900 hover:bg-sky-50 h-7 px-2 font-medium"
+                            onClick={() => setNovaAtividadeEtapaId(etapa.id)}
+                            title="Adicionar atividade nesta etapa"
+                          >
+                            + Ativ.
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7 text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                            onClick={() => {
+                              setEtapaEmEdicao(etapa)
+                              setEditCodigoEtapa(etapa.codigo)
+                              setEditNomeEtapa(etapa.nome)
+                            }}
+                            title="Editar código e nome da etapa"
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-7 text-slate-400 hover:text-rose-600 hover:bg-rose-50"
+                            onClick={() => void excluirEtapa(etapa.id)}
+                            title="Excluir etapa e atividades"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
 
@@ -939,6 +1017,45 @@ export function OrcamentoAnaliticoView({
         etapas={etapas.map((e) => ({ id: e.id, codigo: e.codigo, nome: e.nome }))}
         onInserir={(comp, etapaId) => void inserirComposicaoDoCatalogo(comp, etapaId)}
       />
+
+      {/* Modal Editar Etapa */}
+      <Dialog open={!!etapaEmEdicao} onOpenChange={(v) => !v && setEtapaEmEdicao(null)}>
+        <DialogContent className="max-w-md bg-white text-slate-900 border border-slate-200">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-slate-900">
+              Editar Etapa do Orçamento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">Código da Etapa:</label>
+              <Input
+                value={editCodigoEtapa}
+                onChange={(e) => setEditCodigoEtapa(e.target.value)}
+                placeholder="Ex: 01, 02..."
+                className="h-8 text-xs bg-white text-slate-900 border-slate-300"
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-slate-600 mb-1">Nome da Etapa:</label>
+              <Input
+                value={editNomeEtapa}
+                onChange={(e) => setEditNomeEtapa(e.target.value)}
+                placeholder="Ex: SERVIÇOS PRELIMINARES"
+                className="h-8 text-xs bg-white text-slate-900 border-slate-300"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEtapaEmEdicao(null)}>
+              Cancelar
+            </Button>
+            <Button size="sm" onClick={salvarEdicaoEtapa} className="bg-sky-600 hover:bg-sky-700 text-white">
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal Nova Etapa */}
       <Dialog open={novaEtapaOpen} onOpenChange={setNovaEtapaOpen}>
