@@ -59,7 +59,8 @@ async function criarBancoLegado() {
       descricao text NOT NULL,
       etapa_cronograma text,
       unidade_medida text NOT NULL DEFAULT 'un',
-      quantidade_total numeric(14,3) NOT NULL DEFAULT 1,
+      quantidade_total numeric(14,3) DEFAULT 1,
+      quantidade numeric(14,3) DEFAULT 1,
       valor_unitario numeric(14,2) NOT NULL DEFAULT 0,
       valor_total numeric(14,2) NOT NULL DEFAULT 0,
       status text NOT NULL DEFAULT 'rascunho',
@@ -246,4 +247,120 @@ test('rollback documentado permite reverter e reaplicar a migration em banco ef�
   // Re-aplica migration com sucesso
   await db.exec(migrationSql);
   assert.equal(Number((await db.query('SELECT COUNT(*) FROM contratos_empreiteiros')).rows[0].count), 0);
+});
+
+
+test('edição de contrato de empreiteiro e atualização de escopo', async () => {
+  const db = await criarBancoLegado();
+  const migrationSql = await read('supabase/migrations/20261031000000_contratos_empreiteiros.sql');
+  await db.exec(migrationSql);
+  await db.exec("SELECT set_config('request.jwt.claim.role','admin',false)");
+
+  const obraId = (await db.query("INSERT INTO obras(nome) VALUES ('Obra Edição') RETURNING id")).rows[0].id;
+  const fornecedorId = (await db.query("INSERT INTO fornecedores(razao_social) VALUES ('Empreiteiro Edição') RETURNING id")).rows[0].id;
+
+  // 1. Criar contrato
+  const contratoId = (await db.query(`
+    INSERT INTO contratos_empreiteiros (numero, obra_id, fornecedor_id, tipo, objeto, status, valor_total_original_centavos, valor_total_atual_centavos)
+    VALUES ('CTE-2026-0099', $1, $2, 'preco_unitario', 'Instalações Elétricas', 'rascunho', 100000, 100000)
+    RETURNING id
+  `, [obraId, fornecedorId])).rows[0].id;
+
+  const item1Id = (await db.query(`
+    INSERT INTO servicos_terceirizados (contrato_empreiteiro_id, obra_id, fornecedor_id, descricao, quantidade, valor_unitario, valor_total, preco_unitario_centavos, preco_total_centavos, status)
+    VALUES ($1, $2, $3, 'Fiação 2.5mm', 100, 10.00, 1000.00, 1000, 100000, 'aprovado')
+    RETURNING id
+  `, [contratoId, obraId, fornecedorId])).rows[0].id;
+
+  // 2. Editar contrato (objeto, status, retenção, e valores)
+  await db.query(`
+    UPDATE contratos_empreiteiros
+    SET objeto = 'Instalações Elétricas e Lógica',
+        status = 'ativo',
+        retencao_padrao_percentual = 5.0,
+        valor_total_atual_centavos = 250000,
+        updated_at = now()
+    WHERE id = $1
+  `, [contratoId]);
+
+  // Atualiza item existente e adiciona um novo item
+  await db.query(`
+    UPDATE servicos_terceirizados
+    SET quantidade = 150, preco_total_centavos = 150000
+    WHERE id = $1
+  `, [item1Id]);
+
+  const item2Id = (await db.query(`
+    INSERT INTO servicos_terceirizados (contrato_empreiteiro_id, obra_id, fornecedor_id, descricao, quantidade, valor_unitario, valor_total, preco_unitario_centavos, preco_total_centavos, status)
+    VALUES ($1, $2, $3, 'Quadros de Distribuição', 2, 500.00, 1000.00, 50000, 100000, 'aprovado')
+    RETURNING id
+  `, [contratoId, obraId, fornecedorId])).rows[0].id;
+
+  // Verifica dados atualizados
+  const cAtualizado = (await db.query('SELECT * FROM contratos_empreiteiros WHERE id = $1', [contratoId])).rows[0];
+  assert.equal(cAtualizado.objeto, 'Instalações Elétricas e Lógica');
+  assert.equal(cAtualizado.status, 'ativo');
+  assert.equal(Number(cAtualizado.retencao_padrao_percentual), 5.0);
+  assert.equal(Number(cAtualizado.valor_total_atual_centavos), 250000);
+
+  const itens = (await db.query('SELECT * FROM servicos_terceirizados WHERE contrato_empreiteiro_id = $1 ORDER BY id', [contratoId])).rows;
+  assert.equal(itens.length, 2);
+});
+
+test('exclusão com sucesso de contrato sem medições aprovadas e bloqueio de contrato com medição aprovada', async () => {
+  const db = await criarBancoLegado();
+  const migrationSql = await read('supabase/migrations/20261031000000_contratos_empreiteiros.sql');
+  await db.exec(migrationSql);
+  await db.exec("SELECT set_config('request.jwt.claim.role','admin',false)");
+
+  const obraId = (await db.query("INSERT INTO obras(nome) VALUES ('Obra Exclusao') RETURNING id")).rows[0].id;
+  const fornecedorId = (await db.query("INSERT INTO fornecedores(razao_social) VALUES ('Empreiteiro Exclusao') RETURNING id")).rows[0].id;
+
+  // A. Contrato sem medições aprovadas -> pode ser excluído
+  const c1Id = (await db.query(`
+    INSERT INTO contratos_empreiteiros (numero, obra_id, fornecedor_id, objeto, status)
+    VALUES ('CTE-2026-0001', $1, $2, 'Contrato Temporário', 'rascunho')
+    RETURNING id
+  `, [obraId, fornecedorId])).rows[0].id;
+
+  await db.query(`
+    INSERT INTO servicos_terceirizados (contrato_empreiteiro_id, obra_id, fornecedor_id, descricao, quantidade, valor_unitario, valor_total, preco_unitario_centavos, preco_total_centavos)
+    VALUES ($1, $2, $3, 'Demolição', 10, 100, 1000, 10000, 100000)
+  `, [c1Id, obraId, fornecedorId]);
+
+  // Medição apenas em rascunho
+  const mRascunhoId = (await db.query(`
+    INSERT INTO medicoes_empreiteiros (contrato_empreiteiro_id, numero, status)
+    VALUES ($1, 1, 'rascunho')
+    RETURNING id
+  `, [c1Id])).rows[0].id;
+
+  // Exclusão segura em cascata do contrato sem medições aprovadas
+  await db.query('DELETE FROM medicoes_empreiteiros WHERE id = $1', [mRascunhoId]);
+  await db.query('DELETE FROM servicos_terceirizados WHERE contrato_empreiteiro_id = $1', [c1Id]);
+  await db.query('DELETE FROM contratos_empreiteiros WHERE id = $1', [c1Id]);
+
+  const countC1 = (await db.query('SELECT COUNT(*) FROM contratos_empreiteiros WHERE id = $1', [c1Id])).rows[0].count;
+  assert.equal(Number(countC1), 0, 'Contrato sem medição aprovada deve ser excluído');
+
+  // B. Contrato com medição aprovada -> foreign key / regra de integridade bloqueia exclusão
+  const c2Id = (await db.query(`
+    INSERT INTO contratos_empreiteiros (numero, obra_id, fornecedor_id, objeto, status)
+    VALUES ('CTE-2026-0002', $1, $2, 'Contrato Ativo com Medição', 'ativo')
+    RETURNING id
+  `, [obraId, fornecedorId])).rows[0].id;
+
+  await db.query(`
+    INSERT INTO medicoes_empreiteiros (contrato_empreiteiro_id, numero, status)
+    VALUES ($1, 1, 'aprovada')
+  `, [c2Id]);
+
+  // Tentativa de exclusão direta do contrato com medição aprovada deve falhar por constraint ON DELETE RESTRICT
+  await assert.rejects(
+    async () => {
+      await db.query('DELETE FROM contratos_empreiteiros WHERE id = $1', [c2Id]);
+    },
+    /violates foreign key constraint|restrict/i,
+    'Exclusão de contrato com medições aprovadas deve ser estritamente bloqueada'
+  );
 });

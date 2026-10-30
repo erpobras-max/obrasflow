@@ -22,6 +22,17 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { ContratoEditorDialog } from "./contrato-editor-dialog";
 import { ContratoStatusBadge, MedicaoStatusBadge } from "./contrato-status-badge";
 import { AditivoDialog } from "./aditivo-dialog";
 import { RetencoesDialog } from "./retencoes-dialog";

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,26 +18,38 @@ import {
   FileSpreadsheet,
   Loader2,
   HardHat,
+  Pencil,
 } from "lucide-react";
 import { ImportarOrcamentoDialog } from "./importar-orcamento-dialog";
 import { ImportarExcelDialog } from "./importar-excel-dialog";
-import { criarContratoComItens } from "@/lib/contratos-empreiteiros.functions";
+import {
+  criarContratoComItens,
+  atualizarContratoEmpreiteiro,
+  extrairUnidadeItem,
+} from "@/lib/contratos-empreiteiros.functions";
 import type { ContratoItem } from "@/lib/contratos-empreiteiros.schema";
 
 interface ContratoEditorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onContratoCriado: (contratoId: string) => void;
+  onContratoCriado?: (contratoId: string) => void;
+  onContratoSalvo?: (contratoId: string) => void;
+  contratoParaEditar?: any | null;
 }
 
 export function ContratoEditorDialog({
   open,
   onOpenChange,
   onContratoCriado,
+  onContratoSalvo,
+  contratoParaEditar,
 }: ContratoEditorDialogProps) {
+  const isEditing = Boolean(contratoParaEditar?.id);
+
   const [obraId, setObraId] = useState("");
   const [fornecedorId, setFornecedorId] = useState("");
   const [tipo, setTipo] = useState<"preco_unitario" | "empreitada_global">("preco_unitario");
+  const [status, setStatus] = useState<"rascunho" | "em_aprovacao" | "ativo" | "concluido" | "cancelado">("ativo");
   const [objeto, setObjeto] = useState("");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFimPrevista, setDataFimPrevista] = useState("");
@@ -50,6 +62,78 @@ export function ContratoEditorDialog({
 
   const [openImportarOrcamento, setOpenImportarOrcamento] = useState(false);
   const [openImportarExcel, setOpenImportarExcel] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      if (contratoParaEditar) {
+        setObraId(contratoParaEditar.obra_id || "");
+        setFornecedorId(contratoParaEditar.fornecedor_id || "");
+        setTipo(contratoParaEditar.tipo || "preco_unitario");
+        setStatus(contratoParaEditar.status || "ativo");
+        setObjeto(contratoParaEditar.objeto || "");
+        setDataInicio(contratoParaEditar.data_inicio || "");
+        setDataFimPrevista(contratoParaEditar.data_fim_prevista || "");
+        setRetencaoPadraoPercentual(String(contratoParaEditar.retencao_padrao_percentual || "0"));
+        setAdiantamentoPrevistoBRL(
+          contratoParaEditar.adiantamento_previsto_centavos
+            ? (Number(contratoParaEditar.adiantamento_previsto_centavos) / 100).toFixed(2).replace(".", ",")
+            : ""
+        );
+        setObservacoes(contratoParaEditar.observacoes || "");
+
+        if (contratoParaEditar.itens && contratoParaEditar.itens.length > 0) {
+          setItens(
+            contratoParaEditar.itens.map((it: any, idx: number) => ({
+              id: it.id,
+              codigo: it.codigo || null,
+              descricao: it.descricao,
+              unidade: it.unidade || "un",
+              etapa: it.etapa || "Geral",
+              quantidadeContratada: Number(it.quantidadeContratada || it.quantidade || 1),
+              precoUnitarioCentavos: Number(it.precoUnitarioCentavos || it.preco_unitario_centavos || 0),
+              origemTipo: it.origemTipo || "manual",
+              ordem: it.ordem ?? idx,
+            }))
+          );
+        } else if (contratoParaEditar.id) {
+          supabase
+            .from("servicos_terceirizados")
+            .select("*")
+            .eq("contrato_empreiteiro_id", contratoParaEditar.id)
+            .order("ordem", { ascending: true })
+            .then(({ data: servicos }) => {
+              if (servicos) {
+                setItens(
+                  servicos.map((s: any, idx: number) => ({
+                    id: s.id,
+                    codigo: s.codigo || null,
+                    descricao: s.descricao,
+                    unidade: extrairUnidadeItem(s),
+                    etapa: s.etapa || "Geral",
+                    quantidadeContratada: Number(s.quantidade || 1),
+                    precoUnitarioCentavos: Number(s.preco_unitario_centavos || s.valor_unitario || 0),
+                    origemTipo: "manual",
+                    ordem: s.ordem ?? idx,
+                  }))
+                );
+              }
+            });
+        }
+      } else {
+        setObraId("");
+        setFornecedorId("");
+        setTipo("preco_unitario");
+        setStatus("ativo");
+        setObjeto("");
+        setDataInicio("");
+        setDataFimPrevista("");
+        setRetencaoPadraoPercentual("0");
+        setAdiantamentoPrevistoBRL("");
+        setObservacoes("");
+        setItens([]);
+      }
+    }
+  }, [open, contratoParaEditar]);
 
   // Buscar obras
   const { data: obras = [] } = useQuery({
@@ -151,24 +235,46 @@ export function ContratoEditorDialog({
       const adiantamentoCentavos = Math.round((parseFloat(adiantamentoLimpo) || 0) * 100);
       const retencaoPct = parseFloat(retencaoPadraoPercentual.replace(",", ".")) || 0;
 
-      const novoContrato = await criarContratoComItens({
-        obraId,
-        fornecedorId,
-        tipo,
-        objeto: objeto.trim(),
-        dataInicio: dataInicio || null,
-        dataFimPrevista: dataFimPrevista || null,
-        retencaoPadraoPercentual: retencaoPct,
-        adiantamentoPrevistoCentavos: adiantamentoCentavos,
-        observacoes: observacoes.trim() || null,
-        itens,
-      });
+      if (isEditing && contratoParaEditar?.id) {
+        await atualizarContratoEmpreiteiro({
+          id: contratoParaEditar.id,
+          obraId,
+          fornecedorId,
+          tipo,
+          status,
+          objeto: objeto.trim(),
+          dataInicio: dataInicio || null,
+          dataFimPrevista: dataFimPrevista || null,
+          retencaoPadraoPercentual: retencaoPct,
+          adiantamentoPrevistoCentavos: adiantamentoCentavos,
+          observacoes: observacoes.trim() || null,
+          itens,
+        });
 
-      toast.success(`Contrato nº ${novoContrato.numero} criado com sucesso!`);
-      onContratoCriado(novoContrato.id);
-      onOpenChange(false);
+        toast.success(`Contrato nº ${contratoParaEditar.numero || ""} atualizado com sucesso!`);
+        onContratoSalvo?.(contratoParaEditar.id);
+        onOpenChange(false);
+      } else {
+        const novoContrato = await criarContratoComItens({
+          obraId,
+          fornecedorId,
+          tipo,
+          objeto: objeto.trim(),
+          dataInicio: dataInicio || null,
+          dataFimPrevista: dataFimPrevista || null,
+          retencaoPadraoPercentual: retencaoPct,
+          adiantamentoPrevistoCentavos: adiantamentoCentavos,
+          observacoes: observacoes.trim() || null,
+          itens,
+        });
+
+        toast.success(`Contrato nº ${novoContrato.numero} criado com sucesso!`);
+        onContratoCriado?.(novoContrato.id);
+        onContratoSalvo?.(novoContrato.id);
+        onOpenChange(false);
+      }
     } catch (err: any) {
-      toast.error(`Falha ao criar contrato: ${err.message}`);
+      toast.error(`Falha ao salvar contrato: ${err.message}`);
     } finally {
       setSalvando(false);
     }
@@ -180,16 +286,27 @@ export function ContratoEditorDialog({
         <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-lg">
-              <FileText className="h-5 w-5 text-blue-600" />
-              Novo Contrato de Empreiteiro
+              {isEditing ? (
+                <>
+                  <Pencil className="h-5 w-5 text-indigo-600" />
+                  Editar Contrato {contratoParaEditar?.numero ? `nº ${contratoParaEditar.numero}` : ""}
+                </>
+              ) : (
+                <>
+                  <FileText className="h-5 w-5 text-blue-600" />
+                  Novo Contrato de Empreiteiro
+                </>
+              )}
             </DialogTitle>
             <DialogDescription>
-              Cadastre o contrato de prestação de serviços com itens negociados, valores e regras de retenção técnica.
+              {isEditing
+                ? "Atualize os dados cadastrais, prazos, retenções ou a planilha de itens e escopo deste contrato."
+                : "Cadastre o contrato de prestação de serviços com itens negociados, valores e regras de retenção técnica."}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col gap-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className={`grid grid-cols-1 ${isEditing ? "md:grid-cols-4" : "md:grid-cols-3"} gap-3`}>
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Obra *</Label>
                 <Select value={obraId} onValueChange={setObraId} required>
@@ -234,6 +351,24 @@ export function ContratoEditorDialog({
                   </SelectContent>
                 </Select>
               </div>
+
+              {isEditing && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium">Status do Contrato</Label>
+                  <Select value={status} onValueChange={(v: any) => setStatus(v)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rascunho">Rascunho</SelectItem>
+                      <SelectItem value="em_aprovacao">Em Aprovação</SelectItem>
+                      <SelectItem value="ativo">Ativo</SelectItem>
+                      <SelectItem value="concluido">Concluído</SelectItem>
+                      <SelectItem value="cancelado">Cancelado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1.5">
@@ -451,8 +586,10 @@ export function ContratoEditorDialog({
                 {salvando ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Criando Contrato...
+                    {isEditing ? "Salvando Alterações..." : "Criando Contrato..."}
                   </>
+                ) : isEditing ? (
+                  "Salvar Alterações"
                 ) : (
                   "Salvar e Ativar Contrato"
                 )}
@@ -477,4 +614,3 @@ export function ContratoEditorDialog({
     </>
   );
 }
-

@@ -499,3 +499,259 @@ export async function liberarRetencaoEmpreiteiroRPC(
   return data;
 }
 
+
+export interface AtualizarContratoParams {
+  id: string;
+  obraId?: string;
+  fornecedorId?: string;
+  tipo?: "preco_unitario" | "empreitada_global";
+  objeto?: string;
+  status?: "rascunho" | "em_aprovacao" | "ativo" | "concluido" | "cancelado";
+  dataInicio?: string | null;
+  dataFimPrevista?: string | null;
+  retencaoPadraoPercentual?: number;
+  adiantamentoPrevistoCentavos?: number;
+  observacoes?: string | null;
+  itens?: ContratoItem[];
+}
+
+/**
+ * Atualiza um contrato de empreiteiro existente e gerencia seus itens de escopo.
+ */
+export async function atualizarContratoEmpreiteiro(params: AtualizarContratoParams) {
+  // 1. Obter contrato atual
+  const { data: contratoAtual, error: errBusca } = await supabase
+    .from("contratos_empreiteiros")
+    .select("id, numero, obra_id, fornecedor_id, valor_total_aditivos_centavos")
+    .eq("id", params.id)
+    .single();
+
+  if (errBusca || !contratoAtual) {
+    throw new Error("Contrato não encontrado para edição.");
+  }
+
+  // 2. Se obra_id ou fornecedor_id estiverem sendo alterados, verificar se existem medições aprovadas
+  if (
+    (params.obraId && params.obraId !== contratoAtual.obra_id) ||
+    (params.fornecedorId && params.fornecedorId !== contratoAtual.fornecedor_id)
+  ) {
+    const { data: medicoesAprovadas } = await supabase
+      .from("medicoes_empreiteiros")
+      .select("id")
+      .eq("contrato_empreiteiro_id", params.id)
+      .in("status", ["aprovada", "paga"]);
+
+    if (medicoesAprovadas && medicoesAprovadas.length > 0) {
+      throw new Error(
+        "Não é possível alterar a obra ou o empreiteiro deste contrato pois ele já possui medições aprovadas."
+      );
+    }
+  }
+
+  // 3. Gerenciar itens do contrato caso informados
+  let valorTotalOriginal: number | undefined;
+  let valorTotalAtual: number | undefined;
+
+  const finalObraId = params.obraId || contratoAtual.obra_id;
+  const finalFornecedorId = params.fornecedorId || contratoAtual.fornecedor_id;
+
+  if (params.itens) {
+    // Calcular novo valor total
+    valorTotalOriginal = params.itens.reduce((acc, item) => {
+      return acc + Math.round(item.quantidadeContratada * item.precoUnitarioCentavos);
+    }, 0);
+
+    const valorAditivos = Number(contratoAtual.valor_total_aditivos_centavos || 0);
+    valorTotalAtual = valorTotalOriginal + valorAditivos;
+
+    // Buscar itens atuais salvos em servicos_terceirizados
+    const { data: itensAtuais, error: errItensAtuais } = await supabase
+      .from("servicos_terceirizados")
+      .select("id, descricao")
+      .eq("contrato_empreiteiro_id", params.id);
+
+    if (errItensAtuais) throw errItensAtuais;
+
+    const idsAtuais = new Set((itensAtuais || []).map((i) => i.id));
+    const idsEnviados = new Set(
+      params.itens.filter((i) => i.id).map((i) => i.id as string)
+    );
+
+    // Itens que foram excluídos
+    const itensParaRemover = (itensAtuais || []).filter((i) => !idsEnviados.has(i.id));
+
+    if (itensParaRemover.length > 0) {
+      const idsParaRemover = itensParaRemover.map((i) => i.id);
+
+      // Verificar se algum item removido possui medição aprovada
+      const { data: medicoesItens } = await supabase
+        .from("medicoes_terceirizados")
+        .select("servico_id, status")
+        .in("servico_id", idsParaRemover)
+        .in("status", ["aprovada", "paga", "financeiro_gerado"]);
+
+      if (medicoesItens && medicoesItens.length > 0) {
+        const itemComMedicao = itensParaRemover.find((it) =>
+          medicoesItens.some((m) => m.servico_id === it.id)
+        );
+        throw new Error(
+          `O item "${itemComMedicao?.descricao || "selecionado"}" não pode ser excluído pois já possui medições aprovadas.`
+        );
+      }
+
+      // Deletar medições rascunho vinculadas a esses itens removidos
+      await supabase
+        .from("medicoes_terceirizados")
+        .delete()
+        .in("servico_id", idsParaRemover);
+
+      // Deletar itens
+      const { error: errDelItens } = await supabase
+        .from("servicos_terceirizados")
+        .delete()
+        .in("id", idsParaRemover);
+
+      if (errDelItens) throw errDelItens;
+    }
+
+    // Atualizar itens existentes ou inserir novos
+    for (let idx = 0; idx < params.itens.length; idx++) {
+      const item = params.itens[idx];
+      const payloadItem = {
+        contrato_empreiteiro_id: params.id,
+        obra_id: finalObraId,
+        fornecedor_id: finalFornecedorId,
+        tipo_servico: item.etapa || item.descricao || "Geral",
+        descricao: item.descricao,
+        quantidade: item.quantidadeContratada,
+        valor_unitario: Math.max(1, Math.round(item.precoUnitarioCentavos)),
+        valor_total: Math.max(1, Math.round(item.quantidadeContratada * item.precoUnitarioCentavos)),
+        preco_unitario_centavos: item.precoUnitarioCentavos,
+        preco_total_centavos: Math.round(item.quantidadeContratada * item.precoUnitarioCentavos),
+        codigo: item.codigo || null,
+        etapa: item.etapa || "Geral",
+        origem: `unidade:${item.unidade || "un"}|origem:${item.origemTipo || "manual"}`,
+        data_inicio: params.dataInicio || new Date().toISOString().split("T")[0],
+        data_fim: params.dataFimPrevista || null,
+        ordem: idx,
+      };
+
+      if (item.id && idsAtuais.has(item.id)) {
+        // Atualizar item existente
+        const { error: errUpdItem } = await supabase
+          .from("servicos_terceirizados")
+          .update(payloadItem)
+          .eq("id", item.id);
+        if (errUpdItem) throw errUpdItem;
+      } else {
+        // Inserir novo item
+        const { error: errInsItem } = await supabase
+          .from("servicos_terceirizados")
+          .insert({
+            ...payloadItem,
+            status: "aprovado",
+          });
+        if (errInsItem) throw errInsItem;
+      }
+    }
+  }
+
+  // 4. Montar campos para atualizar no cabeçalho
+  const updatePayload: any = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (params.objeto !== undefined) updatePayload.objeto = params.objeto;
+  if (params.tipo !== undefined) updatePayload.tipo = params.tipo;
+  if (params.status !== undefined) updatePayload.status = params.status;
+  if (params.dataInicio !== undefined) updatePayload.data_inicio = params.dataInicio || null;
+  if (params.dataFimPrevista !== undefined) updatePayload.data_fim_prevista = params.dataFimPrevista || null;
+  if (params.retencaoPadraoPercentual !== undefined) updatePayload.retencao_padrao_percentual = params.retencaoPadraoPercentual;
+  if (params.adiantamentoPrevistoCentavos !== undefined) updatePayload.adiantamento_previsto_centavos = params.adiantamentoPrevistoCentavos;
+  if (params.observacoes !== undefined) updatePayload.observacoes = params.observacoes || null;
+  if (params.obraId !== undefined) updatePayload.obra_id = params.obraId;
+  if (params.fornecedorId !== undefined) updatePayload.fornecedor_id = params.fornecedorId;
+  if (valorTotalOriginal !== undefined) {
+    updatePayload.valor_total_original_centavos = valorTotalOriginal;
+    updatePayload.valor_total_atual_centavos = valorTotalAtual;
+  }
+
+  const { data: contratoAtualizado, error: errUpdate } = await supabase
+    .from("contratos_empreiteiros")
+    .update(updatePayload)
+    .eq("id", params.id)
+    .select()
+    .single();
+
+  if (errUpdate) throw errUpdate;
+
+  return contratoAtualizado;
+}
+
+/**
+ * Exclui um contrato de empreiteiro caso não possua medições aprovadas ou contas a pagar vinculadas.
+ */
+export async function excluirContratoEmpreiteiro(contratoId: string) {
+  // 1. Verificar se existem medições aprovadas ou pagas
+  const { data: medicoes, error: errMedicoes } = await supabase
+    .from("medicoes_empreiteiros")
+    .select("id, numero, status")
+    .eq("contrato_empreiteiro_id", contratoId);
+
+  if (errMedicoes) throw errMedicoes;
+
+  const medicoesAprovadas = (medicoes || []).filter(
+    (m) => m.status === "aprovada" || m.status === "paga"
+  );
+
+  if (medicoesAprovadas.length > 0) {
+    throw new Error(
+      `Não é possível excluir este contrato porque ele possui ${medicoesAprovadas.length} medição(ões) aprovada(s) ou paga(s). Para encerrá-lo, cancele as medições previamente ou altere o status do contrato para 'cancelado'.`
+    );
+  }
+
+  // 2. Verificar retenções liberadas
+  const { data: retencoes, error: errRet } = await supabase
+    .from("retencoes_empreiteiros")
+    .select("id, status")
+    .eq("contrato_empreiteiro_id", contratoId);
+
+  if (errRet) throw errRet;
+
+  const retencoesLiberadas = (retencoes || []).filter((r) =>
+    r.status ? r.status.includes("liberada") : false
+  );
+  if (retencoesLiberadas.length > 0) {
+    throw new Error(
+      "Não é possível excluir este contrato porque ele possui retenções técnicas já liberadas no Financeiro."
+    );
+  }
+
+  // 3. Deletar dependências das medições rascunho / canceladas / reprovadas
+  const medicaoIds = (medicoes || []).map((m) => m.id);
+  if (medicaoIds.length > 0) {
+    await supabase.from("medicoes_terceirizados").delete().in("medicao_empreiteiro_id", medicaoIds);
+    await supabase.from("medicao_empreiteiro_ajustes").delete().in("medicao_empreiteiro_id", medicaoIds);
+    await supabase.from("medicao_empreiteiro_anexos").delete().in("medicao_empreiteiro_id", medicaoIds);
+    await supabase.from("medicao_empreiteiro_links").delete().in("medicao_empreiteiro_id", medicaoIds);
+  }
+
+  // 4. Deletar retenções, medições, aditivos e auditoria do contrato
+  await supabase.from("retencoes_empreiteiros").delete().eq("contrato_empreiteiro_id", contratoId);
+  await supabase.from("medicoes_empreiteiros").delete().eq("contrato_empreiteiro_id", contratoId);
+  await supabase.from("contrato_empreiteiro_aditivos").delete().eq("contrato_empreiteiro_id", contratoId);
+  await supabase.from("contrato_empreiteiro_auditoria").delete().eq("contrato_empreiteiro_id", contratoId);
+
+  // 5. Deletar itens do contrato em servicos_terceirizados
+  await supabase.from("servicos_terceirizados").delete().eq("contrato_empreiteiro_id", contratoId);
+
+  // 6. Deletar o cabeçalho do contrato
+  const { error: errDel } = await supabase
+    .from("contratos_empreiteiros")
+    .delete()
+    .eq("id", contratoId);
+
+  if (errDel) throw errDel;
+
+  return { success: true };
+}

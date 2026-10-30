@@ -17,10 +17,31 @@ import {
   ChevronRight,
   Filter,
 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ContratoStatusBadge } from "@/components/contratos-empreiteiros/contrato-status-badge";
 import { ContratoEditorDialog } from "@/components/contratos-empreiteiros/contrato-editor-dialog";
 import { ContratoDetalheView } from "@/components/contratos-empreiteiros/contrato-detalhe-view";
-import { listarContratosEmpreiteiros } from "@/lib/contratos-empreiteiros.functions";
+import {
+  listarContratosEmpreiteiros,
+  excluirContratoEmpreiteiro,
+} from "@/lib/contratos-empreiteiros.functions";
 
 export const Route = createFileRoute("/_app/contratos-empreiteiros")({
   validateSearch: (search: Record<string, unknown>) => ({

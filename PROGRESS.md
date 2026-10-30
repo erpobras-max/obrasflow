@@ -475,3 +475,10 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Atualizada a listagem (`/contratos-empreiteiros`), o detalhe do contrato, o boletim de medição e a impressão de relatório para exibir `nome_fantasia || razao_social` e endereço formatado.
   - Adicionado tratamento de erro (`isError`) e botão de repetição na tabela de contratos.
   - Todos os 109 testes automatizados aprovados e build SSR verificado com sucesso.
+
+- **Edição e Exclusão Segura de Contratos de Empreitada (Branch feat/201-editar-excluir-contrato-empreiteiro)**:
+  - Implementadas as funções `atualizarContratoEmpreiteiro` e `excluirContratoEmpreiteiro` em `src/lib/contratos-empreiteiros.functions.ts`.
+  - Edição completa com o `ContratoEditorDialog`: permite alterar objeto, modalidade, status (`rascunho`, `em_aprovacao`, `ativo`, `concluido`, `cancelado`), datas, percentual de retenção técnica, adiantamento previsto, observações e a planilha de itens/preços negociados.
+  - Exclusão com confirmação visual via `AlertDialog` e validação estrita no servidor: impede a remoção de contratos com medições aprovadas/pagas ou retenções liberadas, protegendo a integridade fiscal e financeira.
+  - Ações de Editar e Excluir disponibilizadas no menu de contexto (`DropdownMenu`) da listagem de contratos (`/contratos-empreiteiros`) e nos botões de cabeçalho na tela de detalhes do contrato (`ContratoDetalheView`).
+  - 111 testes automatizados aprovados e build SSR verificado com sucesso.
