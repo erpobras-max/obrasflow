@@ -51,6 +51,30 @@ test("mapearAtividadesParaItensContrato: calcula custo unitário e BDI", () => {
   assert.equal(itens[0].origemAtividadeId, "atv-1");
 });
 
+test("mapearAtividadesParaItensContrato: preserva preco_unitario_centavos direto e origemTipo orcamento_legado", () => {
+  const mockItensLegados = [
+    {
+      id: "item-leg-1",
+      codigo: "02.01",
+      descricao: "Piso Cerâmico 60x60",
+      unidade: "m2",
+      quantidade: 50,
+      etapaNome: "Acabamento",
+      orcamentoId: "orc-leg-1",
+      preco_unitario_centavos: 6500, // R$ 65,00
+      origemTipo: "orcamento_legado",
+    },
+  ];
+
+  const itens = mapearAtividadesParaItensContrato(mockItensLegados, 0);
+  assert.equal(itens.length, 1);
+  assert.equal(itens[0].descricao, "Piso Cerâmico 60x60");
+  assert.equal(itens[0].quantidadeContratada, 50);
+  assert.equal(itens[0].precoUnitarioCentavos, 6500);
+  assert.equal(itens[0].origemTipo, "orcamento_legado");
+  assert.equal(itens[0].origemOrcamentoId, "orc-leg-1");
+});
+
 test("processarPlanilhaExcelContrato: processa buffer XLSX com colunas reconhecidas", () => {
   const dados = [
     {
@@ -84,4 +108,3 @@ test("processarPlanilhaExcelContrato: processa buffer XLSX com colunas reconheci
   assert.equal(resultado.itens[1].precoUnitarioCentavos, 2550);
   assert.equal(resultado.itens[1].etapa, "Pintura");
 });
-
