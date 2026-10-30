@@ -1,5 +1,24 @@
+export function montarDocumentoImpressao(
+  conteudo: string,
+  titulo: string,
+  orientacao: "portrait" | "landscape" = "portrait",
+  estilos = "",
+) {
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${titulo}</title>${estilos}<style>
+    @page { size: A4 ${orientacao}; margin: 12mm; }
+    html, body { margin: 0; background: #fff !important; color: #0f172a; }
+    body { font-family: Arial, Helvetica, sans-serif; }
+    @media print { body, body * { visibility: visible !important; } }
+    .print-sheet { width: 100% !important; max-width: none !important; min-height: auto !important; max-height: none !important; overflow: visible !important; box-shadow: none !important; border: 0 !important; }
+  </style></head><body>${conteudo}</body></html>`;
+}
+
 /** Abre uma folha limpa para impressão, sem o modal ou a navegação do sistema. */
-export function imprimirElemento(elemento: HTMLElement | null, titulo: string, orientacao: "portrait" | "landscape" = "portrait") {
+export function imprimirElemento(
+  elemento: HTMLElement | null,
+  titulo: string,
+  orientacao: "portrait" | "landscape" = "portrait",
+) {
   if (!elemento) return;
   // `noopener` faz alguns navegadores devolverem `null` para a nova janela,
   // deixando uma aba about:blank sem receber o documento de impressão.
@@ -17,15 +36,11 @@ export function imprimirElemento(elemento: HTMLElement | null, titulo: string, o
   copia.querySelectorAll(".print-hidden, [data-print-hidden]").forEach((item) => item.remove());
 
   janela.document.open();
-  janela.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${titulo}</title>${estilos}<style>
-    @page { size: A4 ${orientacao}; margin: 12mm; }
-    html, body { margin: 0; background: #fff !important; color: #0f172a; }
-    body { font-family: Arial, Helvetica, sans-serif; }
-    .print-sheet { width: 100% !important; max-width: none !important; min-height: auto !important; max-height: none !important; overflow: visible !important; box-shadow: none !important; border: 0 !important; }
-  </style></head><body>${copia.outerHTML}</body></html>`);
+  janela.document.write(montarDocumentoImpressao(copia.outerHTML, titulo, orientacao, estilos));
   janela.document.close();
   window.setTimeout(() => {
     janela.focus();
     janela.print();
   }, 500);
 }
+
