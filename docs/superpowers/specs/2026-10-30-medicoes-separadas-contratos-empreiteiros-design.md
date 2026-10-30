@@ -219,3 +219,4 @@ Quantidades usam escala de seis casas e percentuais quatro casas. Conversões us
 - Dados legados continuam acessíveis e seus vínculos financeiros permanecem válidos.
 - Medição da Obra continua gerando conta a receber e não se mistura com contas a pagar.
 - Desktop e celular permitem concluir os fluxos essenciais; a grade vira cartões ou rolagem controlada no mobile.
+

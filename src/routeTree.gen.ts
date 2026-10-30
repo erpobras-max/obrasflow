@@ -49,6 +49,7 @@ import { Route as AppDocumentosRouteImport } from './routes/_app/documentos'
 import { Route as AppDiarioRouteImport } from './routes/_app/diario'
 import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppCronogramaRouteImport } from './routes/_app/cronograma'
+import { Route as AppContratosEmpreiteirosRouteImport } from './routes/_app/contratos-empreiteiros'
 import { Route as AppComprasRouteImport } from './routes/_app/compras'
 import { Route as AppComercialRouteImport } from './routes/_app/comercial'
 import { Route as AppCotacoesIndexRouteImport } from './routes/_app/cotacoes/index'
@@ -269,6 +270,12 @@ const AppCronogramaRoute = AppCronogramaRouteImport.update({
   path: '/cronograma',
   getParentRoute: () => AppRoute,
 } as any)
+const AppContratosEmpreiteirosRoute =
+  AppContratosEmpreiteirosRouteImport.update({
+    id: '/contratos-empreiteiros',
+    path: '/contratos-empreiteiros',
+    getParentRoute: () => AppRoute,
+  } as any)
 const AppComprasRoute = AppComprasRouteImport.update({
   id: '/compras',
   path: '/compras',
@@ -381,6 +388,7 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/comercial': typeof AppComercialRouteWithChildren
   '/compras': typeof AppComprasRoute
+  '/contratos-empreiteiros': typeof AppContratosEmpreiteirosRoute
   '/cronograma': typeof AppCronogramaRoute
   '/dashboard': typeof AppDashboardRoute
   '/diario': typeof AppDiarioRoute
@@ -441,6 +449,7 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/comercial': typeof AppComercialRouteWithChildren
   '/compras': typeof AppComprasRoute
+  '/contratos-empreiteiros': typeof AppContratosEmpreiteirosRoute
   '/cronograma': typeof AppCronogramaRoute
   '/dashboard': typeof AppDashboardRoute
   '/diario': typeof AppDiarioRoute
@@ -504,6 +513,7 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/_app/comercial': typeof AppComercialRouteWithChildren
   '/_app/compras': typeof AppComprasRoute
+  '/_app/contratos-empreiteiros': typeof AppContratosEmpreiteirosRoute
   '/_app/cronograma': typeof AppCronogramaRoute
   '/_app/dashboard': typeof AppDashboardRoute
   '/_app/diario': typeof AppDiarioRoute
@@ -567,6 +577,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/comercial'
     | '/compras'
+    | '/contratos-empreiteiros'
     | '/cronograma'
     | '/dashboard'
     | '/diario'
@@ -627,6 +638,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/comercial'
     | '/compras'
+    | '/contratos-empreiteiros'
     | '/cronograma'
     | '/dashboard'
     | '/diario'
@@ -689,6 +701,7 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/_app/comercial'
     | '/_app/compras'
+    | '/_app/contratos-empreiteiros'
     | '/_app/cronograma'
     | '/_app/dashboard'
     | '/_app/diario'
@@ -1042,6 +1055,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCronogramaRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/contratos-empreiteiros': {
+      id: '/_app/contratos-empreiteiros'
+      path: '/contratos-empreiteiros'
+      fullPath: '/contratos-empreiteiros'
+      preLoaderRoute: typeof AppContratosEmpreiteirosRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/compras': {
       id: '/_app/compras'
       path: '/compras'
@@ -1253,6 +1273,7 @@ const AppCotacoesCotacaoIdRouteWithChildren =
 interface AppRouteChildren {
   AppComercialRoute: typeof AppComercialRouteWithChildren
   AppComprasRoute: typeof AppComprasRoute
+  AppContratosEmpreiteirosRoute: typeof AppContratosEmpreiteirosRoute
   AppCronogramaRoute: typeof AppCronogramaRoute
   AppDashboardRoute: typeof AppDashboardRoute
   AppDiarioRoute: typeof AppDiarioRoute
@@ -1282,6 +1303,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppComercialRoute: AppComercialRouteWithChildren,
   AppComprasRoute: AppComprasRoute,
+  AppContratosEmpreiteirosRoute: AppContratosEmpreiteirosRoute,
   AppCronogramaRoute: AppCronogramaRoute,
   AppDashboardRoute: AppDashboardRoute,
   AppDiarioRoute: AppDiarioRoute,

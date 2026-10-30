@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Hammer } from "lucide-react";
+import { Hammer, FileCheck, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";

@@ -434,3 +434,32 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - **Validação de Testes**:
   - Todos os 96 testes do repositório aprovados com 100% de sucesso.
   - Compilação SSR/Nitro concluída sem erros.
+
+## Atualização 30/10/2026 — Conclusão do Módulo de Contratos de Empreiteiros e Medições Multi-Itens (Issue #199)
+
+- **Separação de Navegação e Regra Mental (Medição da Obra vs Contratos de Empreiteiros)**:
+  - Menu lateral (`src/components/layout/app-sidebar.tsx`) atualizado com distinção explícita: **Medição da Obra** (`/medicoes`, avanço do cliente e contas a receber) e **Contratos de Empreiteiros** (`/contratos-empreiteiros`, avanço do terceiro e contas a pagar).
+  - Banner de transição e atalho rápido adicionados no topo de `/prestadores` direcionando diretamente para a gestão moderna de contratos.
+- **Gestão Completa de Contratos de Empreiteiros (`/contratos-empreiteiros`)**:
+  - Listagem com cartões de KPIs em tempo real: Quantidade de Contratos, Total Contratado (com aditivos), Total Medido Bruto, Saldo a Medir e percentual geral concluído.
+  - Filtros rápidos por Obra, Status e busca textual por número de contrato, objeto, obra ou prestador.
+  - Dialog de cadastro com preenchimento de Obra, Empreiteiro, Tipo (Preço Unitário ou Empreitada Global), Objeto, Datas, Retenção padrão e Adiantamento previsto.
+- **Importação de Escopo do Orçamento e Planilhas Excel**:
+  - `ImportarOrcamentoDialog`: Carrega as etapas e atividades do orçamento analítico da obra com cálculo automático do preço unitário com BDI, permitindo seleção múltipla para compor o escopo do contrato.
+  - `ImportarExcelDialog`: Parser inteligente de planilhas (`.xlsx`, `.xls`, `.csv`) que identifica colunas de descrição, unidade, quantidade, preço unitário e etapa, exibindo pré-visualização e validação antes da importação.
+- **Boletim de Medição Dinâmico (Experiência Mais Controle)**:
+  - Planilha de medição multi-itens com histórico contratado, medições anteriores aprovadas e saldo físico-financeiro restante.
+  - Entrada de medição por **Quantidade**, **Percentual (%)** ou **Valor (R$)**, recalculando instantaneamente os demais parâmetros.
+  - Detecção e alerta visual de estouro de saldo físico/financeiro.
+  - Painel de deduções com amortização de adiantamento, descontos de EPI/retrabalho e retenção técnica percentual calculada automaticamente sobre o valor bruto medido.
+  - Resumo financeiro com Valor Bruto Medido, Total de Deduções e **Valor Líquido a Pagar**.
+  - Aprovação transacional em 1 clique chamando a RPC `aprovar_medicao_empreiteiro`, que valida o saldo restante, atualiza o acumulado e cria exatamente 1 conta a pagar no módulo Financeiro.
+  - Cancelamento seguro chamando `cancelar_medicao_empreiteiro`, estornando o financeiro e restabelecendo os saldos.
+- **Controle de Retenções Técnicas e Termos Aditivos**:
+  - `RetencoesDialog`: Acompanhamento de retenções técnicas por boletim de medição, com saldo disponível e liberação controlada que gera a conta a pagar com data de vencimento programada via RPC `liberar_retencao_empreiteiro`.
+  - `AditivoDialog`: Registro de termos aditivos de quantidade, preço, prazo ou escopo com atualização automática do valor total do contrato.
+- **Relatório Imprimível / Salvar PDF**:
+  - `MedicaoRelatorioImprimir`: Folha A4 formatada com cabeçalho oficial da construtora (`configuracoes_empresa` e logo do R2), identificação completa da obra e do empreiteiro, quadro de medição discriminado, resumo financeiro e campos de assinatura formal do engenheiro fiscal e do prestador.
+- **Verificação e Testes**:
+  - 107 testes automatizados aprovados no total (100% de sucesso), cobrindo regras de conversão, limites de saldo, retenções, deduções, importação de planilhas e integridade do banco de dados em memória.
+  - Compilação do projeto (`npm run build`) validada com 0 erros no Vite e no Nitro SSR.

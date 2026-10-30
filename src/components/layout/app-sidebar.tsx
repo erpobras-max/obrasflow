@@ -23,6 +23,7 @@ import {
   CalendarDays,
   Handshake,
   FileSearch,
+  FileCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -63,7 +64,8 @@ const NAVIGATION_GROUPS: SidebarGroup[] = [
       { key: "ordens_servico", label: "Ordens de Serviço", icon: ClipboardCheck, to: "/ordens-servico" },
       { key: "orcamentos", label: "Orçamentos", icon: Calculator, to: "/orcamentos" },
       { key: "diario", label: "Diário de Obra", icon: ClipboardList, to: "/diario" },
-      { key: "medicoes", label: "Medições", icon: Ruler, to: "/medicoes" },
+      { key: "medicoes", label: "Medição da Obra", icon: Ruler, to: "/medicoes" },
+      { key: "prestadores", label: "Contratos Empreiteiros", icon: FileCheck, to: "/contratos-empreiteiros" },
       { key: "cronograma", label: "Cronograma", icon: CalendarDays, to: "/cronograma" },
       { key: "documentos", label: "Documentos", icon: Folder, to: "/documentos" },
     ],
