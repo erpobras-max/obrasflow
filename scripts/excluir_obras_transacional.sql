@@ -1,18 +1,13 @@
 -- ==============================================================================
--- Script Transacional Seguro para Exclusão das 5 Obras Antigas de Teste
--- Obras-alvo:
---   - OBRA-2026-0005: Tica - Rural Net
---   - OBRA-2026-0006: Obra Lucas - Obra 1
---   - OBRA-2026-0007: CASA 13
---   - OBRA-2026-0008: Flatiron Building
---   - OBRA-2026-0009: Obra Caio Henrique / Kennedy
+-- Script 100% Dinâmico e Seguro para Exclusão das 5 Obras Antigas de Teste
+-- Executa em transação única e usa SQL dinâmico para não falhar por coluna ausente
 -- ==============================================================================
 
 BEGIN;
 
--- 1. Criação de tabela temporária com IDs e dados das obras para backup
+-- 1. Identifica e isola as 5 obras alvo
 CREATE TEMP TABLE temp_obras_alvo ON COMMIT DROP AS
-SELECT * FROM public.obras
+SELECT id, numero, nome FROM public.obras
 WHERE numero IN (
   'OBRA-2026-0005',
   'OBRA-2026-0006',
@@ -21,12 +16,12 @@ WHERE numero IN (
   'OBRA-2026-0009'
 );
 
--- Tabela de orçamentos vinculados
+-- Tabela de orçamentos vinculados a essas obras
 CREATE TEMP TABLE temp_orcamentos_alvo ON COMMIT DROP AS
 SELECT id, obra_id FROM public.orcamentos
 WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
 
--- 2. Limpeza das tabelas filhas do novo orçamento analítico (Issue #197 / #199)
+-- 2. Limpeza bottom-up das tabelas filhas do novo orçamento analítico
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'orcamento_memoriais') THEN
@@ -69,117 +64,56 @@ BEGIN
   WHERE id IN (SELECT id FROM temp_orcamentos_alvo);
 END $$;
 
--- 3. Limpeza ou desvinculação segura de tabelas operacionais
+-- 3. Limpeza de medições de terceirizados (filhas de servicos_terceirizados)
 DO $$
 BEGIN
-  -- Projetos 3D / CAD
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'obra_projetos_cad') THEN
-    DELETE FROM public.obra_projetos_cad WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Ordens de serviço
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'ordens_servico') THEN
-    DELETE FROM public.ordens_servico WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Diário de obras
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'diarios_obra') THEN
-    DELETE FROM public.diarios_obra WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'diario_obras') THEN
-    DELETE FROM public.diario_obras WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Medições e serviços terceirizados
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'medicoes_terceirizados') THEN
-    DELETE FROM public.medicoes_terceirizados WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'servicos_terceirizados') THEN
-    DELETE FROM public.servicos_terceirizados WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'medicoes') THEN
-    DELETE FROM public.medicoes WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Cronogramas
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'obra_cronograma') THEN
-    DELETE FROM public.obra_cronograma WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'obras_cronogramas') THEN
-    DELETE FROM public.obras_cronogramas WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Equipe / Funcionários da obra
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'obras_equipe') THEN
-    DELETE FROM public.obras_equipe WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'obra_funcionarios') THEN
-    DELETE FROM public.obra_funcionarios WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Estoque da obra
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'estoque_obra') THEN
-    DELETE FROM public.estoque_obra WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'movimentacoes_estoque') THEN
-    UPDATE public.movimentacoes_estoque SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Cotações e pedidos de compra
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_pedidos') THEN
-    UPDATE public.cotacoes_pedidos SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cotacoes_compra') THEN
-    UPDATE public.cotacoes_compra SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'solicitacoes_compra') THEN
-    UPDATE public.solicitacoes_compra SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Financeiro (desvincular obra para manter histórico contábil sem órfãos)
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'contas_pagar') THEN
-    UPDATE public.contas_pagar SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'contas_receber') THEN
-    UPDATE public.contas_receber SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'lancamentos_financeiros') THEN
-    UPDATE public.lancamentos_financeiros SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Contratos e propostas (desvincular para não quebrar cadastros comerciais)
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'contratos') THEN
-    UPDATE public.contratos SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'propostas') THEN
-    UPDATE public.propostas SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Documentos
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'documentos') THEN
-    DELETE FROM public.documentos WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-
-  -- Entidades gerais que possuam obra_id opcional
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'equipamentos') THEN
-    UPDATE public.equipamentos SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'funcionarios') THEN
-    UPDATE public.funcionarios SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'fornecedores') THEN
-    UPDATE public.fornecedores SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
-  END IF;
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'depositos') THEN
-    UPDATE public.depositos SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo);
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'medicoes_terceirizados') 
+     AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'servicos_terceirizados') THEN
+    DELETE FROM public.medicoes_terceirizados
+    WHERE servico_id IN (
+      SELECT id FROM public.servicos_terceirizados
+      WHERE obra_id IN (SELECT id FROM temp_obras_alvo)
+    );
   END IF;
 END $$;
 
--- 4. Exclusão final das 5 obras alvo
+-- 4. Tratamento dinâmico de todas as tabelas públicas que contêm a coluna 'obra_id'
+DO $$
+DECLARE
+  rec RECORD;
+BEGIN
+  FOR rec IN (
+    SELECT c.table_name, c.is_nullable
+    FROM information_schema.columns c
+    JOIN information_schema.tables t 
+      ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+    WHERE c.table_schema = 'public'
+      AND c.column_name = 'obra_id'
+      AND t.table_type = 'BASE TABLE'
+      AND c.table_name NOT IN ('obras', 'orcamentos')
+  ) LOOP
+    -- Se for tabela estritamente operacional da obra (projetos, cronogramas, diários, ordens, medições), remove os registros
+    IF rec.table_name IN (
+      'obra_projetos_cad', 'obra_cronograma', 'obras_cronogramas', 'obras_equipe', 
+      'obra_funcionarios', 'diarios_obra', 'diario_obras', 'ordens_servico', 
+      'medicoes', 'servicos_terceirizados', 'documentos', 'estoque_obra'
+    ) THEN
+      EXECUTE format('DELETE FROM public.%I WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
+    -- Se a coluna permitir NULL (contas a pagar, compras, funcionários, movimentações), desvincula para não violar FK
+    ELSIF rec.is_nullable = 'YES' THEN
+      EXECUTE format('UPDATE public.%I SET obra_id = NULL WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
+    ELSE
+      -- Se não for anulável, remove os registros vinculados
+      EXECUTE format('DELETE FROM public.%I WHERE obra_id IN (SELECT id FROM temp_obras_alvo)', rec.table_name);
+    END IF;
+  END LOOP;
+END $$;
+
+-- 5. Exclusão definitiva das 5 obras alvo
 DELETE FROM public.obras
 WHERE id IN (SELECT id FROM temp_obras_alvo);
 
--- 5. Conferência de integridade
+-- 6. Conferência final: deve retornar 0
 SELECT 
   COUNT(*) AS total_obras_restantes_com_esses_numeros
 FROM public.obras
@@ -191,5 +125,4 @@ WHERE numero IN (
   'OBRA-2026-0009'
 );
 
--- Confirmação da transação
 COMMIT;
