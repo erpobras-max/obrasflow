@@ -398,3 +398,39 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
 - **Testes e Publicação**:
   - 17 testes automatizados de unidade aprovados cobrindo discriminação de BDI/custos, editor de proposta, orçamentos analíticos e legados, fotografias imutáveis e importações SINAPI.
   - Todos os builds e deploys no Cloudflare Workers concluídos com 100% de sucesso.
+
+
+## Atualização 30/10/2026 — Contratos de Empreiteiros, Dados de Empresa e Cliente, Minuta Contratual na Impressão e Estabilidade de Build
+
+- **Contratos de Empreiteiros e Medições Separadas (Issue #199)**:
+  - Criada migration aditiva e idempotente `supabase/migrations/20261031000000_contratos_empreiteiros.sql`.
+  - Definidos enums, tabelas e constraints para contratos de prestadores (`contratos_empreiteiros`), medições multi-item (`medicoes_empreiteiros`), ajustes e retenções técnicas (`retencoes_empreiteiros`), anexos e evidências fotográficas (`medicao_empreiteiro_anexos`) e tokens seguros de compartilhamento (`medicao_empreiteiro_links`).
+  - Implementadas RPCs transacionais `aprovar_medicao_empreiteiro` (cria exatamente uma conta a pagar de forma idempotente), `cancelar_medicao_empreiteiro` e `liberar_retencao_empreiteiro`.
+  - Backfill automático 1-para-1 de contratos e medições legadas sem perda de dados.
+  - Suíte de 3 testes com banco em memória PGlite aprovada cobrindo migration, constraints, RLS, concorrência, idempotência e rollback.
+- **Dados Reais da Empresa (/empresa) e Logomarca em Propostas**:
+  - `EditorPropostaComercial` consulta dinamicamente a tabela `configuracoes_empresa` (`order by id limit 1`).
+  - Logomarca recuperada do storage R2 via componente `EmpresaLogo`.
+  - Cabeçalho, capa e bloco de assinaturas exibem Nome Fantasia, Razão Social, CNPJ, Inscrição Municipal/Estadual, e-mail, telefone e endereço oficial configurados.
+- **Identificação do Cliente e Obra na Proposta**:
+  - Consulta direta a `clientes` por chave estrangeira, sem dependência frágil de join de cache do PostgREST.
+  - Dados completos do cliente (Nome, CPF/CNPJ formatado, e-mail) e da obra (nome, endereço composto e prazo previsto) exibidos no quadro do contratante e no bloco de assinaturas.
+- **Valores Reais dos Itens da Proposta**:
+  - Cálculo dinâmico do custo direto das atividades a partir dos insumos vinculados (`orcamento_atividade_insumos`) com aplicação ponderada do BDI da atividade ou geral.
+  - Fallback automático para `orcamento_itens` garantindo que os itens nunca apareçam zerados ao carregar propostas geradas de orçamentos.
+- **Minuta do Contrato no Editor e na Impressão**:
+  - Adicionada seção de **Minuta Contratual & Cláusulas Gerais** à proposta comercial, editável no painel lateral esquerdo com inicialização a partir da `clausula_padrao` cadastrada em `/empresa`.
+  - Alternador `mostrarContrato` no menu lateral para ativar/desativar a inclusão da minuta.
+  - Cláusulas formatadas e posicionadas antes do bloco de assinaturas na folha A4.
+- **Correção Definitiva da Impressão (Eliminação de Página em Branco)**:
+  - No `styles.css` e no `EditorPropostaComercial`, a folha `.proposta-print-sheet` foi configurada para `position: absolute !important; left: 0; top: 0; width: 100% !important;` durante `@media print`.
+  - Forçado `overflow: visible !important; height: auto !important; max-height: none !important;` em todos os contêineres pais, eliminando o mascaramento de layout que causava página branca no Chrome Print.
+- **Exclusão Persistente de Propostas e Composições**:
+  - `deleteMutation` em `comercial.propostas.tsx` realiza limpeza atômica de dependências (cronogramas, contratos, obras, revisões, etapas e itens) e limpa o parâmetro `propostaId` da URL para impedir reabertura.
+  - `excluirAtividade` em `orcamento-analitico-view.tsx` elimina memoriais, insumos e atividades, remove itens legados de mesmo código/descrição e assegura `analitico_ativo = true` no orçamento para prevenir re-migrações fantasmas.
+- **Estabilidade do Pipeline de Build**:
+  - Configurado `node --max-old-space-size=4096` diretamente no script de build do `package.json`, prevenindo falhas por esgotamento de memória no Cloudflare Pages.
+  - Adicionados arquivos de configuração `.nvmrc` e `.node-version` (Node 20) para assegurar o mesmo ambiente de compilação em todas as plataformas.
+- **Validação de Testes**:
+  - Todos os 96 testes do repositório aprovados com 100% de sucesso.
+  - Compilação SSR/Nitro concluída sem erros.

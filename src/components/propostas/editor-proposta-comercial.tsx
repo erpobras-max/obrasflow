@@ -86,12 +86,6 @@ export function EditorPropostaComercial({
   onPublicarRevisao,
   onVoltar,
 }: EditorPropostaComercialProps) {
-    const [config, setConfig] = useState<ConfiguracaoPropostaComercial>({
-    ...configuracaoPropostaPadrao,
-    tituloProposta: `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
-    prazoExecucaoTexto: proposta.prazoExecucaoTexto || configuracaoPropostaPadrao.prazoExecucaoTexto,
-  })
-
   // Consulta dados e logo da empresa cadastrada em /empresa
   const { data: empresa } = useQuery({
     queryKey: ['configuracoes-empresa'],
@@ -99,7 +93,8 @@ export function EditorPropostaComercial({
       const { data, error } = await supabase
         .from('configuracoes_empresa')
         .select('*')
-        .eq('id', 1)
+        .order('id')
+        .limit(1)
         .maybeSingle()
       if (error) throw error
       return data
@@ -107,14 +102,31 @@ export function EditorPropostaComercial({
   })
 
   const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'ObrasFlow Engenharia & Construções'
-  const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : '12.345.678/0001-90'
+  const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
   const registroEmpresa = empresa?.inscricao_municipal
-    ? `CREA/CAU: ${empresa.inscricao_municipal}`
-    : (empresa?.inscricao_estadual ? `IE: ${empresa.inscricao_estadual}` : 'CREA/CAU: 194820-SP')
-  const emailEmpresa = empresa?.email || 'contato@obrasflow.com.br'
+    ? `Insc. Mun.: ${empresa.inscricao_municipal}`
+    : (empresa?.inscricao_estadual ? `IE: ${empresa.inscricao_estadual}` : '')
+  const emailEmpresa = empresa?.email || ''
   const telefoneEmpresa = (empresa?.telefone || empresa?.celular)
     ? formatTelefone(empresa.telefone || empresa.celular)
-    : '(11) 3456-7890'
+    : ''
+  const enderecoEmpresa = empresa?.endereco || [empresa?.logradouro, empresa?.numero, empresa?.bairro, empresa?.cidade, empresa?.uf].filter(Boolean).join(', ') || ''
+
+  const [config, setConfig] = useState<ConfiguracaoPropostaComercial>(() => ({
+    ...configuracaoPropostaComercialPadrao,
+    tituloProposta: proposta.numero ? `Proposta Comercial nº ${proposta.numero} · ${proposta.obraNome ?? 'Obra'}` : `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
+    prazoExecucaoTexto: proposta.prazoExecucaoTexto || configuracaoPropostaComercialPadrao.prazoExecucaoTexto,
+    textoContrato: empresa?.clausula_padrao || configuracaoPropostaComercialPadrao.textoContrato,
+  }))
+
+  useEffect(() => {
+    if (empresa?.clausula_padrao && config.textoContrato === configuracaoPropostaComercialPadrao.textoContrato) {
+      setConfig((prev) => ({
+        ...prev,
+        textoContrato: empresa.clausula_padrao,
+      }))
+    }
+  }, [empresa?.clausula_padrao])
 
   const [modoImpressao, setModoImpressao] = useState(false)
   const [historicoOpen, setHistoricoOpen] = useState(false)
@@ -218,34 +230,37 @@ export function EditorPropostaComercial({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 10mm;
+            margin: 10mm 12mm;
           }
-          html, body {
+          html, body, #root, div {
             background: #ffffff !important;
-            margin: 0 !important;
-            padding: 0 !important;
             height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
             overflow: visible !important;
           }
-          .no-print {
-            display: none !important;
+          body * {
+            visibility: hidden;
+          }
+          .proposta-print-sheet,
+          .proposta-print-sheet * {
+            visibility: visible !important;
           }
           .proposta-print-sheet {
-            visibility: visible !important;
-            position: relative !important;
-            display: block !important;
+            position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            max-width: none !important;
+            max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
-            box-shadow: none !important;
-            border: none !important;
             background: #ffffff !important;
+            color: #0f172a !important;
+            border: none !important;
+            box-shadow: none !important;
           }
-          .proposta-print-sheet * {
-            visibility: visible !important;
+          .no-print, header, nav, aside, [data-sidebar], .app-sidebar {
+            display: none !important;
           }
         }
       `}</style>
@@ -534,6 +549,27 @@ export function EditorPropostaComercial({
               </div>
 
               <div className="flex items-center justify-between py-1 border-t border-slate-200/60 pt-2">
+                <span className="text-slate-700">Incluir Minuta do Contrato / Cláusulas</span>
+                <Switch
+                  checked={config.mostrarContrato}
+                  onCheckedChange={(v) => updateConfig({ mostrarContrato: v })}
+                />
+              </div>
+
+              {config.mostrarContrato && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Minuta Contratual / Cláusulas:</label>
+                  <Textarea
+                    rows={6}
+                    value={config.textoContrato}
+                    onChange={(e) => updateConfig({ textoContrato: e.target.value })}
+                    className="text-xs bg-white text-slate-900 border-slate-300 leading-relaxed font-mono text-[10px]"
+                    placeholder="Cláusulas contratuais da proposta..."
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between py-1 border-t border-slate-200/60 pt-2">
                 <span className="text-slate-700">Incluir Bloco de Assinaturas</span>
                 <Switch
                   checked={config.mostrarAssinaturas}
@@ -579,8 +615,19 @@ export function EditorPropostaComercial({
                 )}
                 <div>
                   <h3 className="text-base font-bold text-slate-900">{nomeEmpresa.toUpperCase()}</h3>
-                  <p className="text-xs text-slate-500">{`CNPJ: ${cnpjFormatado} • ${registroEmpresa}`}</p>
-                  <p className="text-xs text-slate-500">{`${emailEmpresa} • ${telefoneEmpresa}`}</p>
+                  {(cnpjFormatado || registroEmpresa) && (
+                    <p className="text-xs text-slate-500">
+                      {[cnpjFormatado ? `CNPJ: ${cnpjFormatado}` : null, registroEmpresa].filter(Boolean).join(' • ')}
+                    </p>
+                  )}
+                  {(emailEmpresa || telefoneEmpresa) && (
+                    <p className="text-xs text-slate-500">
+                      {[emailEmpresa, telefoneEmpresa].filter(Boolean).join(' • ')}
+                    </p>
+                  )}
+                  {enderecoEmpresa && (
+                    <p className="text-[11px] text-slate-400">{enderecoEmpresa}</p>
+                  )}
                 </div>
               </div>
 
@@ -752,18 +799,32 @@ export function EditorPropostaComercial({
               </p>
             )}
 
+            {/* MINUTA DO CONTRATO / CLÁUSULAS */}
+            {config.mostrarContrato && config.textoContrato && (
+              <div className="pt-6 border-t border-slate-200 space-y-2 text-xs break-inside-avoid">
+                <h4 className="font-bold text-slate-800 uppercase tracking-wide">
+                  4. Minuta Contratual & Cláusulas Gerais
+                </h4>
+                <div className="text-slate-600 whitespace-pre-line leading-relaxed text-[11px] bg-slate-50/70 p-4 rounded-lg border border-slate-200 print:bg-transparent print:border-none print:p-0">
+                  {config.textoContrato}
+                </div>
+              </div>
+            )}
+
             {/* BLOCO DE ASSINATURAS */}
             {config.mostrarAssinaturas && (
-              <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs">
+              <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs break-inside-avoid">
                 <div>
-                  <div className="border-b border-slate-400 w-48 mx-auto mb-1" />
-                  <strong className="text-slate-900">{nomeEmpresa}</strong>
+                  <div className="border-b border-slate-400 w-48 mx-auto mb-1.5" />
+                  <strong className="text-slate-900 block">{nomeEmpresa}</strong>
                   <div className="text-slate-500 text-[11px]">Diretoria Técnica & Comercial</div>
+                  {cnpjFormatado && <div className="text-slate-400 text-[10px]">CNPJ: {cnpjFormatado}</div>}
                 </div>
                 <div>
-                  <div className="border-b border-slate-400 w-48 mx-auto mb-1" />
-                  <strong className="text-slate-900">{proposta.clienteNome ?? 'Cliente'}</strong>
+                  <div className="border-b border-slate-400 w-48 mx-auto mb-1.5" />
+                  <strong className="text-slate-900 block">{proposta.clienteNome ?? 'Cliente'}</strong>
                   <div className="text-slate-500 text-[11px]">De Acordo do Contratante</div>
+                  {proposta.clienteCpfCnpj && <div className="text-slate-400 text-[10px]">CPF/CNPJ: {proposta.clienteCpfCnpj}</div>}
                 </div>
               </div>
             )}

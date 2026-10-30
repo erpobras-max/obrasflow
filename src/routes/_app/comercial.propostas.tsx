@@ -167,25 +167,30 @@ function PropostasPage() {
       // 1. Identificar Obra e Cliente da Proposta
       let obra: any = null;
       if ((editorTarget as any).obra_id) {
-        const { data } = await supabase.from("obras").select("*, clientes(*)").eq("id", (editorTarget as any).obra_id).maybeSingle();
+        const { data } = await supabase.from("obras").select("*").eq("id", (editorTarget as any).obra_id).maybeSingle();
         if (data) obra = data;
       }
       if (!obra) {
-        const { data } = await supabase.from("obras").select("*, clientes(*)").eq("proposta_id", editorTarget.id).maybeSingle();
+        const { data } = await supabase.from("obras").select("*").eq("proposta_id", editorTarget.id).maybeSingle();
         if (data) obra = data;
       }
       if (!obra && editorTarget.titulo) {
         const nomeLimpo = editorTarget.titulo.replace(/^Proposta\s+Comercial\s*[-–—:]\s*/i, "").trim();
         if (nomeLimpo) {
-          const { data } = await supabase.from("obras").select("*, clientes(*)").ilike("nome", nomeLimpo).limit(1).maybeSingle();
+          const { data } = await supabase.from("obras").select("*").ilike("nome", `%${nomeLimpo}%`).limit(1).maybeSingle();
           if (data) obra = data;
         }
       }
+      if (!obra && editorTarget.cliente_id) {
+        const { data } = await supabase.from("obras").select("*").eq("cliente_id", editorTarget.cliente_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        if (data) obra = data;
+      }
 
       // Cliente da obra ou da proposta
-      let cliente = obra?.clientes as any;
-      if (!cliente && editorTarget.cliente_id) {
-        const { data } = await supabase.from("clientes").select("*").eq("id", editorTarget.cliente_id).maybeSingle();
+      let cliente: any = null;
+      const clienteIdParaBuscar = obra?.cliente_id || editorTarget.cliente_id;
+      if (clienteIdParaBuscar) {
+        const { data } = await supabase.from("clientes").select("*").eq("id", clienteIdParaBuscar).maybeSingle();
         if (data) cliente = data;
       }
 
@@ -225,16 +230,31 @@ function PropostasPage() {
               .order("ordem");
 
             if (ativs && ativs.length > 0) {
+              const ativIds = ativs.map((a) => a.id);
+              const { data: insumosDb } = await supabase
+                .from("orcamento_atividade_insumos")
+                .select("*")
+                .in("atividade_id", ativIds);
+              const insumosPorAtiv = (insumosDb ?? []) as any[];
+
               const etapaPorId = new Map(etapasAnaliticas.map((e) => [e.id, e]));
               itens = ativs.map((a, idx) => {
                 const ep = etapaPorId.get(a.etapa_id);
                 const qtd = Number(a.quantidade ?? 1);
                 const bdiAtiv = a.bdi_percentual != null ? Number(a.bdi_percentual) : bdiGeral;
-                let precoTot = Number(a.preco_total_centavos ?? 0);
-                if (!precoTot && a.custo_total_centavos) {
-                  precoTot = Math.round(Number(a.custo_total_centavos) * (1 + bdiAtiv / 100));
+
+                // Custo dos insumos da atividade
+                const insumosDestaAtiv = insumosPorAtiv.filter((i) => i.atividade_id === a.id);
+                const custoInsumosCentavos = insumosDestaAtiv.reduce(
+                  (sum, i) => sum + Math.round(Number(i.coeficiente ?? 1) * Number(i.preco_unitario_centavos ?? 0)),
+                  0
+                );
+                let precoUnit = 0;
+                if (custoInsumosCentavos > 0) {
+                  const precoTotCentavos = Math.round(custoInsumosCentavos * (1 + bdiAtiv / 100));
+                  precoUnit = precoTotCentavos / 100;
                 }
-                const precoUnit = qtd > 0 && precoTot > 0 ? (precoTot / 100) / qtd : 0;
+
                 return {
                   id: a.id,
                   descricao: a.descricao,
@@ -250,7 +270,7 @@ function PropostasPage() {
             }
           }
 
-          if (itens.length === 0) {
+          if (itens.length === 0 || itens.every((it) => it.valor_unitario === 0)) {
             const { data: legados } = await supabase
               .from("orcamento_itens")
               .select("*")
@@ -290,7 +310,7 @@ function PropostasPage() {
         }
         const etapa = etapasMap.get(etapaCod)!;
         const precoUnitarioCentavos = Math.round(Number(it.valor_unitario ?? 0) * 100);
-        const precoTotalCentavos = Math.round(Number(it.quantidade ?? 0) * precoUnitarioCentavos);
+        const precoTotalCentavos = Math.round(Number(it.quantidade ?? 1) * precoUnitarioCentavos);
         etapa.valorTotalCentavos += precoTotalCentavos;
         etapa.atividades.push({
           id: it.id,
@@ -303,10 +323,11 @@ function PropostasPage() {
         });
       });
 
-      const enderecoObra = [obra?.logradouro, obra?.numero_endereco, obra?.bairro, obra?.cidade, obra?.uf].filter(Boolean).join(", ") || obra?.endereco || "";
+      const enderecoObra = [obra?.logradouro, obra?.numero_endereco, obra?.bairro, obra?.cidade, obra?.uf].filter(Boolean).join(", ") || obra?.endereco || [cliente?.logradouro, cliente?.numero, cliente?.bairro, cliente?.cidade, cliente?.uf].filter(Boolean).join(", ") || cliente?.endereco || "";
       let prazoTexto = "30 a 60 dias úteis";
       if (obra?.prazo_meses) prazoTexto = `${obra.prazo_meses} meses`;
       else if (obra?.data_fim_prevista) prazoTexto = `Até ${new Date(obra.data_fim_prevista).toLocaleDateString("pt-BR")}`;
+      else if (obra?.data_inicio_prevista) prazoTexto = `Início em ${new Date(obra.data_inicio_prevista).toLocaleDateString("pt-BR")}`;
 
       const docCliente = cliente?.cpf_cnpj || cliente?.cnpj || cliente?.cpf || "";
       const clienteCpfCnpj = docCliente ? formatCpfCnpj(docCliente) : "";
@@ -314,7 +335,7 @@ function PropostasPage() {
       return {
         id: editorTarget.id,
         numero: editorTarget.numero,
-        clienteNome: cliente?.nome || "Cliente",
+        clienteNome: cliente?.nome || cliente?.nome_fantasia || "Cliente",
         clienteCpfCnpj,
         clienteEmail: cliente?.email || "",
         obraNome: obra?.nome || editorTarget.titulo || "Obra",
@@ -396,22 +417,48 @@ function PropostasPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      // 1. Desvincular obras que apontam para esta proposta
+      // 1. Tentar exclusão via RPC atômica se disponível no banco
+      try {
+        const { data: rpcSuccess, error: rpcError } = await supabase.rpc("excluir_proposta_comercial", { p_proposta_id: id });
+        if (!rpcError && rpcSuccess) {
+          return;
+        }
+      } catch {
+        // Fallback para exclusão direta das tabelas
+      }
+
+      // 2. Desvincular obras que apontam para esta proposta
       await supabase.from("obras").update({ proposta_id: null } as any).eq("proposta_id", id);
 
-      // 2. Desvincular contratos que apontam para esta proposta
+      // 3. Desvincular contratos que apontam para esta proposta
       await supabase.from("contratos").update({ proposta_id: null } as any).eq("proposta_id", id);
 
-      // 3. Desvincular cronogramas
+      // 4. Desvincular cronogramas
       await supabase.from("obras_cronogramas").update({ proposta_id: null } as any).eq("proposta_id", id);
 
-      // 4. Excluir revisões da proposta
+      // 5. Excluir revisões da proposta
       await supabase.from("proposta_revisoes").delete().eq("proposta_id", id);
 
-      // 5. Excluir itens da proposta
+      // 6. Excluir estrutura hierárquica e itens
+      try {
+        const { data: etapas } = await supabase.from("propostas_etapas").select("id").eq("proposta_id", id);
+        const etapaIds = (etapas ?? []).map((e: any) => e.id);
+        if (etapaIds.length > 0) {
+          const { data: itensH } = await supabase.from("propostas_itens_hierarquia").select("id").in("proposta_etapa_id", etapaIds);
+          const itemHIds = (itensH ?? []).map((i: any) => i.id);
+          if (itemHIds.length > 0) {
+            await supabase.from("propostas_subitens").delete().in("proposta_item_id", itemHIds);
+          }
+          await supabase.from("propostas_itens_hierarquia").delete().in("proposta_etapa_id", etapaIds);
+          await supabase.from("propostas_etapas").delete().eq("proposta_id", id);
+        }
+      } catch {
+        // Tabelas hierárquicas podem não existir
+      }
+
       await supabase.from("propostas_itens").delete().eq("proposta_id", id);
 
-      // 6. Excluir a proposta principal com verificação
+      // 7. Excluir a proposta principal com verificação
       const { data, error } = await supabase.from("propostas").delete().eq("id", id).select("id");
       if (error) throw error;
       if (!data || data.length === 0) {
@@ -430,8 +477,12 @@ function PropostasPage() {
       }
       toast.error(e.message);
     },
-    onSuccess: () => {
-      toast.success("Proposta excluída");
+    onSuccess: (_, id) => {
+      toast.success("Proposta excluída com sucesso");
+      if (editorTarget?.id === id) {
+        setEditorTarget(null);
+      }
+      navigate({ to: "/comercial/propostas", search: {} });
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["propostas"] });
