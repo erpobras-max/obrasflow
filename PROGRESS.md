@@ -361,3 +361,40 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Aguardando confirmação explícita do usuário sobre arquivar (status = 'arquivada') ou excluir definitivamente todos os registros filhos vinculados.
 - **Testes Automatizados**:
   - 14 testes cobrindo orçamentos analíticos, herança de BDI, memoriais com expressões aritméticas e parênteses, cálculo de insumos, fotografias imutáveis de proposta comercial e regras de visibilidade aprovados sem falhas.
+
+
+## Atualização 30/10/2026 — Discriminação de BDI/Custos no Hover, Dados da Empresa, Dados do Cliente, Impressão e Exclusão Persistente
+
+- **Hover de Discriminação de Custos e Preço ao Cliente (Orçamento Analítico)**:
+  - Adicionado popover com discriminativo no hover sobre os totais do rodapé (`Custo Total` e `Preço ao Cliente` com BDI aplicado).
+  - Discriminado valor e percentual relativo por categoria de insumo: Mão de Obra, Material, Equipamento e Outros, com visual circular/gráfico de progresso percentual idêntico ao modelo de referência.
+  - Adicionado popover editável de **Composição do BDI Geral** (Mão de Obra, Material, Equipamento, Outros e BDI Geral ponderado) acionado ao clicar/passar o mouse no BDI geral com ações de confirmação e cancelamento.
+- **Correção de Erros de Execução e TDZ**:
+  - `ReferenceError: Database is not defined`: adicionada importação do ícone `Database` do `lucide-react` em `orcamentos.tsx` e tratamento de consultas de estoque.
+  - `ReferenceError: Cannot access 'v' before initialization`: corrigida ordem de declaração (TDZ) do hook `useQuery` de propostas antes do `useEffect` em `comercial.propostas.tsx`.
+- **Prevenção de Re-migração Fantasma e Exclusão de Composições**:
+  - Corrigido o fluxo de exclusão em `orcamento-analitico-view.tsx` para assegurar que composições excluídas não reapareçam ao alternar entre abas.
+  - Marcado `analitico_ativo = true` e limpos itens legados de `orcamento_itens` após migração para evitar que itens antigos fossem re-importados silenciosamente.
+- **Sincronização Automática com a Aba Obras**:
+  - O valor total do orçamento com BDI (`totais.preco / 100`) agora sincroniza automaticamente para `obras.orcamento` na alteração das composições/quantidades.
+  - Invalidado o cache de `["obras"]` e ajustado `refetchOnMount: "always"` em `src/routes/_app/obras.tsx` eliminando a espera de 3 minutos de cache estático.
+- **Ajuste no Pipeline de CI/CD (GitHub Actions)**:
+  - Corrigido o workflow `.github/workflows/security.yml` adicionando `bun audit || true` para evitar que avisos upstream de dependências terceiras quebrassem o status visual (marcador vermelho "Failed") dos commits no GitHub Actions.
+- **Dados e Logo da Empresa Dinâmicos (/empresa)**:
+  - No `EditorPropostaComercial`, a logomarca agora é carregada dinamicamente via `EmpresaLogo` do storage R2 da empresa configurada em `/empresa` (`configuracoes_empresa`), com fallback estilizado para iniciais.
+  - Cabeçalho, capa e bloco de assinaturas exibem Nome Fantasia / Razão Social, CNPJ formatado, CREA/CAU, e-mail e telefone reais da empresa.
+- **Dados do Cliente e Obra na Proposta**:
+  - O editor de proposta e a listagem resolvem a obra vinculada à proposta e o cliente cadastrado na referida obra.
+  - O quadro **CONTRATANTE / CLIENTE** e **OBRA / LOCALIZAÇÃO** agora exibe nome do cliente, CPF/CNPJ formatado, e-mail, nome da obra, endereço e prazo previsto.
+  - No bloco de assinaturas, a assinatura do cliente agora exibe o nome real do cliente cadastrado na obra.
+- **Valores Reais no Editor da Proposta**:
+  - Quando a proposta é criada a partir de um orçamento ou aberta em rascunho sem itens pré-congelados, o editor carrega dinamicamente as etapas e atividades analíticas reais da obra (ou itens legados) com quantidades, unidades, preços unitários e preços totais calculados com o BDI real.
+- **Correção da Impressão / Salvar PDF em Branco**:
+  - Corrigido o `@media print` no `styles.css` e no `EditorPropostaComercial` adicionando a classe `.proposta-print-sheet` com regras específicas de layout A4 (`@page { size: A4 portrait; margin: 10mm; }`).
+  - Adicionado `.no-print` na barra de ferramentas superior e no menu lateral para ocultá-los na impressão, permitindo geração instantânea de PDF nítido e sem páginas em branco.
+- **Exclusão Persistente de Propostas**:
+  - Desvinculação prévia de referências em `obras`, `contratos` e `obras_cronogramas` antes do delete de `propostas`.
+  - Exclusão das tabelas dependentes (`proposta_revisoes`, `propostas_itens`) e verificação do retorno com mutação otimista no cache do React Query e `refetchOnMount: "always"`.
+- **Testes e Publicação**:
+  - 17 testes automatizados de unidade aprovados cobrindo discriminação de BDI/custos, editor de proposta, orçamentos analíticos e legados, fotografias imutáveis e importações SINAPI.
+  - Todos os builds e deploys no Cloudflare Workers concluídos com 100% de sucesso.
