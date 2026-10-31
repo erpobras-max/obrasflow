@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog'
 import {
   normalizarConfiguracaoProposta,
+  formatarRegistroEmpresa,
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
 import type { PropostaEditorData } from '@/lib/propostas/proposta-editor.types'
