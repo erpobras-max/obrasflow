@@ -605,3 +605,27 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     - Testes de migração em banco efêmero PGlite (`tests/financeiro-parcelamento-db.test.mjs`).
     - Suite completa de 154/154 testes automatizados aprovada com 100% de sucesso.
     - Build de produção SSR (`npm run build`) validado com sucesso.
+
+
+- **Correção no Editor de Propostas Comerciais (Branch fix/210-import-formatar-registro-empresa-propostas, Issue #210)**:
+  - **Diagnóstico**: O editor comercial (`src/components/propostas/editor-proposta-comercial.tsx`) disparava `ReferenceError: formatarRegistroEmpresa is not defined` ao ser aberto devido à omissão da função no bloco de imports de `@/lib/proposta-orcamento.functions`.
+  - **Correção**: Import adicionado e coberto por teste unitário em `tests/editor-proposta-comercial.test.mjs`.
+  - PR mesclada na `main` e publicada.
+
+- **Fase 2 do Módulo Financeiro: Múltiplas Contas, Transferências, Extrato OFX e Central de Vencimentos (Inspirado no Mais Controle - Issue #211, Branch feat/211-financeiro-fase-2-contas-ofx-transferencias)**:
+  - **1. Gestão de Contas Bancárias e Transferências Internas**:
+    - Migration `20261031150000_financeiro_transferencias_bancarias.sql` criando a tabela `public.transferencias_bancarias`, índices, constraint de contas distintas (`conta_origem_id <> conta_destino_id`) e RLS.
+    - Componente modular `TransferenciaFormDialog` (`src/components/financeiro/transferencia-form-dialog.tsx`) com upload de comprovante de transferência.
+    - Tabela de histórico de transferências na aba "Contas Bancárias" com visualização de comprovante e exclusão controlada para administradores e diretores.
+    - Recálculo contábil exato dos saldos em tempo real de cada conta bancária (`saldo_inicial + receitas_recebidas - despesas_pagas + transferencias_recebidas - transferencias_enviadas`), sem impactar nem distorcer as receitas/despesas operacionais do DRE.
+  - **2. Importação e Conciliação com Extrato Bancário OFX**:
+    - Parser nativo de arquivos OFX em `src/lib/financeiro-ofx.ts`, tolerante a variações SGML e XML dos bancos brasileiros (Itaú, Bradesco, Santander, Banco do Brasil, Caixa, Inter, Nubank, etc.).
+    - Algoritmo de correspondência assistida `sugerirConciliacaoParaTransacao` com pontuação por valor idêntico em centavos, documento e proximidade de data.
+    - Componente modular `ConciliacaoOfxDialog` (`src/components/financeiro/conciliacao-ofx-dialog.tsx`) com seleção de conta, upload de arquivo `.ofx`, resumo do extrato e conciliação assistida de créditos/débitos com 1 clique, além de criação rápida de lançamentos diretos para tarifas bancárias.
+  - **3. Central de Alertas e Vencimentos Financeiros**:
+    - Componente `AlertasVencimentoBar` (`src/components/financeiro/alertas-vencimento-bar.tsx`) com cards interativos destacando "Vencimentos de Hoje", "Próximos 7 Dias" e "Títulos em Atraso", integrados a atalhos de filtros na tela.
+  - **Validação**:
+    - Testes unitários do parser OFX e algoritmo de matching (`tests/financeiro-ofx.test.mjs`).
+    - Testes de migração em banco efêmero PGlite (`tests/financeiro-transferencias-db.test.mjs`).
+    - Suite completa de 160/160 testes automatizados aprovada com 100% de sucesso.
+    - Build de produção SSR (`npm run build`) validado com sucesso.

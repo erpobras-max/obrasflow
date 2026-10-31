@@ -26,6 +26,10 @@ import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import { uploadR2, openR2File } from "@/lib/r2";
 import { gerarParcelasFinanceiras } from "@/lib/financeiro-parcelamento";
+import { ArrowRightLeft, Sparkles, Clock, CalendarDays } from "lucide-react";
+import { TransferenciaFormDialog } from "@/components/financeiro/transferencia-form-dialog";
+import { ConciliacaoOfxDialog } from "@/components/financeiro/conciliacao-ofx-dialog";
+import { AlertasVencimentoBar } from "@/components/financeiro/alertas-vencimento-bar";
 import * as XLSX from "xlsx";
 import {
   contasReceberSchema,
