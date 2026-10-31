@@ -35,7 +35,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { OrcamentoAnaliticoView } from "@/components/orcamentos/orcamento-analitico-view";
-import { sincronizarPropostaComOrcamento } from "@/lib/proposta-orcamento-sync";
 
 export const Route = createFileRoute("/_app/orcamentos")({
   component: OrcamentosPage,
@@ -132,7 +131,7 @@ function OrcamentosPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("obras")
-        .select("id,numero,nome,orcamento,valor_executado,cliente_id")
+        .select("id,numero,nome,orcamento,valor_executado")
         .order("nome");
       if (error) throw error;
       return data ?? [];
@@ -260,42 +259,11 @@ function OrcamentosPage() {
         .from("obras")
         .update({ orcamento: Number(totalCents) / 100 })
         .eq("id", selectedObraId);
-
-      // Sincroniza valor da proposta em status rascunho com o total do orçamento
-      try {
-        const { data: obraRow } = await supabase
-          .from("obras")
-          .select("proposta_id, nome")
-          .eq("id", selectedObraId)
-          .maybeSingle();
-
-        let propId = obraRow?.proposta_id;
-        if (!propId && obraRow?.nome) {
-          const { data: pExist } = await supabase
-            .from("propostas")
-            .select("id")
-            .ilike("titulo", `%${obraRow.nome}%`)
-            .eq("status", "rascunho")
-            .limit(1);
-          propId = pExist?.[0]?.id;
-        }
-
-        if (propId) {
-          await supabase
-            .from("propostas")
-            .update({ valor_total: Number(totalCents) / 100 })
-            .eq("id", propId)
-            .eq("status", "rascunho");
-        }
-      } catch (errSync) {
-        console.warn("Aviso ao sincronizar proposta com orçamento:", errSync);
-      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["obras"] });
       qc.invalidateQueries({ queryKey: ["obras-select-orc"] });
       qc.invalidateQueries({ queryKey: ["orcamento-for-obra"] });
-      qc.invalidateQueries({ queryKey: ["propostas"] });
     }
   });
 
@@ -1035,106 +1003,15 @@ function OrcamentosPage() {
                 somenteLeitura={!podeEditar}
                 onItensAlterados={() => qc.invalidateQueries({ queryKey: ["orcamento-itens", orcamento?.id] })}
                 onGerarProposta={async () => {
-                  try {
-                    let obra = obras?.find((o) => o.id === selectedObraId);
-                    if (selectedObraId) {
-                      const { data: obraDb } = await supabase
-                        .from("obras")
-                        .select("id, numero, nome, cliente_id")
-                        .eq("id", selectedObraId)
-                        .maybeSingle();
-                      if (obraDb) obra = obraDb;
-                    }
-
-                    const nomeObra = obra?.nome || "Obra";
-                    const { data: propsExistentes } = await supabase
-                      .from("propostas")
-                      .select("id, titulo, status")
-                      .ilike("titulo", `%${nomeObra}%`)
-                      .limit(1);
-
-                    if (propsExistentes && propsExistentes.length > 0) {
-                      const prop = propsExistentes[0];
-                      if (prop.status === "rascunho") {
-                        try {
-                          await sincronizarPropostaComOrcamento(prop.id, selectedObraId);
-                          toast.success("Proposta comercial sincronizada com o orçamento atualizado!");
-                        } catch (errSync) {
-                          console.warn("Aviso ao sincronizar proposta:", errSync);
-                        }
-                      }
-                      navigate({ to: "/comercial/propostas", search: { propostaId: prop.id } });
-                      return;
-                    }
-
-                    let clienteId = obra?.cliente_id;
-                    if (!clienteId) {
-                      const { data: clientes } = await supabase.from("clientes").select("id").limit(1);
-                      clienteId = clientes?.[0]?.id;
-                    }
-
-                    if (clienteId) {
-                      // Calcular valor total inicial do orçamento (caso já existam etapas analíticas ou itens)
-                      let initialValorTotal = orcamento?.total_estimado ? Number(orcamento.total_estimado) / 100 : 0;
-                      if (initialValorTotal === 0 && orcamento?.id) {
-                        const { data: etapasAnaliticas } = await supabase
-                          .from("orcamento_etapas")
-                          .select("id")
-                          .eq("orcamento_id", orcamento.id);
-                        if (etapasAnaliticas && etapasAnaliticas.length > 0) {
-                          const epIds = etapasAnaliticas.map((e) => e.id);
-                          const { data: ativs } = await supabase
-                            .from("orcamento_atividades")
-                            .select("id, quantidade, etapa_id, bdi_percentual, codigo, descricao, unidade")
-                            .in("etapa_id", epIds);
-                          if (ativs && ativs.length > 0) {
-                            const ativIds = ativs.map((a) => a.id);
-                            const { data: insDb } = await supabase
-                              .from("orcamento_atividade_insumos")
-                              .select("atividade_id, preco_unitario_centavos, coeficiente")
-                              .in("atividade_id", ativIds);
-                            const insList = insDb ?? [];
-                            const bdiGeral = Number(orcamento.bdi_geral ?? 25);
-                            let totalCentavos = 0;
-                            ativs.forEach((a) => {
-                              const bdi = a.bdi_percentual != null ? Number(a.bdi_percentual) : bdiGeral;
-                              const insAtiv = insList.filter((i) => i.atividade_id === a.id);
-                              const custoCents = insAtiv.reduce((sum, i) => sum + Math.round(Number(i.coeficiente ?? 1) * Number(i.preco_unitario_centavos ?? 0)), 0);
-                              if (custoCents > 0) {
-                                totalCentavos += Math.round(custoCents * (1 + bdi / 100)) * Number(a.quantidade ?? 1);
-                              }
-                            });
-                            if (totalCentavos > 0) {
-                              initialValorTotal = totalCentavos / 100;
-                            }
-                          }
-                        }
-                      }
-
-                      const { data: nova, error } = await supabase
-                        .from("propostas")
-                        .insert({
-                          cliente_id: clienteId,
-                          titulo: `Proposta Comercial - ${nomeObra}`,
-                          valor_total: initialValorTotal,
-                          status: "rascunho",
-                        })
-                        .select("id")
-                        .single();
-
-                      if (!error && nova) {
-                        if (obra?.id) {
-                          await supabase.from("obras").update({ proposta_id: nova.id } as any).eq("id", obra.id);
-                        }
-                        toast.success("Proposta comercial iniciada com sucesso!");
-                        navigate({ to: "/comercial/propostas", search: { propostaId: nova.id } });
-                        return;
-                      }
-                    }
-                  } catch (e) {
-                    console.error(e);
-                  }
-                  navigate({ to: "/comercial/propostas" });
+                  const obra = obras?.find((item) => item.id === selectedObraId)
+                  navigate({
+                    to: "/comercial/propostas",
+                    search: {
+                      busca: obra?.nome,
+                      clienteId: obra?.cliente_id,
+                      propostaId: undefined,
+                    },
+                  })
                 }}
               />
             ) : (
