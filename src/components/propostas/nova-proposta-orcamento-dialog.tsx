@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { AlertCircle, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -77,6 +78,18 @@ export function NovaPropostaOrcamentoDialog({
     })),
   })
 
+  const obrasCadastradasQuery = useQuery<number>({
+    queryKey: ['quantidade-obras-cadastradas'],
+    enabled: open,
+    queryFn: async () => {
+      const { count, error } = await supabase
+        .from('obras')
+        .select('id', { count: 'exact', head: true })
+      if (error) throw error
+      return count ?? 0
+    },
+  })
+
   const obras = useMemo(() => {
     const unicas = new Map<string, { id: string; numero?: string | null; nome: string; cliente_id: string }>()
     for (const origem of origensQuery.data ?? []) {
@@ -113,6 +126,22 @@ export function NovaPropostaOrcamentoDialog({
       })),
     [orcamentoId, origensQuery.data],
   )
+
+  const carregandoOrigens = origensQuery.isPending || obrasCadastradasQuery.isPending
+  const erroOrigens = origensQuery.isError || obrasCadastradasQuery.isError
+  const semOrigens = !carregandoOrigens && !erroOrigens && obras.length === 0
+  const placeholderObra = carregandoOrigens
+    ? 'Carregando obras e revisões…'
+    : erroOrigens
+      ? 'Não foi possível carregar as obras'
+      : semOrigens
+        ? 'Nenhuma obra com orçamento e revisão congelada disponível'
+        : 'Selecione a obra'
+
+  const tentarNovamente = () => {
+    void origensQuery.refetch()
+    void obrasCadastradasQuery.refetch()
+  }
 
   useEffect(() => {
     if (!open || !revisaoInicialId) return
@@ -175,10 +204,38 @@ export function NovaPropostaOrcamentoDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          {carregandoOrigens && (
+            <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Carregando obras e revisões…
+            </div>
+          )}
+          {erroOrigens && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+              <span className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4" />
+                Não foi possível carregar as obras disponíveis.
+              </span>
+              <Button type="button" size="sm" variant="outline" onClick={tentarNovamente}>
+                <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                Tentar novamente
+              </Button>
+            </div>
+          )}
+          {semOrigens && (
+            <div className="rounded-md border border-dashed px-3 py-3 text-sm text-muted-foreground">
+              <p className="font-medium text-foreground">Nenhuma obra com orçamento e revisão congelada disponível</p>
+              <p className="mt-1">
+                {(obrasCadastradasQuery.data ?? 0) === 0
+                  ? 'Nenhuma obra cadastrada. Cadastre uma obra antes de criar a proposta.'
+                  : 'As obras cadastradas ainda não possuem orçamento com revisão congelada.'}
+              </p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Obra</label>
-            <Select value={obraId} disabled={Boolean(origemPropostaId)} onValueChange={(valor) => { setObraId(valor); setOrcamentoId(''); setRevisaoId('') }}>
-              <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
+            <Select value={obraId} disabled={Boolean(origemPropostaId) || carregandoOrigens || erroOrigens || semOrigens} onValueChange={(valor) => { setObraId(valor); setOrcamentoId(''); setRevisaoId('') }}>
+              <SelectTrigger><SelectValue placeholder={placeholderObra} /></SelectTrigger>
               <SelectContent>{obras.map((obra: any) => <SelectItem key={obra.id} value={obra.id}>{obra.numero ? `${obra.numero} — ` : ''}{obra.nome}</SelectItem>)}</SelectContent>
             </Select>
           </div>
