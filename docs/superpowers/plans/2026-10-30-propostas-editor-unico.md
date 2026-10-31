@@ -488,7 +488,7 @@ Run: `git log --oneline origin/main..HEAD`
 
 Expected: commits pequenos correspondentes às Tasks 1–9.
 
-- [ ] **Step 8: Abrir PR sem mesclar**
+- [x] **Step 8: Abrir PR sem mesclar**
 
 Título sugerido: `feat(propostas): consolidar fluxo no editor comercial`
 
