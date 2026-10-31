@@ -154,7 +154,12 @@ function OrcamentosPage() {
   }, [obras, selectedObraId]);
 
   // Orcamento table check/upsert
-  const { data: orcamento } = useQuery({
+  const {
+    data: orcamento,
+    isPending: loadingOrcamento,
+    isError: erroOrcamento,
+    refetch: recarregarOrcamento,
+  } = useQuery({
     queryKey: ["orcamento-for-obra", selectedObraId],
     enabled: !!selectedObraId,
     queryFn: async () => {
@@ -986,7 +991,28 @@ function OrcamentosPage() {
         {/* Tab 1: Orçamento de Obras */}
         <TabsContent value="obras" className="space-y-6">
           {selectedObraId ? (
-            import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 !== "false" && orcamento ? (
+            loadingOrcamento ? (
+              <Card className="border border-dashed py-12">
+                <CardContent className="flex flex-col items-center justify-center gap-3 text-center">
+                  <Loader2 className="size-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">Carregando orçamento da obra…</p>
+                </CardContent>
+              </Card>
+            ) : erroOrcamento ? (
+              <Card className="border border-destructive/30 bg-destructive/5 py-12">
+                <CardContent className="flex flex-col items-center justify-center gap-3 text-center">
+                  <AlertCircle className="size-8 text-destructive" />
+                  <div>
+                    <p className="font-medium text-destructive">Não foi possível carregar o orçamento</p>
+                    <p className="mt-1 text-sm text-muted-foreground">Verifique a conexão e tente novamente.</p>
+                  </div>
+                  <Button variant="outline" onClick={() => void recarregarOrcamento()}>
+                    <RefreshCw className="mr-2 size-4" />
+                    Tentar novamente
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : import.meta.env.VITE_ORCAMENTO_ANALITICO_V1 !== "false" && orcamento ? (
               <OrcamentoAnaliticoView
                 orcamentoId={orcamento.id}
                 obraId={selectedObraId}
