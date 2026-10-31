@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { Fragment, useState, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { EmpresaLogo } from '@/components/empresa-logo'
 import { formatCpfCnpj, formatTelefone } from '@/lib/validacao-documento'
@@ -22,7 +22,6 @@ import {
   DollarSign,
   RefreshCw,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -37,113 +36,63 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import {
-  configuracaoPropostaPadrao,
-  configuracaoPropostaComercialPadrao,
+  normalizarConfiguracaoProposta,
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
+import type { PropostaEditorData } from '@/lib/propostas/proposta-editor.types'
+import type { PropostaRevisaoResumo } from '@/lib/propostas/proposta-editor.types'
+import { HistoricoRevisoesProposta } from './historico-revisoes-proposta'
 import { supabase as client } from '@/integrations/supabase/client.custom'
 
 const supabase = client as any
 const brl = (cents: number) =>
   (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-export interface PropostaEditorData {
-  id?: string
-  numero?: string
-  clienteId?: string
-  clienteNome?: string
-  clienteCpfCnpj?: string
-  clienteEmail?: string
-  obraId?: string
-  obraNome?: string
-  obraEndereco?: string
-  prazoExecucaoTexto?: string
-  orcamentoRevisaoId?: string
-  status?: 'rascunho' | 'enviada' | 'aceita' | 'rejeitada'
-  revisaoNumero?: number
-  etapas: Array<{
-    id: string
-    codigo: string
-    nome: string
-    valorTotalCentavos: number
-    atividades: Array<{
-      id: string
-      codigo?: string | null
-      descricao: string
-      unidade: string
-      quantidade: number
-      precoUnitarioCentavos: number
-      precoTotalCentavos: number
-    }>
-  }>
-}
-
-export interface SalvarPropostaParams {
-  config: ConfiguracaoPropostaComercial
-  valorTotalCentavos: number
-  clienteId?: string
-  etapas: any[]
-}
-
 interface EditorPropostaComercialProps {
   proposta: PropostaEditorData
-  onSalvarRascunho?: (params: SalvarPropostaParams) => Promise<void>
-  onPublicarRevisao?: (params: SalvarPropostaParams) => Promise<void>
-  onSincronizarOrcamento?: () => Promise<void>
+  configuracaoInicial?: Partial<ConfiguracaoPropostaComercial> | null
+  revisoes?: PropostaRevisaoResumo[]
+  revisaoSelecionadaId?: string
+  onSelecionarRevisao?: (id: string) => void
+  somenteLeitura?: boolean
+  onSalvarRascunho?: (config: ConfiguracaoPropostaComercial) => Promise<void>
+  onPublicarRevisao?: (config: ConfiguracaoPropostaComercial) => Promise<void>
   onVoltar?: () => void
 }
 
 export function EditorPropostaComercial({
   proposta,
+  configuracaoInicial,
+  revisoes = [],
+  revisaoSelecionadaId,
+  onSelecionarRevisao,
+  somenteLeitura = false,
   onSalvarRascunho,
   onPublicarRevisao,
-  onSincronizarOrcamento,
   onVoltar,
 }: EditorPropostaComercialProps) {
-  // Consulta dados e logo da empresa cadastrada em /empresa
-  const { data: listaClientes } = useQuery({
-    queryKey: ['clientes-opt-editor'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('id,nome,nome_fantasia,cpf_cnpj,cnpj,cpf,email')
-        .is('deleted_at', null)
-        .order('nome')
-      if (error) throw error
-      return (data ?? []) as any[]
-    },
-  })
-
-  const [selectedClienteId, setSelectedClienteId] = useState<string>(
-    proposta.clienteId || ''
+  const configRecebida = useMemo(
+    () => normalizarConfiguracaoProposta({
+      ...configuracaoInicial,
+      tituloProposta: configuracaoInicial?.tituloProposta ?? `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
+      prazoExecucaoTexto: configuracaoInicial?.prazoExecucaoTexto ?? proposta.prazoExecucaoTexto,
+    }),
+    [configuracaoInicial, proposta.obraNome, proposta.prazoExecucaoTexto],
   )
+  const [config, setConfig] = useState<ConfiguracaoPropostaComercial>(configRecebida)
 
   useEffect(() => {
-    if (proposta.clienteId) {
-      setSelectedClienteId(proposta.clienteId)
-    }
-  }, [proposta.clienteId])
+    setConfig(configRecebida)
+  }, [configRecebida])
 
-  const clienteAtual = useMemo(() => {
-    if (selectedClienteId && listaClientes) {
-      return listaClientes.find((item: any) => item.id === selectedClienteId) || null
-    }
-    return null
-  }, [selectedClienteId, listaClientes])
-
-  const clienteNome = clienteAtual?.nome || clienteAtual?.nome_fantasia || proposta.clienteNome || 'Cliente'
-  const docCliente = clienteAtual?.cpf_cnpj || clienteAtual?.cnpj || clienteAtual?.cpf || ''
-  const clienteCpfCnpj = docCliente ? formatCpfCnpj(docCliente) : (proposta.clienteCpfCnpj || '')
-  const clienteEmail = clienteAtual?.email || proposta.clienteEmail || ''
-
+  // Consulta dados e logo da empresa cadastrada em /empresa
   const { data: empresa } = useQuery({
     queryKey: ['configuracoes-empresa'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('configuracoes_empresa')
         .select('*')
-        .order('id')
-        .limit(1)
+        .eq('id', 1)
         .maybeSingle()
       if (error) throw error
       return data
@@ -151,55 +100,26 @@ export function EditorPropostaComercial({
   })
 
   const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'ObrasFlow Engenharia & Construções'
-  const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
+const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
   const registroEmpresa = formatarRegistroEmpresa(empresa)
   const emailEmpresa = empresa?.email || ''
   const telefoneEmpresa = (empresa?.telefone || empresa?.celular)
     ? formatTelefone(empresa.telefone || empresa.celular)
-    : ''
-  const enderecoEmpresa = empresa?.endereco || [empresa?.logradouro, empresa?.numero, empresa?.bairro, empresa?.cidade, empresa?.uf].filter(Boolean).join(', ') || ''
-
-  const [config, setConfig] = useState<ConfiguracaoPropostaComercial>(() => ({
-    ...configuracaoPropostaComercialPadrao,
-    tituloProposta: proposta.numero ? `Proposta Comercial nº ${proposta.numero} · ${proposta.obraNome ?? 'Obra'}` : `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
-    prazoExecucaoTexto: proposta.prazoExecucaoTexto || configuracaoPropostaComercialPadrao.prazoExecucaoTexto,
-    textoContrato: empresa?.clausula_padrao || configuracaoPropostaComercialPadrao.textoContrato,
-  }))
-
-  useEffect(() => {
-    if (empresa?.clausula_padrao && config.textoContrato === configuracaoPropostaComercialPadrao.textoContrato) {
-      setConfig((prev) => ({
-        ...prev,
-        textoContrato: empresa.clausula_padrao,
-      }))
-    }
-  }, [empresa?.clausula_padrao])
+    : '(11) 3456-7890'
 
   const [modoImpressao, setModoImpressao] = useState(false)
   const [historicoOpen, setHistoricoOpen] = useState(false)
   const [salvando, setSalvando] = useState(false)
-  const [sincronizando, setSincronizando] = useState(false)
-
-  const sincronizarOrcamento = async () => {
-    if (!onSincronizarOrcamento) return
-    setSincronizando(true)
-    try {
-      await onSincronizarOrcamento()
-    } catch (e) {
-      toast.error((e as Error).message)
-    } finally {
-      setSincronizando(false)
-    }
-  }
-
 
   // Status da proposta
-  const isAceita = proposta.status === 'aceita'
+  const isEditavel = proposta.status === 'rascunho' && !somenteLeitura
+  const podeCriarNovaRevisao =
+    !somenteLeitura && (proposta.status === 'rejeitada' || proposta.status === 'expirada')
 
   // Atualizador de campo individual
   const updateConfig = (patch: Partial<ConfiguracaoPropostaComercial>) => {
-    if (isAceita) {
-      toast.error('Proposta aceita está congelada. Crie uma nova revisão para alterar.')
+    if (!isEditavel) {
+      toast.error('Esta revisão está congelada e disponível somente para leitura e impressão.')
       return
     }
     setConfig((prev) => ({ ...prev, ...patch }))
@@ -253,12 +173,7 @@ export function EditorPropostaComercial({
     setSalvando(true)
     try {
       if (onSalvarRascunho) {
-        await onSalvarRascunho({
-          config,
-          valorTotalCentavos: valorTotalVisivelCentavos,
-          clienteId: selectedClienteId || proposta.clienteId,
-          etapas: etapasVisiveis,
-        })
+        await onSalvarRascunho(config)
       } else {
         toast.success('Rascunho da proposta salvo com sucesso.')
       }
@@ -274,12 +189,7 @@ export function EditorPropostaComercial({
     setSalvando(true)
     try {
       if (onPublicarRevisao) {
-        await onPublicarRevisao({
-          config,
-          valorTotalCentavos: valorTotalVisivelCentavos,
-          clienteId: selectedClienteId || proposta.clienteId,
-          etapas: etapasVisiveis,
-        })
+        await onPublicarRevisao(config)
       } else {
         toast.success('Nova revisão publicada e congelada com sucesso!')
       }
@@ -301,37 +211,34 @@ export function EditorPropostaComercial({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 10mm 12mm;
+            margin: 10mm;
           }
-          html, body, #root, div {
+          html, body {
             background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
             height: auto !important;
-            min-height: 0 !important;
-            max-height: none !important;
             overflow: visible !important;
           }
-          body * {
-            visibility: hidden;
-          }
-          .proposta-print-sheet,
-          .proposta-print-sheet * {
-            visibility: visible !important;
+          .no-print {
+            display: none !important;
           }
           .proposta-print-sheet {
+            visibility: visible !important;
             position: absolute !important;
+            display: block !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
-            max-width: 100% !important;
+            max-width: none !important;
             margin: 0 !important;
             padding: 0 !important;
-            background: #ffffff !important;
-            color: #0f172a !important;
-            border: none !important;
             box-shadow: none !important;
+            border: none !important;
+            background: #ffffff !important;
           }
-          .no-print, header, nav, aside, [data-sidebar], .app-sidebar {
-            display: none !important;
+          .proposta-print-sheet * {
+            visibility: visible !important;
           }
         }
       `}</style>
@@ -346,12 +253,12 @@ export function EditorPropostaComercial({
           )}
           <span
             className={`font-bold text-xs px-2.5 py-1 rounded border ${
-              isAceita
+              !isEditavel
                 ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
                 : 'bg-amber-100 text-amber-800 border-amber-300'
             }`}
           >
-            {isAceita ? 'Proposta Aceita (Congelada)' : `Rascunho Comercial (Rev. ${proposta.revisaoNumero ?? 1})`}
+            {isEditavel ? `Rascunho Comercial (Rev. ${proposta.revisaoNumero ?? 1})` : `Revisão ${proposta.revisaoNumero ?? 1} · ${proposta.status} (somente leitura)`}
           </span>
           <span className="text-xs text-slate-500 hidden sm:inline">
             Obra: <strong>{proposta.obraNome ?? 'Obra'}</strong> • Preços congelados do orçamento
@@ -369,25 +276,11 @@ export function EditorPropostaComercial({
             Revisões
           </Button>
 
-          {onSincronizarOrcamento && !isAceita && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={sincronizarOrcamento}
-              disabled={salvando || sincronizando}
-              className="text-xs bg-white text-blue-700 border-blue-300 hover:bg-blue-50 flex items-center gap-1.5"
-              title="Atualizar os itens, quantidades e preços com o orçamento mais recente da obra"
-            >
-              <RefreshCw className={cn("size-3.5", sincronizando && "animate-spin text-blue-600")} />
-              Atualizar do Orçamento
-            </Button>
-          )}
-
           <Button
             variant="outline"
             size="sm"
             onClick={salvarRascunho}
-            disabled={salvando || isAceita}
+            disabled={salvando || !isEditavel}
             className="text-xs bg-white text-slate-700 border-slate-300"
           >
             Salvar Rascunho
@@ -396,12 +289,24 @@ export function EditorPropostaComercial({
           <Button
             size="sm"
             onClick={publicar}
-            disabled={salvando || isAceita}
+            disabled={salvando || !isEditavel}
             className="bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs shadow-sm"
           >
             <CheckCircle2 className="mr-1.5 size-3.5" />
             Publicar Nova Revisão
           </Button>
+
+          {podeCriarNovaRevisao && (
+            <Button
+              size="sm"
+              onClick={salvarRascunho}
+              disabled={salvando}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-sm"
+            >
+              <RefreshCw className="mr-1.5 size-3.5" />
+              Criar nova revisão
+            </Button>
+          )}
 
           <Button
             size="sm"
@@ -427,26 +332,6 @@ export function EditorPropostaComercial({
               Personalize a apresentação comercial sem alterar o orçamento técnico original. As mudanças refletem instantaneamente no preview à direita.
             </p>
           </div>
-
-          {onSincronizarOrcamento && !isAceita && (
-            <div className="p-3 bg-blue-50/70 border border-blue-200 rounded-lg flex items-center justify-between gap-2">
-              <div>
-                <span className="font-semibold text-blue-900 block text-[11px]">Sincronização com Orçamento</span>
-                <span className="text-[10px] text-blue-700 block">Atualize etapas e itens conforme alterações no orçamento da obra.</span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={sincronizarOrcamento}
-                disabled={salvando || sincronizando}
-                className="h-7 text-[11px] bg-white text-blue-700 border-blue-300 hover:bg-blue-100 shrink-0"
-              >
-                <RefreshCw className={cn("size-3 mr-1", sincronizando && "animate-spin text-blue-600")} />
-                Sincronizar
-              </Button>
-            </div>
-          )}
 
           {/* 1. APRESENTAÇÃO & IDENTIFICAÇÃO */}
           <div className="border border-slate-200 rounded-lg p-4 space-y-3 bg-slate-50/50">
@@ -477,24 +362,6 @@ export function EditorPropostaComercial({
                   checked={config.mostrarDadosCliente}
                   onCheckedChange={(v) => updateConfig({ mostrarDadosCliente: v })}
                 />
-              </div>
-
-              <div className="pt-2">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1">
-                  Cliente Associado à Proposta:
-                </label>
-                <select
-                  value={selectedClienteId}
-                  onChange={(e) => setSelectedClienteId(e.target.value)}
-                  className="w-full h-8 text-xs bg-white text-slate-900 border border-slate-300 rounded-md px-2 font-medium"
-                >
-                  <option value="">Selecione um cliente...</option>
-                  {(listaClientes ?? []).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.nome || c.nome_fantasia}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="pt-2">
@@ -672,27 +539,6 @@ export function EditorPropostaComercial({
               </div>
 
               <div className="flex items-center justify-between py-1 border-t border-slate-200/60 pt-2">
-                <span className="text-slate-700">Incluir Minuta do Contrato / Cláusulas</span>
-                <Switch
-                  checked={config.mostrarContrato}
-                  onCheckedChange={(v) => updateConfig({ mostrarContrato: v })}
-                />
-              </div>
-
-              {config.mostrarContrato && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Minuta Contratual / Cláusulas:</label>
-                  <Textarea
-                    rows={6}
-                    value={config.textoContrato}
-                    onChange={(e) => updateConfig({ textoContrato: e.target.value })}
-                    className="text-xs bg-white text-slate-900 border-slate-300 leading-relaxed font-mono text-[10px]"
-                    placeholder="Cláusulas contratuais da proposta..."
-                  />
-                </div>
-              )}
-
-              <div className="flex items-center justify-between py-1 border-t border-slate-200/60 pt-2">
                 <span className="text-slate-700">Incluir Bloco de Assinaturas</span>
                 <Switch
                   checked={config.mostrarAssinaturas}
@@ -738,19 +584,8 @@ export function EditorPropostaComercial({
                 )}
                 <div>
                   <h3 className="text-base font-bold text-slate-900">{nomeEmpresa.toUpperCase()}</h3>
-                  {(cnpjFormatado || registroEmpresa) && (
-                    <p className="text-xs text-slate-500">
-                      {[cnpjFormatado ? `CNPJ: ${cnpjFormatado}` : null, registroEmpresa].filter(Boolean).join(' • ')}
-                    </p>
-                  )}
-                  {(emailEmpresa || telefoneEmpresa) && (
-                    <p className="text-xs text-slate-500">
-                      {[emailEmpresa, telefoneEmpresa].filter(Boolean).join(' • ')}
-                    </p>
-                  )}
-                  {enderecoEmpresa && (
-                    <p className="text-[11px] text-slate-400">{enderecoEmpresa}</p>
-                  )}
+                  <p className="text-xs text-slate-500">{`CNPJ: ${cnpjFormatado} • ${registroEmpresa}`}</p>
+                  <p className="text-xs text-slate-500">{`${emailEmpresa} • ${telefoneEmpresa}`}</p>
                 </div>
               </div>
 
@@ -771,8 +606,8 @@ export function EditorPropostaComercial({
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs">
                 <div>
                   <span className="font-bold text-slate-400 uppercase text-[10px]">CONTRATANTE / CLIENTE:</span>
-                  <div className="font-bold text-slate-900 mt-0.5">{clienteNome}</div>
-                  <div className="text-slate-600">CPF/CNPJ: {clienteCpfCnpj || '-'}</div>
+<div className="font-bold text-slate-900 mt-0.5">{proposta.clienteNome || 'Cliente'}</div>
+                  <div className="text-slate-600">CPF/CNPJ: {proposta.clienteCpfCnpj || '-'}</div>
                 </div>
                 <div>
                   <span className="font-bold text-slate-400 uppercase text-[10px]">OBRA / LOCALIZAÇÃO:</span>
@@ -814,7 +649,7 @@ export function EditorPropostaComercial({
                   </thead>
                   <tbody className="divide-y divide-slate-200 text-slate-800">
                     {etapasVisiveis.map((etapa) => (
-                      <div key={etapa.id} className="contents">
+                      <Fragment key={etapa.id}>
                         {/* Linha da Etapa */}
                         <tr className="bg-slate-100 font-bold text-slate-900">
                           <td className="py-2.5 px-3 text-center">{etapa.codigo}</td>
@@ -862,7 +697,7 @@ export function EditorPropostaComercial({
                               </tr>
                             )
                           })}
-                      </div>
+                      </Fragment>
                     ))}
                   </tbody>
 
@@ -921,32 +756,18 @@ export function EditorPropostaComercial({
               </p>
             )}
 
-            {/* MINUTA DO CONTRATO / CLÁUSULAS */}
-            {config.mostrarContrato && config.textoContrato && (
-              <div className="pt-6 border-t border-slate-200 space-y-2 text-xs break-inside-avoid">
-                <h4 className="font-bold text-slate-800 uppercase tracking-wide">
-                  4. Minuta Contratual & Cláusulas Gerais
-                </h4>
-                <div className="text-slate-600 whitespace-pre-line leading-relaxed text-[11px] bg-slate-50/70 p-4 rounded-lg border border-slate-200 print:bg-transparent print:border-none print:p-0">
-                  {config.textoContrato}
-                </div>
-              </div>
-            )}
-
             {/* BLOCO DE ASSINATURAS */}
             {config.mostrarAssinaturas && (
-              <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs break-inside-avoid">
+              <div className="pt-8 border-t border-slate-200 grid grid-cols-2 gap-8 text-center text-xs">
                 <div>
-                  <div className="border-b border-slate-400 w-48 mx-auto mb-1.5" />
-                  <strong className="text-slate-900 block">{nomeEmpresa}</strong>
+                  <div className="border-b border-slate-400 w-48 mx-auto mb-1" />
+                  <strong className="text-slate-900">{nomeEmpresa}</strong>
                   <div className="text-slate-500 text-[11px]">Diretoria Técnica & Comercial</div>
-                  {cnpjFormatado && <div className="text-slate-400 text-[10px]">CNPJ: {cnpjFormatado}</div>}
                 </div>
                 <div>
-                  <div className="border-b border-slate-400 w-48 mx-auto mb-1.5" />
-                  <strong className="text-slate-900 block">{clienteNome}</strong>
+                  <div className="border-b border-slate-400 w-48 mx-auto mb-1" />
+                  <strong className="text-slate-900">{proposta.clienteNome ?? 'Cliente'}</strong>
                   <div className="text-slate-500 text-[11px]">De Acordo do Contratante</div>
-                  {clienteCpfCnpj && <div className="text-slate-400 text-[10px]">CPF/CNPJ: {clienteCpfCnpj}</div>}
                 </div>
               </div>
             )}
@@ -954,41 +775,13 @@ export function EditorPropostaComercial({
         </main>
       </div>
 
-      {/* DIÁLOGO HISTÓRICO DE REVISÕES */}
-      <Dialog open={historicoOpen} onOpenChange={setHistoricoOpen}>
-        <DialogContent className="max-w-2xl bg-white text-slate-900 border border-slate-200">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900">
-              Histórico de Revisões da Proposta
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="space-y-3 py-2 text-xs">
-            <div className="bg-slate-50 p-3 rounded border border-slate-200 flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-slate-900">
-                    Revisão {proposta.revisaoNumero ?? 1} (Atual)
-                  </span>
-                  <Badge variant="outline" className="text-[10px]">
-                    {proposta.status ?? 'rascunho'}
-                  </Badge>
-                </div>
-                <p className="text-slate-500 text-[11px] mt-0.5">
-                  Valor Total: {brl(valorTotalVisivelCentavos)}
-                </p>
-              </div>
-              <span className="text-[11px] text-slate-400">Em edição</span>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setHistoricoOpen(false)}>
-              Fechar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <HistoricoRevisoesProposta
+        open={historicoOpen}
+        onOpenChange={setHistoricoOpen}
+        revisoes={revisoes}
+        revisaoSelecionadaId={revisaoSelecionadaId}
+        onSelecionar={onSelecionarRevisao}
+      />
     </div>
   )
 }

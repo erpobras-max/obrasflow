@@ -46,7 +46,7 @@ const ALL: ModuleKey[] = [
 export const ROLE_MODULES: Record<string, string[]> = {
   admin: [...ALL, "usuarios", "ponto"],
   diretor: [...ALL, "ponto"],
-  financeiro_civil: ["dashboard","financeiro","fiscal","estoque","compras","prestadores","orcamentos","medicoes","relatorios","documentos","produtos","vendas","importacoes", "ponto"],
+  financeiro_civil: ["dashboard","comercial","financeiro","fiscal","estoque","compras","prestadores","orcamentos","medicoes","relatorios","documentos","produtos","vendas","importacoes", "ponto"],
   financeiro_imobiliaria: ["dashboard","financeiro_imobiliaria","fiscal","imobiliaria","relatorios","documentos", "ponto"],
   compras: ["dashboard","compras","prestadores","estoque","orcamentos","documentos","produtos"],
   engenharia: ["dashboard","obras","ordens_servico","comercial","orcamentos","diario","medicoes","cronograma","prestadores","equipamentos","documentos","relatorios"],

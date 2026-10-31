@@ -552,6 +552,24 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
        - Ao clicar em "Iniciar/Editar Proposta Comercial" para uma obra com rascunho já existente, os itens e o valor da proposta são automaticamente sincronizados com o orçamento mais recente antes de abrir o editor.
   - 115 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
 
+- **Consolidação do Editor Único de Propostas (Issue #200)**:
+  - A rota `/comercial/propostas` mantém apenas o novo editor comercial, removendo o formulário, catálogo e impressão legados da experiência principal.
+  - Criação de proposta encadeada por obra, orçamento e revisão congelada, com reutilização idempotente do rascunho comum e duplicação somente quando solicitada como variação comercial.
+  - Histórico persistente de revisões, publicação imutável, aceite/rejeição/expiração transacionais e exclusão definitiva restrita a rascunhos por admin/diretor.
+  - Correção da causa do registro que reaparecia: a exclusão agora ocorre no banco pela RPC `excluir_proposta_rascunho`, sem remoção apenas visual ou otimista.
+  - O valor e o cliente são derivados no servidor da revisão selecionada e da obra vinculada; totais, custos e preços enviados pelo navegador não são confiados.
+  - A fotografia técnica de `orcamento_revisoes` permanece restrita a admin, diretor e engenharia. O editor consulta a RPC `listar_origens_proposta_editor`, que devolve somente metadados e fotografia comercial sem insumos, coeficientes, custos ou BDI.
+  - No aceite, a proposta é associada atomicamente à obra que originou a revisão antes do trigger legado executar; o snapshot comercial é materializado em `propostas_itens`, evitando obra duplicada e abastecendo cronograma/medições com o escopo congelado.
+  - `financeiro_civil` foi alinhado no menu, na tela e nas RPCs comerciais; `financeiro_imobiliaria` permanece isolado dos dados técnicos de obras civis.
+  - O DML direto de `propostas`, `proposta_revisoes` e `propostas_itens` foi revogado de `authenticated`; alterações comerciais passam exclusivamente pelas RPCs transacionais.
+  - Propostas legadas vinculadas à obra podem materializar explicitamente o orçamento analítico atual em uma revisão segura por `materializar_origem_analitica_proposta`.
+  - O vínculo legado agora valida cliente e obra no servidor, impedindo associar uma revisão de outra obra do mesmo cliente.
+  - A variação comercial pode ser criada a partir de qualquer proposta com revisão, inclusive enviada/aceita, preservando `duplicada_de_id` da proposta escolhida.
+  - O helper temporário de sincronização direta `proposta-orcamento-sync.ts` foi removido porque conflitava com o congelamento das revisões e com as novas permissões de banco.
+  - Propostas legadas com itens continuam disponíveis em modo somente leitura; vínculos ambíguos exigem seleção explícita da revisão de origem.
+  - Integração realizada sobre a `main` atualizada até `50b4d69`, preservando as entregas posteriores de contratos de empreiteiros, medições e impressão sem reintroduzir gravações diretas inseguras no fluxo de propostas.
+  - Validação: 143/143 testes automatizados aprovados; lint focado sem erros (1 aviso preexistente em `orcamentos.tsx`); build Vite + Nitro/Cloudflare concluído com sucesso. O E2E autenticado permanece condicionado às credenciais `E2E_EMAIL` e `E2E_PASSWORD`.
+
 - **Configuração Oficial de CREA/CAU da Empresa e Remoção de E-mail do Cliente na Proposta (Branch feat/208-crea-cadastro-empresa-e-remover-email-proposta)**:
   - **Diagnóstico e necessidades**:
     1. *Registro CREA/CAU incorreto*: O cabeçalho dos documentos de proposta comercial exibia um número de registro hardcoded ("194820-SP") quando a empresa não tinha o campo preenchido, gerando dados profissionais inverídicos para empresas cadastradas (ex: CONSTAGRO CONSTRUTORA).
@@ -562,5 +580,4 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     2. **Cadastro da Empresa (`src/routes/_app/empresa.tsx`)**: Campo "CREA / CAU" adicionado no formulário de "Identificação e situação cadastral" com placeholder explicativo, hidratado na consulta e persistido na mutação de salvamento.
     3. **Formatação segura do registro da empresa (`src/lib/proposta-orcamento.functions.ts`)**: Implementada a função utilitária `formatarRegistroEmpresa(empresa)`, que renderiza `CREA/CAU: <valor>` estritamente quando preenchido pela empresa, combinado com Inscrição Estadual e Inscrição Municipal, eliminando definitivamente qualquer fallback mockado ou estático.
     4. **Remoção do e-mail do cliente na proposta (`src/components/propostas/editor-proposta-comercial.tsx`)**: Removida a linha de e-mail do bloco visual do contratante, mantendo apenas Nome e CPF/CNPJ, além da Obra, Localização e Prazo Previsto.
-    5. **Impressão da Proposta (`src/components/propostas/proposta-impressao.tsx`)**: Cabeçalho de impressão da empresa atualizado para utilizar o campo oficial `crea_cau` quando informado.
-  - 118 testes automatizados aprovados (incluindo testes unitários dedicados em `editor-proposta-comercial.test.mjs`) e build de produção verificado com sucesso no Vite e Cloudflare Nitro.
+  - Testes automatizados aprovados (incluindo testes unitários dedicados em `editor-proposta-comercial.test.mjs`) e build de produção verificado com sucesso no Vite e Cloudflare Nitro.

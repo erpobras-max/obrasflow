@@ -3,9 +3,52 @@ import assert from 'node:assert/strict'
 import {
   configuracaoPropostaComercialPadrao,
   criarFotografiaProposta,
+  normalizarConfiguracaoProposta,
   proximaRevisaoProposta,
   formatarRegistroEmpresa,
 } from '../src/lib/proposta-orcamento.functions.ts'
+
+test('normaliza configuracao ausente para impedir campos indefinidos no editor', () => {
+  const config = normalizarConfiguracaoProposta(undefined)
+
+  assert.deepEqual(config.etapasOcultas, [])
+  assert.deepEqual(config.atividadesOcultas, [])
+  assert.deepEqual(config.descricoesComerciais, {})
+  assert.equal(config.mostrarAssinaturas, true)
+})
+
+test('completa configuracao basica preservando textos comerciais informados', () => {
+  const config = normalizarConfiguracaoProposta({
+    mostrarEtapas: true,
+    mostrarAtividades: true,
+    mostrarQuantidades: false,
+    mostrarUnidades: true,
+    mostrarPrecoUnitario: false,
+    mostrarComposicoes: false,
+    mostrarCustosInternos: false,
+    mostrarBdi: false,
+    tituloProposta: 'Reforma da residência',
+  })
+
+  assert.equal(config.tituloProposta, 'Reforma da residência')
+  assert.equal(config.mostrarQuantidades, false)
+  assert.deepEqual(config.etapasOcultas, [])
+  assert.deepEqual(config.observacoesEtapa, {})
+})
+
+test('substitui colecoes nulas de configuracao antiga por colecoes vazias', () => {
+  const config = normalizarConfiguracaoProposta({
+    etapasOcultas: null,
+    atividadesOcultas: null,
+    descricoesComerciais: null,
+    observacoesEtapa: null,
+  })
+
+  assert.deepEqual(config.etapasOcultas, [])
+  assert.deepEqual(config.atividadesOcultas, [])
+  assert.deepEqual(config.descricoesComerciais, {})
+  assert.deepEqual(config.observacoesEtapa, {})
+})
 
 test('configuracao comercial padrao contem textos executivos e visibilidade padrao', () => {
   assert.equal(configuracaoPropostaComercialPadrao.mostrarQuantidades, true)

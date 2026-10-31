@@ -79,10 +79,64 @@ export const configuracaoPropostaComercialPadrao: ConfiguracaoPropostaComercial 
   observacoesEtapa: {},
 })
 
+const registroTexto = (valor: unknown): Record<string, string> => {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return {}
+  return Object.fromEntries(
+    Object.entries(valor as Record<string, unknown>)
+      .filter(([, item]) => typeof item === 'string')
+      .map(([chave, item]) => [chave, item as string]),
+  )
+}
+
+export function normalizarConfiguracaoProposta(
+  valor?: Partial<ConfiguracaoPropostaComercial> | null,
+): ConfiguracaoPropostaComercial {
+  const origem = valor && typeof valor === 'object' ? valor : {}
+  const base = configuracaoPropostaComercialPadrao
+  const booleano = (chave: keyof ConfiguracaoPropostaComercial) =>
+    typeof origem[chave] === 'boolean' ? (origem[chave] as boolean) : (base[chave] as boolean)
+  const texto = (chave: keyof ConfiguracaoPropostaComercial) =>
+    typeof origem[chave] === 'string' ? (origem[chave] as string) : (base[chave] as string)
+  const lista = (chave: 'etapasOcultas' | 'atividadesOcultas') =>
+    Array.isArray(origem[chave]) ? origem[chave].filter((item): item is string => typeof item === 'string') : []
+
+  return {
+    mostrarEtapas: booleano('mostrarEtapas'),
+    mostrarAtividades: booleano('mostrarAtividades'),
+    mostrarQuantidades: booleano('mostrarQuantidades'),
+    mostrarUnidades: booleano('mostrarUnidades'),
+    mostrarPrecoUnitario: booleano('mostrarPrecoUnitario'),
+    mostrarComposicoes: booleano('mostrarComposicoes'),
+    mostrarCustosInternos: booleano('mostrarCustosInternos'),
+    mostrarBdi: booleano('mostrarBdi'),
+    mostrarCapa: booleano('mostrarCapa'),
+    mostrarLogo: booleano('mostrarLogo'),
+    mostrarDadosEmpresa: booleano('mostrarDadosEmpresa'),
+    mostrarDadosCliente: booleano('mostrarDadosCliente'),
+    mostrarDadosObra: booleano('mostrarDadosObra'),
+    mostrarApenasEtapa: booleano('mostrarApenasEtapa'),
+    mostrarCondicoesPagamento: booleano('mostrarCondicoesPagamento'),
+    mostrarPrazoExecucao: booleano('mostrarPrazoExecucao'),
+    mostrarValidade: booleano('mostrarValidade'),
+    mostrarObservacoes: booleano('mostrarObservacoes'),
+    mostrarAssinaturas: booleano('mostrarAssinaturas'),
+    tituloProposta: texto('tituloProposta'),
+    textoApresentacao: texto('textoApresentacao'),
+    textoEncerramento: texto('textoEncerramento'),
+    prazoExecucaoTexto: texto('prazoExecucaoTexto'),
+    validadeTexto: texto('validadeTexto'),
+    condicoesPagamentoTexto: texto('condicoesPagamentoTexto'),
+    descricoesComerciais: registroTexto(origem.descricoesComerciais),
+    etapasOcultas: lista('etapasOcultas'),
+    atividadesOcultas: lista('atividadesOcultas'),
+    observacoesEtapa: registroTexto(origem.observacoesEtapa),
+  }
+}
+
 function sanitizarComercial(valor: unknown): any {
   if (Array.isArray(valor)) return valor.map(sanitizarComercial)
   if (!valor || typeof valor !== 'object') return valor
-  const bloqueados = /^(custo|bdi|insumos?|composi(cao|ções)|coeficiente|precoUnitarioCentavos|precoManual)/i
+  const bloqueados = /^(custo|bdi|insumos?|composi(cao|ções)|coeficiente|precoManual)/i
   return Object.fromEntries(
     Object.entries(valor as Record<string, unknown>)
       .filter(([chave]) => !bloqueados.test(chave))
@@ -92,13 +146,54 @@ function sanitizarComercial(valor: unknown): any {
 
 export function criarFotografiaProposta(
   revisao: { id: string; numero: number; fotografia: Record<string, any> },
-  configuracao: Partial<ConfiguracaoPropostaComercial> = configuracaoPropostaPadrao
+  configuracao: Partial<ConfiguracaoPropostaComercial> = configuracaoPropostaComercialPadrao
 ) {
-  const config = {
-    ...configuracaoPropostaComercialPadrao,
-    ...configuracao,
+  const config = normalizarConfiguracaoProposta(configuracao)
+  const fotografiaOriginal = structuredClone(revisao.fotografia)
+  const fotografiaPlana = Array.isArray(fotografiaOriginal.atividades)
+  const origem = sanitizarComercial(fotografiaOriginal)
+
+  if (fotografiaPlana) {
+    const atividadesOrigem = Array.isArray(fotografiaOriginal.atividades) ? fotografiaOriginal.atividades : []
+    const insumosOrigem = Array.isArray(fotografiaOriginal.insumos) ? fotografiaOriginal.insumos : []
+    const bdiGeral = Number(fotografiaOriginal.orcamento?.bdi_geral ?? 0)
+    origem.etapas = (Array.isArray(fotografiaOriginal.etapas) ? fotografiaOriginal.etapas : []).map((etapa: any) => {
+      const atividades = atividadesOrigem
+        .filter((atividade: any) => atividade.etapa_id === etapa.id)
+        .sort((a: any, b: any) => Number(a.ordem ?? 0) - Number(b.ordem ?? 0))
+        .map((atividade: any) => {
+          const custoUnitarioCentavos = insumosOrigem
+            .filter((insumo: any) => insumo.atividade_id === atividade.id)
+            .reduce(
+              (total: number, insumo: any) =>
+                total + Math.round(Number(insumo.coeficiente ?? 0) * Number(insumo.preco_unitario_centavos ?? 0)),
+              0,
+            )
+          const bdi = Number(atividade.bdi_percentual ?? bdiGeral)
+          const quantidade = Number(atividade.quantidade ?? 0)
+          const precoUnitarioCentavos = Math.round(custoUnitarioCentavos * (1 + bdi / 100))
+          return {
+            id: atividade.id,
+            codigo: atividade.codigo,
+            descricao: atividade.descricao,
+            unidade: atividade.unidade,
+            quantidade,
+            precoUnitarioCentavos,
+            precoTotalCentavos: Math.round(precoUnitarioCentavos * quantidade),
+          }
+        })
+      return {
+        id: etapa.id,
+        codigo: etapa.codigo,
+        nome: etapa.nome,
+        valorTotalCentavos: atividades.reduce(
+          (total: number, atividade: any) => total + atividade.precoTotalCentavos,
+          0,
+        ),
+        atividades,
+      }
+    })
   }
-  const origem = sanitizarComercial(structuredClone(revisao.fotografia))
 
   const etapasFiltradas = (origem.etapas ?? [])
     .filter((e: any) => !config.etapasOcultas?.includes(e.id) && !config.etapasOcultas?.includes(e.codigo))
@@ -118,13 +213,18 @@ export function criarFotografiaProposta(
             })),
     }))
 
+  const totalPrecoCentavos = etapasFiltradas.reduce(
+    (total: number, etapa: any) => total + Number(etapa.valorTotalCentavos ?? 0),
+    0,
+  )
+
   return {
     orcamentoRevisaoId: revisao.id,
     orcamentoRevisaoNumero: revisao.numero,
     configuracao: structuredClone(config),
     etapas: etapasFiltradas,
-    atividades: config.mostrarAtividades ? (origem.atividades ?? []) : [],
-    totalPrecoCentavos: origem.totalPrecoCentavos ?? 0,
+    atividades: config.mostrarAtividades && !fotografiaPlana ? (origem.atividades ?? []) : [],
+    totalPrecoCentavos: totalPrecoCentavos || origem.totalPrecoCentavos || 0,
   }
 }
 
