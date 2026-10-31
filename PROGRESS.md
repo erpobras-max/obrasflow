@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 30/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 31/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -629,3 +629,14 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     - Testes de migração em banco efêmero PGlite (`tests/financeiro-transferencias-db.test.mjs`).
     - Suite completa de 160/160 testes automatizados aprovada com 100% de sucesso.
     - Build de produção SSR (`npm run build`) validado com sucesso.
+
+- **Reorganização do menu principal por fluxo de trabalho (Issue #208, Branch feat/208-menu-organizado)**:
+  - Construção Civil e Imobiliária agora funcionam como ambientes de navegação separados, alternados no cabeçalho do menu conforme as permissões do usuário.
+  - O ambiente civil foi reorganizado em Visão geral, Comercial, Planejamento e obras, Empreiteiros, Suprimentos, Financeiro e Gestão, sem excluir rotas ou funcionalidades existentes.
+  - Prestadores e Contratos de Empreiteiros foram reunidos visualmente no grupo Empreiteiros; Compras, Cotações e Pedidos de compra ficaram concentrados em Suprimentos.
+  - Os grupos são recolhíveis, a preferência fica salva no navegador e o grupo correspondente à página atual abre automaticamente.
+  - Incluída busca de módulos tolerante a acentos, aplicada depois do filtro de permissões.
+  - Corrigido o destaque de rotas com query string, diferenciando a Central de compras de `?tab=pedidos` sem perder o destaque de páginas como `/orcamentos?obra=<id>`.
+  - A mesma estrutura é reutilizada no menu desktop e na gaveta mobile.
+  - Nenhuma migration ou alteração de banco foi necessária.
+  - Validação: 167/167 testes automatizados aprovados, ESLint focado sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.
