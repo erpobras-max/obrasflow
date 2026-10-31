@@ -25,6 +25,7 @@ import {
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import { uploadR2, openR2File } from "@/lib/r2";
+import { gerarParcelasFinanceiras } from "@/lib/financeiro-parcelamento";
 import * as XLSX from "xlsx";
 import {
   contasReceberSchema,
@@ -233,6 +234,8 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
 
   // Filters
   const [filtroObra, setFiltroObra] = useState("todos");
+  const [filtroEtapa, setFiltroEtapa] = useState("todos");
+  const [filtroObraDre, setFiltroObraDre] = useState("todos");
   const [filtroStatusReceber, setFiltroStatusReceber] = useState("todos");
   const [filtroStatusPagar, setFiltroStatusPagar] = useState("todos");
   const [filtroOrigem, setFiltroOrigem] = useState("todos");
@@ -359,14 +362,58 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
     },
   });
 
+
+  const { data: etapasFiltroObra } = useQuery({
+    queryKey: ["etapas-filtro-obra", filtroObra],
+    queryFn: async () => {
+      if (!filtroObra || filtroObra === "todos" || filtroObra === "none") return [];
+      const { data: orcamento } = await (supabase as any)
+        .from("orcamentos")
+        .select("id")
+        .eq("obra_id", filtroObra)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (orcamento?.id) {
+        const { data: etapas } = await (supabase as any)
+          .from("orcamento_etapas")
+          .select("id, codigo, nome, ordem")
+          .eq("orcamento_id", orcamento.id)
+          .order("ordem", { ascending: true });
+
+        if (etapas && etapas.length > 0) return etapas;
+      }
+
+      const { data: crono } = await (supabase as any)
+        .from("obra_cronograma")
+        .select("id, nome, ordem")
+        .eq("obra_id", filtroObra)
+        .order("ordem", { ascending: true });
+
+      return (crono || []).map((c: any) => ({
+        id: c.id,
+        codigo: null,
+        nome: c.nome,
+        ordem: c.ordem,
+      }));
+    },
+    enabled: !!filtroObra && filtroObra !== "todos" && filtroObra !== "none",
+  });
+
   // DRE calculation
   const dreReport = useMemo(() => {
     if (!contasReceber || !contasPagar || !categoriasFinanceiras) {
       return { receitas: [], despesas: [], totalReceitas: 0, totalDespesas: 0, resultado: 0 };
     }
 
-    const paidReceitas = contasReceberFiltradas.filter(r => r.status === "recebida");
-    const paidDespesas = contasPagarFiltradas.filter(p => p.status === "paga");
+    let paidReceitas = contasReceberFiltradas.filter(r => r.status === "recebida");
+    let paidDespesas = contasPagarFiltradas.filter(p => p.status === "paga");
+
+    if (filtroObraDre !== "todos") {
+      paidReceitas = paidReceitas.filter(r => r.obra_id === filtroObraDre);
+      paidDespesas = paidDespesas.filter(p => p.obra_id === filtroObraDre);
+    }
 
     const categoryMap = new Map<string, string>();
     categoriasFinanceiras.forEach(cat => categoryMap.set(cat.id, cat.nome));
@@ -396,7 +443,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
       totalDespesas,
       resultado: totalReceitas - totalDespesas
     };
-  }, [contasReceberFiltradas, contasPagarFiltradas, categoriasFinanceiras]);
+  }, [contasReceberFiltradas, contasPagarFiltradas, categoriasFinanceiras, filtroObraDre]);
 
   const bankAccountsList = useMemo(() => {
     if (!contasBancarias) return [];
@@ -1155,7 +1202,7 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
             <div className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
               <Search className="size-4" /> Filtrar por Obra:
             </div>
-            <Select value={filtroObra} onValueChange={setFiltroObra}>
+            <Select value={filtroObra} onValueChange={(val) => { setFiltroObra(val); setFiltroEtapa("todos"); }}>
               <SelectTrigger className="w-[240px]">
                 <SelectValue placeholder="Todas as obras" />
               </SelectTrigger>
@@ -2230,7 +2277,47 @@ function ReceberFormDialog({
   const watchStatusReceita = form.watch("status");
   const watchValorPrevisto = Number(form.watch("valor_total") || 0);
   const watchValorAditivo = Number(form.watch("valor_aditivo") || 0);
+  const watchTipoLancamento = form.watch("tipo_lancamento") || "a_vista";
+  const watchQuantidadeParcelas = Number(form.watch("quantidade_parcelas") || 1);
   const totalRealRecebido = watchValorPrevisto + watchValorAditivo;
+
+  const { data: etapasDaObra, isLoading: loadingEtapas } = useQuery({
+    queryKey: ["etapas-obra-receber", watchObraId],
+    queryFn: async () => {
+      if (!watchObraId || watchObraId === "none") return [];
+      const { data: orcamento } = await (supabase as any)
+        .from("orcamentos")
+        .select("id")
+        .eq("obra_id", watchObraId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (orcamento?.id) {
+        const { data: etapas } = await (supabase as any)
+          .from("orcamento_etapas")
+          .select("id, codigo, nome, ordem")
+          .eq("orcamento_id", orcamento.id)
+          .order("ordem", { ascending: true });
+
+        if (etapas && etapas.length > 0) return etapas;
+      }
+
+      const { data: crono } = await (supabase as any)
+        .from("obra_cronograma")
+        .select("id, nome, ordem")
+        .eq("obra_id", watchObraId)
+        .order("ordem", { ascending: true });
+
+      return (crono || []).map((c: any) => ({
+        id: c.id,
+        codigo: null,
+        nome: c.nome,
+        ordem: c.ordem,
+      }));
+    },
+    enabled: !!watchObraId && watchObraId !== "none",
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -2254,6 +2341,11 @@ function ReceberFormDialog({
         conta_bancaria_id: (target as any).conta_bancaria_id || "",
         categoria_dre_id: (target as any).categoria_dre_id || "",
         numero_documento: (target as any).numero_documento || "",
+        etapa_id: target.etapa_id || "",
+        etapa_nome: target.etapa_nome || "",
+        tipo_lancamento: "a_vista" as const,
+        quantidade_parcelas: 1,
+        periodicidade_parcelas: "mensal" as const,
       });
     } else {
       form.reset(EMPTY_RECEBER);
@@ -2272,14 +2364,11 @@ function ReceberFormDialog({
         comprovanteUrl = await uploadR2(comprovanteFile, "financeiro/comprovantes");
       }
 
-      const payload = {
+      const basePayload = {
         origem,
         obra_id: values.obra_id || null,
         cliente_id: values.cliente_id || null,
-        descricao: values.descricao,
-        valor_total: Math.round(values.valor_total * 100),
         valor_aditivo: Math.round((values.valor_aditivo || 0) * 100),
-        data_vencimento: values.data_vencimento,
         status: values.status,
         data_recebimento: values.status === "recebida" ? values.data_recebimento || null : null,
         valor_recebido: values.status === "recebida" ? Math.round((values.valor_total + (values.valor_aditivo || 0)) * 100) : null,
@@ -2290,19 +2379,56 @@ function ReceberFormDialog({
         conta_bancaria_id: values.conta_bancaria_id || null,
         categoria_dre_id: values.categoria_dre_id || null,
         numero_documento: values.numero_documento || null,
+        etapa_id: values.etapa_id || null,
+        etapa_nome: values.etapa_nome || null,
       };
 
-      if (target) {
-        const { error } = await (supabase as any)
-          .from("contas_receber")
-          .update(payload)
-          .eq("id", target.id);
+      if (!target && values.tipo_lancamento === "parcelado" && Number(values.quantidade_parcelas) > 1) {
+        const parcelas = gerarParcelasFinanceiras({
+          valorTotalCentavos: Math.round(values.valor_total * 100),
+          quantidadeParcelas: Number(values.quantidade_parcelas),
+          dataPrimeiroVencimento: values.data_vencimento,
+          periodicidade: values.periodicidade_parcelas || "mensal",
+          descricaoBase: values.descricao,
+        });
+
+        const parcelamentoId = crypto.randomUUID();
+        const rows = parcelas.map((p) => ({
+          ...basePayload,
+          descricao: p.descricao,
+          valor_total: p.valorCentavos,
+          data_vencimento: p.dataVencimento,
+          parcelamento_id: parcelamentoId,
+          parcela_atual: p.numero,
+          total_parcelas: p.totalParcelas,
+        }));
+
+        const { error } = await (supabase as any).from("contas_receber").insert(rows);
         if (error) throw error;
-        toast.success("Conta a receber atualizada");
+        toast.success(`${parcelas.length} parcelas de receita geradas com sucesso!`);
       } else {
-        const { error } = await (supabase as any).from("contas_receber").insert(payload);
-        if (error) throw error;
-        toast.success("Conta a receber adicionada");
+        const singlePayload = {
+          ...basePayload,
+          descricao: values.descricao,
+          valor_total: Math.round(values.valor_total * 100),
+          data_vencimento: values.data_vencimento,
+          parcelamento_id: target?.parcelamento_id || null,
+          parcela_atual: target?.parcela_atual || null,
+          total_parcelas: target?.total_parcelas || null,
+        };
+
+        if (target) {
+          const { error } = await (supabase as any)
+            .from("contas_receber")
+            .update(singlePayload)
+            .eq("id", target.id);
+          if (error) throw error;
+          toast.success("Conta a receber atualizada");
+        } else {
+          const { error } = await (supabase as any).from("contas_receber").insert(singlePayload);
+          if (error) throw error;
+          toast.success("Conta a receber adicionada");
+        }
       }
       onSuccess();
       onOpenChange(false);
@@ -2334,19 +2460,19 @@ function ReceberFormDialog({
                     <Select
                       value={field.value || "none"}
                       onValueChange={(val) => {
-                        const finalVal = val === "none" ? "" : val;
-                        field.onChange(finalVal);
-                        if (finalVal) {
-                          const selectedObra = obras.find((o) => o.id === finalVal);
-                          if (selectedObra?.cliente_id) {
-                            form.setValue("cliente_id", selectedObra.cliente_id);
-                          }
+                        const nextVal = val === "none" ? "" : val;
+                        field.onChange(nextVal);
+                        form.setValue("etapa_id", "");
+                        form.setValue("etapa_nome", "");
+                        const selectedObra = obras.find((o) => o.id === nextVal);
+                        if (selectedObra?.cliente_id) {
+                          form.setValue("cliente_id", selectedObra.cliente_id);
                         }
                       }}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Sem vínculo (Receita Geral)" />
+                          <SelectValue placeholder="Sem vínculo..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -2393,6 +2519,45 @@ function ReceberFormDialog({
                 )}
               />
             </div>
+
+            {watchObraId && watchObraId !== "none" && (
+              <FormField
+                control={form.control as any}
+                name="etapa_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5 text-xs font-semibold">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      Etapa do Orçamento / Cronograma (Apropriação)
+                    </FormLabel>
+                    <Select
+                      value={field.value || "none"}
+                      onValueChange={(val) => {
+                        const nextId = val === "none" ? "" : val;
+                        field.onChange(nextId);
+                        const match = etapasDaObra?.find((e: any) => e.id === nextId);
+                        form.setValue("etapa_nome", match?.nome || "");
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingEtapas ? "Carregando etapas..." : "Selecione a etapa (opcional)"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Geral / Sem etapa específica</SelectItem>
+                        {etapasDaObra?.map((e: any) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.codigo ? `${e.codigo} - ${e.nome}` : e.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control as any}
@@ -2478,8 +2643,120 @@ function ReceberFormDialog({
                   </FormItem>
                 )}
               />
-
             </div>
+
+            {!target && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">Condição de Recebimento</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-background rounded-md p-0.5 border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        form.setValue("tipo_lancamento", "a_vista");
+                        form.setValue("quantidade_parcelas", 1);
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded text-xs font-medium transition-colors",
+                        watchTipoLancamento !== "parcelado"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      À Vista (1x)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        form.setValue("tipo_lancamento", "parcelado");
+                        if (!form.getValues("quantidade_parcelas") || form.getValues("quantidade_parcelas") <= 1) {
+                          form.setValue("quantidade_parcelas", 2);
+                        }
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded text-xs font-medium transition-colors",
+                        watchTipoLancamento === "parcelado"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Parcelado
+                    </button>
+                  </div>
+                </div>
+
+                {watchTipoLancamento === "parcelado" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <FormField
+                      control={form.control as any}
+                      name="quantidade_parcelas"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Número de Parcelas</FormLabel>
+                          <Select
+                            value={String(field.value || 2)}
+                            onValueChange={(val) => field.onChange(parseInt(val, 10))}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="max-h-56">
+                              {Array.from({ length: 59 }, (_, i) => i + 2).map((n) => {
+                                const parcelaAprox = watchValorPrevisto > 0 ? (watchValorPrevisto / n) : 0;
+                                return (
+                                  <SelectItem key={n} value={String(n)}>
+                                    {n}x de {formatBRLInput(parcelaAprox)}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control as any}
+                      name="periodicidade_parcelas"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Periodicidade</FormLabel>
+                          <Select
+                            value={field.value || "mensal"}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="mensal">Mensal (a cada 30 dias)</SelectItem>
+                              <SelectItem value="quinzenal">Quinzenal (a cada 15 dias)</SelectItem>
+                              <SelectItem value="semanal">Semanal (a cada 7 dias)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex flex-col justify-center text-xs text-muted-foreground bg-background/60 rounded-md p-2 border">
+                      <span className="font-medium text-foreground">
+                        {watchQuantidadeParcelas}x de ~{formatBRLInput(watchValorPrevisto / (watchQuantidadeParcelas || 1))}
+                      </span>
+                      <span>Total: {formatBRLInput(watchValorPrevisto)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 rounded-md border bg-muted/20 p-3">
               <FormField control={form.control as any} name="status" render={({ field }) => (
@@ -2531,8 +2808,8 @@ function ReceberFormDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">Nenhuma</SelectItem>
-                        {contasBancarias?.map((c: any) => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        {contasBancarias?.map((cb: any) => (
+                          <SelectItem key={cb.id} value={cb.id}>{cb.nome}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -2549,12 +2826,12 @@ function ReceberFormDialog({
                     <Select value={field.value || "none"} onValueChange={(val) => field.onChange(val === "none" ? "" : val)}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Nenhuma" />
+                          <SelectValue placeholder="Selecione..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="none">Nenhuma</SelectItem>
-                        {categoriasDre?.map((c: any) => (
+                        <SelectItem value="none">Sem categoria</SelectItem>
+                        {categoriasDre?.filter((c: any) => c.tipo === "receita_operacional" || c.tipo === "outras_receitas").map((c: any) => (
                           <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                         ))}
                       </SelectContent>
@@ -2568,21 +2845,20 @@ function ReceberFormDialog({
                 name="numero_documento"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nº do Documento</FormLabel>
+                    <FormLabel>Nº Documento / Cheque</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: NF-1234" {...field} />
+                      <Input placeholder="Ex: NF-1234, CH-99" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 border-t pt-4">
-              <div>
-                <label className="text-sm font-medium block mb-1 text-xs">Nota Fiscal (Imagem/PDF)</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nota Fiscal (Anexo)</label>
                 <Input
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(e) => {
                     const files = e.target.files;
                     if (files && files[0]) setNotaFile(files[0]);
@@ -2595,15 +2871,15 @@ function ReceberFormDialog({
                     className="text-xs p-0 h-auto text-blue-600 mt-1"
                     onClick={() => openR2File(target.nota_fiscal_url!)}
                   >
-                    Visualizar Nota Fiscal Existente
+                    Visualizar Nota Existente
                   </Button>
                 )}
               </div>
-              <div>
-                <label className="text-sm font-medium block mb-1 text-xs">Comprovante de Pagamento (Imagem/PDF)</label>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Comprovante de Pagamento</label>
                 <Input
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(e) => {
                     const files = e.target.files;
                     if (files && files[0]) setComprovanteFile(files[0]);
@@ -2694,6 +2970,49 @@ function PagarFormDialog({
     defaultValues: EMPTY_PAGAR,
   });
 
+  const watchObraId = form.watch("obra_id");
+  const watchTipoLancamento = form.watch("tipo_lancamento") || "a_vista";
+  const watchQuantidadeParcelas = Number(form.watch("quantidade_parcelas") || 1);
+  const watchValorTotal = Number(form.watch("valor_total") || 0);
+
+  const { data: etapasDaObra, isLoading: loadingEtapas } = useQuery({
+    queryKey: ["etapas-obra-pagar", watchObraId],
+    queryFn: async () => {
+      if (!watchObraId || watchObraId === "none") return [];
+      const { data: orcamento } = await (supabase as any)
+        .from("orcamentos")
+        .select("id")
+        .eq("obra_id", watchObraId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (orcamento?.id) {
+        const { data: etapas } = await (supabase as any)
+          .from("orcamento_etapas")
+          .select("id, codigo, nome, ordem")
+          .eq("orcamento_id", orcamento.id)
+          .order("ordem", { ascending: true });
+
+        if (etapas && etapas.length > 0) return etapas;
+      }
+
+      const { data: crono } = await (supabase as any)
+        .from("obra_cronograma")
+        .select("id, nome, ordem")
+        .eq("obra_id", watchObraId)
+        .order("ordem", { ascending: true });
+
+      return (crono || []).map((c: any) => ({
+        id: c.id,
+        codigo: null,
+        nome: c.nome,
+        ordem: c.ordem,
+      }));
+    },
+    enabled: !!watchObraId && watchObraId !== "none",
+  });
+
   useEffect(() => {
     if (!open) return;
     setNotaFile(null);
@@ -2715,6 +3034,11 @@ function PagarFormDialog({
         conta_bancaria_id: (target as any).conta_bancaria_id || "",
         categoria_dre_id: (target as any).categoria_dre_id || "",
         numero_documento: (target as any).numero_documento || "",
+        etapa_id: target.etapa_id || "",
+        etapa_nome: target.etapa_nome || "",
+        tipo_lancamento: "a_vista" as const,
+        quantidade_parcelas: 1,
+        periodicidade_parcelas: "mensal" as const,
       });
     } else {
       form.reset(EMPTY_PAGAR);
@@ -2733,14 +3057,11 @@ function PagarFormDialog({
         comprovanteUrl = await uploadR2(comprovanteFile, "financeiro/comprovantes");
       }
 
-      const payload = {
+      const basePayload = {
         origem,
         obra_id: values.obra_id || null,
         fornecedor_id: values.fornecedor_id || null,
         pedido_id: values.pedido_id || null,
-        descricao: values.descricao,
-        valor_total: Math.round(values.valor_total * 100),
-        data_vencimento: values.data_vencimento,
         status: values.status,
         data_pagamento: values.data_pagamento || null,
         valor_pago: values.valor_pago ? Math.round(values.valor_pago * 100) : null,
@@ -2750,19 +3071,56 @@ function PagarFormDialog({
         conta_bancaria_id: values.conta_bancaria_id || null,
         categoria_dre_id: values.categoria_dre_id || null,
         numero_documento: values.numero_documento || null,
+        etapa_id: values.etapa_id || null,
+        etapa_nome: values.etapa_nome || null,
       };
 
-      if (target) {
-        const { error } = await (supabase as any)
-          .from("contas_pagar")
-          .update(payload)
-          .eq("id", target.id);
+      if (!target && values.tipo_lancamento === "parcelado" && Number(values.quantidade_parcelas) > 1) {
+        const parcelas = gerarParcelasFinanceiras({
+          valorTotalCentavos: Math.round(values.valor_total * 100),
+          quantidadeParcelas: Number(values.quantidade_parcelas),
+          dataPrimeiroVencimento: values.data_vencimento,
+          periodicidade: values.periodicidade_parcelas || "mensal",
+          descricaoBase: values.descricao,
+        });
+
+        const parcelamentoId = crypto.randomUUID();
+        const rows = parcelas.map((p) => ({
+          ...basePayload,
+          descricao: p.descricao,
+          valor_total: p.valorCentavos,
+          data_vencimento: p.dataVencimento,
+          parcelamento_id: parcelamentoId,
+          parcela_atual: p.numero,
+          total_parcelas: p.totalParcelas,
+        }));
+
+        const { error } = await (supabase as any).from("contas_pagar").insert(rows);
         if (error) throw error;
-        toast.success("Conta a pagar atualizada");
+        toast.success(`${parcelas.length} parcelas de despesa geradas com sucesso!`);
       } else {
-        const { error } = await (supabase as any).from("contas_pagar").insert(payload);
-        if (error) throw error;
-        toast.success("Conta a pagar adicionada");
+        const singlePayload = {
+          ...basePayload,
+          descricao: values.descricao,
+          valor_total: Math.round(values.valor_total * 100),
+          data_vencimento: values.data_vencimento,
+          parcelamento_id: target?.parcelamento_id || null,
+          parcela_atual: target?.parcela_atual || null,
+          total_parcelas: target?.total_parcelas || null,
+        };
+
+        if (target) {
+          const { error } = await (supabase as any)
+            .from("contas_pagar")
+            .update(singlePayload)
+            .eq("id", target.id);
+          if (error) throw error;
+          toast.success("Conta a pagar atualizada");
+        } else {
+          const { error } = await (supabase as any).from("contas_pagar").insert(singlePayload);
+          if (error) throw error;
+          toast.success("Conta a pagar adicionada");
+        }
       }
       onSuccess();
       onOpenChange(false);
@@ -2775,7 +3133,7 @@ function PagarFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{target ? "Editar Despesa" : "Nova Despesa"}</DialogTitle>
           <DialogDescription>
@@ -2793,7 +3151,12 @@ function PagarFormDialog({
                     <FormLabel>Obra (Opcional)</FormLabel>
                     <Select
                       value={field.value || "none"}
-                      onValueChange={(val) => field.onChange(val === "none" ? "" : val)}
+                      onValueChange={(val) => {
+                        const nextVal = val === "none" ? "" : val;
+                        field.onChange(nextVal);
+                        form.setValue("etapa_id", "");
+                        form.setValue("etapa_nome", "");
+                      }}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -2841,6 +3204,45 @@ function PagarFormDialog({
                 )}
               />
             </div>
+
+            {watchObraId && watchObraId !== "none" && (
+              <FormField
+                control={form.control as any}
+                name="etapa_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5 text-xs font-semibold">
+                      <Layers className="h-3.5 w-3.5 text-primary" />
+                      Etapa do Orçamento / Cronograma (Apropriação de Custo)
+                    </FormLabel>
+                    <Select
+                      value={field.value || "none"}
+                      onValueChange={(val) => {
+                        const nextId = val === "none" ? "" : val;
+                        field.onChange(nextId);
+                        const match = etapasDaObra?.find((e: any) => e.id === nextId);
+                        form.setValue("etapa_nome", match?.nome || "");
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder={loadingEtapas ? "Carregando etapas..." : "Selecione a etapa da obra (opcional)"} />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="none">Geral / Sem etapa específica</SelectItem>
+                        {etapasDaObra?.map((e: any) => (
+                          <SelectItem key={e.id} value={e.id}>
+                            {e.codigo ? `${e.codigo} - ${e.nome}` : e.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -2894,7 +3296,7 @@ function PagarFormDialog({
               />
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control as any}
                 name="valor_total"
@@ -2928,7 +3330,7 @@ function PagarFormDialog({
                 name="data_vencimento"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Data Vencimento *</FormLabel>
+                    <FormLabel>Data de Vencimento *</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
@@ -2936,7 +3338,122 @@ function PagarFormDialog({
                   </FormItem>
                 )}
               />
+            </div>
 
+            {!target && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-semibold text-foreground">Condição de Pagamento</span>
+                  </div>
+                  <div className="flex items-center gap-1 bg-background rounded-md p-0.5 border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        form.setValue("tipo_lancamento", "a_vista");
+                        form.setValue("quantidade_parcelas", 1);
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded text-xs font-medium transition-colors",
+                        watchTipoLancamento !== "parcelado"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      À Vista (1x)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        form.setValue("tipo_lancamento", "parcelado");
+                        if (!form.getValues("quantidade_parcelas") || form.getValues("quantidade_parcelas") <= 1) {
+                          form.setValue("quantidade_parcelas", 2);
+                        }
+                      }}
+                      className={cn(
+                        "px-3 py-1 rounded text-xs font-medium transition-colors",
+                        watchTipoLancamento === "parcelado"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Parcelado
+                    </button>
+                  </div>
+                </div>
+
+                {watchTipoLancamento === "parcelado" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    <FormField
+                      control={form.control as any}
+                      name="quantidade_parcelas"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Número de Parcelas</FormLabel>
+                          <Select
+                            value={String(field.value || 2)}
+                            onValueChange={(val) => field.onChange(parseInt(val, 10))}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="max-h-56">
+                              {Array.from({ length: 59 }, (_, i) => i + 2).map((n) => {
+                                const parcelaAprox = watchValorTotal > 0 ? (watchValorTotal / n) : 0;
+                                return (
+                                  <SelectItem key={n} value={String(n)}>
+                                    {n}x de {formatBRLInput(parcelaAprox)}
+                                  </SelectItem>
+                                );
+                              })}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control as any}
+                      name="periodicidade_parcelas"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Periodicidade</FormLabel>
+                          <Select
+                            value={field.value || "mensal"}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="mensal">Mensal (a cada 30 dias)</SelectItem>
+                              <SelectItem value="quinzenal">Quinzenal (a cada 15 dias)</SelectItem>
+                              <SelectItem value="semanal">Semanal (a cada 7 dias)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <div className="flex flex-col justify-center text-xs text-muted-foreground bg-background/60 rounded-md p-2 border">
+                      <span className="font-medium text-foreground">
+                        {watchQuantidadeParcelas}x de ~{formatBRLInput(watchValorTotal / (watchQuantidadeParcelas || 1))}
+                      </span>
+                      <span>Total: {formatBRLInput(watchValorTotal)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control as any}
                 name="status"
@@ -2956,6 +3473,49 @@ function PagarFormDialog({
                         <SelectItem value="cancelada">Cancelada</SelectItem>
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control as any}
+                name="data_pagamento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Data de Pagamento</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control as any}
+                name="valor_pago"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Valor Pago (R$)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        {...field}
+                        value={formatBRLInput(field.value)}
+                        onChange={(e) => {
+                          const rawVal = e.target.value;
+                          const cleanDigits = rawVal.replace(/\D/g, "");
+                          if (!cleanDigits) {
+                            field.onChange(0);
+                            return;
+                          }
+                          const val = parseInt(cleanDigits, 10) / 100;
+                          field.onChange(val);
+                        }}
+                      />
+                    </FormControl>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
@@ -2976,8 +3536,8 @@ function PagarFormDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">Nenhuma</SelectItem>
-                        {contasBancarias?.map((c: any) => (
-                          <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                        {contasBancarias?.map((cb: any) => (
+                          <SelectItem key={cb.id} value={cb.id}>{cb.nome}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -2994,12 +3554,12 @@ function PagarFormDialog({
                     <Select value={field.value || "none"} onValueChange={(val) => field.onChange(val === "none" ? "" : val)}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="Nenhuma" />
+                          <SelectValue placeholder="Selecione..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="none">Nenhuma</SelectItem>
-                        {categoriasDre?.map((c: any) => (
+                        <SelectItem value="none">Sem categoria</SelectItem>
+                        {categoriasDre?.filter((c: any) => c.tipo !== "receita_operacional" && c.tipo !== "outras_receitas").map((c: any) => (
                           <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                         ))}
                       </SelectContent>
@@ -3013,21 +3573,20 @@ function PagarFormDialog({
                 name="numero_documento"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nº do Documento</FormLabel>
+                    <FormLabel>Nº Documento / Boleto</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: NF-1234" {...field} />
+                      <Input placeholder="Ex: NF-1234, BOL-99" {...field} />
                     </FormControl>
                   </FormItem>
                 )}
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 border-t pt-4">
-              <div>
-                <label className="text-sm font-medium block mb-1 text-xs">Nota Fiscal (Imagem/PDF)</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Nota Fiscal (Anexo)</label>
                 <Input
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(e) => {
                     const files = e.target.files;
                     if (files && files[0]) setNotaFile(files[0]);
@@ -3040,15 +3599,15 @@ function PagarFormDialog({
                     className="text-xs p-0 h-auto text-blue-600 mt-1"
                     onClick={() => openR2File(target.nota_fiscal_url!)}
                   >
-                    Visualizar Nota Fiscal Existente
+                    Visualizar Nota Existente
                   </Button>
                 )}
               </div>
-              <div>
-                <label className="text-sm font-medium block mb-1 text-xs">Comprovante de Pagamento (Imagem/PDF)</label>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Comprovante de Pagamento</label>
                 <Input
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
                   onChange={(e) => {
                     const files = e.target.files;
                     if (files && files[0]) setComprovanteFile(files[0]);

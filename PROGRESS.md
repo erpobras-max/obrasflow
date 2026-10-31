@@ -581,3 +581,27 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     3. **Formatação segura do registro da empresa (`src/lib/proposta-orcamento.functions.ts`)**: Implementada a função utilitária `formatarRegistroEmpresa(empresa)`, que renderiza `CREA/CAU: <valor>` estritamente quando preenchido pela empresa, combinado com Inscrição Estadual e Inscrição Municipal, eliminando definitivamente qualquer fallback mockado ou estático.
     4. **Remoção do e-mail do cliente na proposta (`src/components/propostas/editor-proposta-comercial.tsx`)**: Removida a linha de e-mail do bloco visual do contratante, mantendo apenas Nome e CPF/CNPJ, além da Obra, Localização e Prazo Previsto.
   - Testes automatizados aprovados (incluindo testes unitários dedicados em `editor-proposta-comercial.test.mjs`) e build de produção verificado com sucesso no Vite e Cloudflare Nitro.
+
+- **Backup de Segurança do Sistema Estável e Fase 1 do Módulo Financeiro (Inspirado no Mais Controle - Issue #209, Branch feat/209-financeiro-fase-1-parcelamento-etapa-dre)**:
+  - **Backup de Segurança**:
+    - Criada branch remota dedicada: `backup/sistema-estavel-pre-fase-1-financeiro-20261031`.
+    - Criada tag git imutável: `backup-sistema-estavel-20261031`.
+    - Ambos publicados e sincronizados no repositório remoto (`origin`), assegurando ponto de restauração instantâneo caso necessário.
+  - **Melhorias da Fase 1 Implementadas**:
+    1. **Parcelamento Automático em Contas a Pagar e Contas a Receber**:
+       - Módulo matemático centralizado `gerarParcelasFinanceiras` (`src/lib/financeiro-parcelamento.ts`) com rateio de centavos exato (distribui o resto da divisão centavo a centavo na primeira parcela, garantindo que a soma bata exatamente com o valor total contratado).
+       - Suporte a periodicidades: Mensal, Quinzenal e Semanal, com tratamento seguro de virada de ano e ajuste de datas em finais de mês (ex: dia 31 limitando-se ao dia 28/29 de fevereiro).
+       - Interface intuitiva nos diálogos de Nova Receita e Nova Despesa: alternador entre "À Vista (1x)" e "Parcelado", seletor de 2x até 60x com visualização em tempo real do valor aproximado de cada parcela e frequência, gerando todas as parcelas em lote com identificador único de agrupamento (`parcelamento_id`), `parcela_atual` e `total_parcelas`.
+       - Exibição de badge com a numeração da parcela (ex: `1/12`) em cada linha das tabelas de contas a receber e contas a pagar.
+    2. **Apropriação de Custo / Receita por Etapa do Orçamento ou Cronograma**:
+       - Colunas `etapa_id (uuid)` e `etapa_nome (text)` adicionadas com índices nas tabelas `contas_pagar` e `contas_receber` via migration `20261031140000_financeiro_parcelamento_e_etapas.sql`.
+       - Seletores dinâmicos de etapas nos formulários de receita e despesa, consultando automaticamente tanto as etapas do orçamento analítico (`orcamento_etapas`) quanto do cronograma da obra (`obra_cronograma`).
+       - Badges com o nome da etapa e ícone `Layers` nas listagens do financeiro.
+       - Filtro por etapa no painel de filtros global do módulo financeiro ao selecionar uma obra.
+    3. **DRE Gerencial com Filtro por Obra Individual ou Consolidado Geral**:
+       - Seletor de obra adicionado no cabeçalho do DRE Gerencial (`filtroObraDre`), permitindo apurar o resultado operacional e a margem de contribuição individual de cada canteiro de obras ou a visão consolidada da construtora.
+  - **Validação**:
+    - Testes unitários do cálculo e datas de parcelamento (`tests/financeiro-parcelamento.test.mjs`).
+    - Testes de migração em banco efêmero PGlite (`tests/financeiro-parcelamento-db.test.mjs`).
+    - Suite completa de 154/154 testes automatizados aprovada com 100% de sucesso.
+    - Build de produção SSR (`npm run build`) validado com sucesso.

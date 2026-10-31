@@ -45,6 +45,12 @@ export const STATUS_PAGAR_BADGE: Record<StatusPagar, string> = {
   cancelada: "bg-muted text-muted-foreground",
 };
 
+export const tipoLancamentoEnum = z.enum(["a_vista", "parcelado"]);
+export type TipoLancamento = z.infer<typeof tipoLancamentoEnum>;
+
+export const periodicidadeParcelasEnum = z.enum(["mensal", "quinzenal", "semanal"]);
+export type PeriodicidadeParcelas = z.infer<typeof periodicidadeParcelasEnum>;
+
 export const contasReceberSchema = z.object({
   obra_id: z.string().uuid().nullable().optional().or(z.literal("")),
   cliente_id: z.string().uuid().nullable().optional().or(z.literal("")),
@@ -62,6 +68,11 @@ export const contasReceberSchema = z.object({
   conta_bancaria_id: z.string().uuid().nullable().optional().or(z.literal("")),
   categoria_dre_id: z.string().uuid().nullable().optional().or(z.literal("")),
   numero_documento: z.string().trim().max(100).optional().or(z.literal("")),
+  etapa_id: z.string().uuid().nullable().optional().or(z.literal("")),
+  etapa_nome: z.string().trim().max(200).optional().or(z.literal("")),
+  tipo_lancamento: tipoLancamentoEnum.default("a_vista").optional(),
+  quantidade_parcelas: z.coerce.number().int().min(1).max(60).default(1).optional(),
+  periodicidade_parcelas: periodicidadeParcelasEnum.default("mensal").optional(),
 }).superRefine((values, ctx) => {
   if (values.status !== "recebida") return;
   if (!values.data_recebimento) {
@@ -89,5 +100,10 @@ export const contasPagarSchema = z.object({
   conta_bancaria_id: z.string().uuid().nullable().optional().or(z.literal("")),
   categoria_dre_id: z.string().uuid().nullable().optional().or(z.literal("")),
   numero_documento: z.string().trim().max(100).optional().or(z.literal("")),
+  etapa_id: z.string().uuid().nullable().optional().or(z.literal("")),
+  etapa_nome: z.string().trim().max(200).optional().or(z.literal("")),
+  tipo_lancamento: tipoLancamentoEnum.default("a_vista").optional(),
+  quantidade_parcelas: z.coerce.number().int().min(1).max(60).default(1).optional(),
+  periodicidade_parcelas: periodicidadeParcelasEnum.default("mensal").optional(),
 });
 export type ContasPagarFormValues = z.infer<typeof contasPagarSchema>;
