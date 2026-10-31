@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const rota = await readFile(new URL('../src/routes/_app/comercial.propostas.tsx', import.meta.url), 'utf8')
+const hookEditor = await readFile(new URL('../src/hooks/use-proposta-editor.ts', import.meta.url), 'utf8')
+const dialogCriacao = await readFile(new URL('../src/components/propostas/nova-proposta-orcamento-dialog.tsx', import.meta.url), 'utf8')
 
 test('rota usa somente editor persistente e criação pelo orçamento', () => {
   assert.match(rota, /NovaPropostaOrcamentoDialog/)
@@ -20,4 +22,23 @@ test('exclusão chama RPC sem remoção otimista e é restrita a rascunho', () =
 test('aceite e rejeição usam transição atômica do editor', () => {
   assert.match(rota, /alterar_status_proposta_editor/)
   assert.doesNotMatch(rota, /from\(['"]propostas['"]\)\.update\(\{ status \}\)/)
+})
+
+test('editor consulta origens por RPC sanitizada sem ler fotografia técnica diretamente', () => {
+  assert.match(hookEditor, /listar_origens_proposta_editor/)
+  assert.match(dialogCriacao, /listar_origens_proposta_editor/)
+  assert.doesNotMatch(hookEditor, /from\(['"]orcamento_revisoes['"]\)/)
+  assert.doesNotMatch(dialogCriacao, /from\(['"]orcamento_revisoes['"]\)/)
+  assert.doesNotMatch(dialogCriacao, /from\(['"]orcamentos['"]\)/)
+})
+
+test('duplicação preserva a proposta de origem e fica disponível após congelamento', () => {
+  assert.match(rota, /origemPropostaId=\{duplicarOrigem\?\.id\}/)
+  assert.match(rota, /revisaoInicialId=\{duplicarOrigem\?\.orcamento_revisao_id\}/)
+  assert.doesNotMatch(rota, /proposta\.status === ['"]rascunho['"] && podeEditar && <Button[^>]+Duplicar/)
+})
+
+test('preview legado oferece materialização do orçamento analítico atual', () => {
+  assert.match(rota, /podeMaterializarOrigemAnalitica/)
+  assert.match(rota, /Importar orçamento atual/)
 })

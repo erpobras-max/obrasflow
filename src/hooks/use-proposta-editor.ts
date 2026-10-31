@@ -23,6 +23,15 @@ import {
 
 const supabase = client as any
 
+interface OrigemComercialSegura {
+  obra_id: string
+  orcamento_id: string
+  revisao_id: string
+  revisao_numero: number
+  revisao_created_at: string
+  fotografia: Record<string, unknown> | null
+}
+
 interface CargaEditor {
   estado: EstadoPropostaEditor
   revisoesPersistidas: PropostaRevisaoPersistida[]
@@ -32,6 +41,7 @@ interface CargaEditor {
   fotografia: Record<string, unknown>
   revisaoSelecionadaId?: string
   somenteLeitura?: boolean
+  podeMaterializarOrigemAnalitica?: boolean
 }
 
 const enderecoObra = (obra: any) =>
@@ -49,6 +59,19 @@ async function consultarOuFalhar(query: PromiseLike<any>) {
   const { data, error } = await query
   if (error) throw error
   return data
+}
+
+async function listarOrigensSeguras(parametros: {
+  obraId?: string | null
+  revisaoId?: string | null
+}): Promise<OrigemComercialSegura[]> {
+  return (await consultarOuFalhar(
+    supabase.rpc('listar_origens_proposta_editor', {
+      p_obra_id: parametros.obraId ?? null,
+      p_revisao_id: parametros.revisaoId ?? null,
+      p_incluir_fotografia: true,
+    }),
+  )) ?? []
 }
 
 export function usePropostaEditor(propostaId: string | null) {
@@ -81,20 +104,17 @@ export function usePropostaEditor(propostaId: string | null) {
       )
       let revisaoOrigem: any = null
       if (proposta.orcamento_revisao_id) {
-        revisaoOrigem = await consultarOuFalhar(
-          supabase
-            .from('orcamento_revisoes')
-            .select('*')
-            .eq('id', proposta.orcamento_revisao_id)
-            .maybeSingle(),
-        )
-        if (!obra && revisaoOrigem?.orcamento_id) {
-          const orcamento = await consultarOuFalhar(
-            supabase.from('orcamentos').select('*').eq('id', revisaoOrigem.orcamento_id).maybeSingle(),
-          )
-          if (orcamento?.obra_id) {
+        const [origemSegura] = await listarOrigensSeguras({ revisaoId: proposta.orcamento_revisao_id })
+        if (origemSegura) {
+          revisaoOrigem = {
+            id: origemSegura.revisao_id,
+            numero: origemSegura.revisao_numero,
+            created_at: origemSegura.revisao_created_at,
+            fotografia: origemSegura.fotografia ?? {},
+          }
+          if (!obra) {
             obra = await consultarOuFalhar(
-              supabase.from('obras').select('*').eq('id', orcamento.obra_id).maybeSingle(),
+              supabase.from('obras').select('*').eq('id', origemSegura.obra_id).maybeSingle(),
             )
           }
         }
@@ -138,25 +158,13 @@ export function usePropostaEditor(propostaId: string | null) {
 
       let candidatas: Array<RevisaoOrcamentoResumo & { fotografia: Record<string, unknown> }> = []
       if (obra?.id) {
-        const orcamentos = await consultarOuFalhar(
-          supabase.from('orcamentos').select('id').eq('obra_id', obra.id),
-        )
-        const ids = (orcamentos ?? []).map((item: any) => item.id)
-        if (ids.length > 0) {
-          const linhas = await consultarOuFalhar(
-            supabase
-              .from('orcamento_revisoes')
-              .select('id,numero,created_at,fotografia')
-              .in('orcamento_id', ids)
-              .order('numero', { ascending: false }),
-          )
-          candidatas = (linhas ?? []).map((linha: any) => ({
-            id: linha.id,
-            numero: linha.numero,
-            createdAt: linha.created_at,
-            fotografia: linha.fotografia ?? {},
-          }))
-        }
+        const linhas = await listarOrigensSeguras({ obraId: obra.id })
+        candidatas = linhas.map((linha) => ({
+          id: linha.revisao_id,
+          numero: linha.revisao_numero,
+          createdAt: linha.revisao_created_at,
+          fotografia: linha.fotografia ?? {},
+        }))
       }
       if (revisaoOrigem && !candidatas.some((item) => item.id === revisaoOrigem.id)) {
         candidatas.unshift({
@@ -190,6 +198,7 @@ export function usePropostaEditor(propostaId: string | null) {
             configuracao: normalizarConfiguracaoProposta(),
             fotografia: { etapas, totalPrecoCentavos: etapas.reduce((total, etapa) => total + etapa.valorTotalCentavos, 0) },
             somenteLeitura: true,
+            podeMaterializarOrigemAnalitica: Boolean(obra?.id),
           }
         }
         return {
@@ -274,6 +283,18 @@ export function usePropostaEditor(propostaId: string | null) {
     onSuccess: invalidar,
   })
 
+  const materializarOrigem = useMutation({
+    mutationFn: async () => {
+      if (!propostaId) return
+      await consultarOuFalhar(
+        supabase.rpc('materializar_origem_analitica_proposta', {
+          p_proposta_id: propostaId,
+        }),
+      )
+    },
+    onSuccess: invalidar,
+  })
+
   const cargaVisual = useMemo(() => {
     const carga = consulta.data
     if (!carga || !revisaoAbertaId || carga.revisoesPersistidas.length === 0) return carga
@@ -304,11 +325,13 @@ export function usePropostaEditor(propostaId: string | null) {
     revisoes: resumirRevisoes(consulta.data?.revisoesPersistidas ?? []),
     revisaoSelecionadaId: cargaVisual?.revisaoSelecionadaId,
     somenteLeitura: cargaVisual?.somenteLeitura ?? true,
+    podeMaterializarOrigemAnalitica: cargaVisual?.podeMaterializarOrigemAnalitica ?? false,
     salvarRascunho: (config: ConfiguracaoPropostaComercial) => persistir.mutateAsync({ publicar: false, config }),
     publicarRascunho: (config: ConfiguracaoPropostaComercial) => persistir.mutateAsync({ publicar: true, config }),
     selecionarRevisaoLegada: selecionar.mutateAsync,
+    materializarOrigemAnalitica: materializarOrigem.mutateAsync,
     abrirRevisaoHistorica: setRevisaoAbertaId,
-    isPending: consulta.isPending || persistir.isPending || selecionar.isPending,
-    error: consulta.error ?? persistir.error ?? selecionar.error,
+    isPending: consulta.isPending || persistir.isPending || selecionar.isPending || materializarOrigem.isPending,
+    error: consulta.error ?? persistir.error ?? selecionar.error ?? materializarOrigem.error,
   }
 }

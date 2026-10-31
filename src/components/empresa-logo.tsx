@@ -3,13 +3,13 @@ import { getSecureR2Url } from "@/lib/r2";
 import { companyLogoKey } from "@/lib/empresa-logo";
 
 export function EmpresaLogo({ value, className = "h-16 max-w-48 object-contain", link = false }: {
-  value: string | null | undefined; className?: string; link?: boolean;
+  value?: string | null | undefined; className?: string; link?: boolean;
 }) {
   const [loaded, setLoaded] = useState<{ value: string; url: string } | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const key = companyLogoKey(value);
   const external = value && /^https?:\/\//i.test(value) && !key ? value : "";
-  const url = loaded?.value === value ? loaded.url : external;
+  const url = loaded && loaded.value === value ? loaded.url : external;
 
   useEffect(() => {
     let active = true;

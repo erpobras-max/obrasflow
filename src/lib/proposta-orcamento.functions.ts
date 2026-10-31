@@ -34,9 +34,11 @@ export interface ConfiguracaoPropostaComercial extends ConfiguracaoPropostaBase 
   mostrarValidade: boolean
   mostrarObservacoes: boolean
   mostrarAssinaturas: boolean
+  mostrarContrato: boolean
   tituloProposta: string
   textoApresentacao: string
   textoEncerramento: string
+  textoContrato: string
   prazoExecucaoTexto: string
   validadeTexto: string
   condicoesPagamentoTexto: string
@@ -59,11 +61,14 @@ export const configuracaoPropostaComercialPadrao: ConfiguracaoPropostaComercial 
   mostrarValidade: true,
   mostrarObservacoes: true,
   mostrarAssinaturas: true,
+  mostrarContrato: true,
   tituloProposta: 'Proposta Comercial para Execução de Obra',
   textoApresentacao:
     'Apresentamos nossa proposta técnica e comercial para a execução dos serviços de engenharia civil discriminados abaixo, em conformidade com as normas ABNT e projetos aprovados.',
   textoEncerramento:
     'Permanecemos à disposição para prestar quaisquer esclarecimentos necessários e alinhar o início das atividades.',
+  textoContrato:
+    'CLÁUSULA 1ª - DO OBJETO: O presente instrumento tem por objeto a prestação dos serviços técnicos e execução de obras civis descritas na planilha orçamentária anexa.\n\nCLÁUSULA 2ª - DOS PRAZOS: Os serviços serão iniciados após a aprovação formal e mobilização inicial, com prazo de conclusão estimado conforme discriminado neste documento.\n\nCLÁUSULA 3ª - DO PREÇO E MEDIÇÕES: Os pagamentos serão efetuados de acordo com as condições comerciais acordadas, mediante emissão de boletins de medição dos serviços efetivamente executados e aprovados pela fiscalização.\n\nCLÁUSULA 4ª - DAS OBRIGAÇÕES: A CONTRATADA compromete-se a empregar mão de obra qualificada e respeitar as normas de segurança e meio ambiente vigentes. O CONTRATANTE fornecerá acesso ao local da obra e os subsídios necessários.\n\nCLÁUSULA 5ª - DO FORO: As partes elegem o foro da comarca da localização da obra para dirimir eventuais dúvidas decorrentes deste instrumento.',
   prazoExecucaoTexto: '120 (cento e vinte) dias úteis a contar da mobilização inicial',
   validadeTexto: '15 (quinze) dias corridos a partir da data de emissão',
   condicoesPagamentoTexto:

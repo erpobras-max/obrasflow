@@ -14,17 +14,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase as client } from '@/integrations/supabase/client.custom'
 import {
   configuracaoPropostaComercialPadrao,
-  criarFotografiaProposta,
 } from '@/lib/proposta-orcamento.functions'
 import { validarSelecaoNovaProposta } from '@/lib/propostas/proposta-criacao'
 
 const supabase = client as any
+
+interface OrigemProposta {
+  obra_id: string
+  obra_numero?: string | null
+  obra_nome: string
+  cliente_id: string
+  orcamento_id: string
+  orcamento_created_at: string
+  revisao_id: string
+  revisao_numero: number
+  revisao_created_at: string
+}
 
 interface NovaPropostaOrcamentoDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCriada: (propostaId: string) => void
   duplicar?: boolean
+  origemPropostaId?: string
+  revisaoInicialId?: string | null
 }
 
 async function dados(query: PromiseLike<any>) {
@@ -38,6 +51,8 @@ export function NovaPropostaOrcamentoDialog({
   onOpenChange,
   onCriada,
   duplicar = false,
+  origemPropostaId,
+  revisaoInicialId,
 }: NovaPropostaOrcamentoDialogProps) {
   const [obraId, setObraId] = useState('')
   const [orcamentoId, setOrcamentoId] = useState('')
@@ -52,27 +67,61 @@ export function NovaPropostaOrcamentoDialog({
     }
   }, [open])
 
-  const obrasQuery = useQuery({
-    queryKey: ['obras-com-orcamento-proposta'],
+  const origensQuery = useQuery<OrigemProposta[]>({
+    queryKey: ['origens-comerciais-proposta'],
     enabled: open,
-    queryFn: () => dados(supabase.from('obras').select('id,numero,nome,cliente_id,orcamentos!inner(id)').order('nome')),
-  })
-  const orcamentosQuery = useQuery({
-    queryKey: ['orcamentos-proposta', obraId],
-    enabled: open && Boolean(obraId),
-    queryFn: () => dados(supabase.from('orcamentos').select('id,created_at').eq('obra_id', obraId).order('created_at', { ascending: false })),
-  })
-  const revisoesQuery = useQuery({
-    queryKey: ['orcamento-revisoes-proposta', orcamentoId],
-    enabled: open && Boolean(orcamentoId),
-    queryFn: () => dados(supabase.from('orcamento_revisoes').select('id,numero,created_at,fotografia').eq('orcamento_id', orcamentoId).order('numero', { ascending: false })),
+    queryFn: () => dados(supabase.rpc('listar_origens_proposta_editor', {
+      p_obra_id: null,
+      p_revisao_id: null,
+      p_incluir_fotografia: false,
+    })),
   })
 
   const obras = useMemo(() => {
-    const orcamentos = orcamentosQuery.data ?? []
-    if (obraId && orcamentos.length === 0) return obrasQuery.data ?? []
-    return obrasQuery.data ?? []
-  }, [obraId, obrasQuery.data, orcamentosQuery.data])
+    const unicas = new Map<string, { id: string; numero?: string | null; nome: string; cliente_id: string }>()
+    for (const origem of origensQuery.data ?? []) {
+      unicas.set(origem.obra_id, {
+        id: origem.obra_id,
+        numero: origem.obra_numero,
+        nome: origem.obra_nome,
+        cliente_id: origem.cliente_id,
+      })
+    }
+    return [...unicas.values()]
+  }, [origensQuery.data])
+
+  const orcamentos = useMemo(() => {
+    const unicos = new Map<string, { id: string; created_at: string }>()
+    for (const origem of origensQuery.data ?? []) {
+      if (origem.obra_id === obraId) {
+        unicos.set(origem.orcamento_id, {
+          id: origem.orcamento_id,
+          created_at: origem.orcamento_created_at,
+        })
+      }
+    }
+    return [...unicos.values()]
+  }, [obraId, origensQuery.data])
+
+  const revisoes = useMemo(
+    () => (origensQuery.data ?? [])
+      .filter((origem) => origem.orcamento_id === orcamentoId)
+      .map((origem) => ({
+        id: origem.revisao_id,
+        numero: origem.revisao_numero,
+        created_at: origem.revisao_created_at,
+      })),
+    [orcamentoId, origensQuery.data],
+  )
+
+  useEffect(() => {
+    if (!open || !revisaoInicialId) return
+    const origem = (origensQuery.data ?? []).find((item) => item.revisao_id === revisaoInicialId)
+    if (!origem) return
+    setObraId(origem.obra_id)
+    setOrcamentoId(origem.orcamento_id)
+    setRevisaoId(origem.revisao_id)
+  }, [open, origensQuery.data, revisaoInicialId])
 
   const confirmar = async () => {
     const validacao = validarSelecaoNovaProposta({ obraId, orcamentoId, revisaoId, duplicar })
@@ -80,7 +129,7 @@ export function NovaPropostaOrcamentoDialog({
       toast.error(validacao.mensagem)
       return
     }
-    const revisao = (revisoesQuery.data ?? []).find((item: any) => item.id === revisaoId)
+    const revisao = revisoes.find((item) => item.id === revisaoId)
     if (!revisao) {
       toast.error('A revisão selecionada não está mais disponível.')
       return
@@ -92,13 +141,19 @@ export function NovaPropostaOrcamentoDialog({
         ...configuracaoPropostaComercialPadrao,
         tituloProposta: `Proposta Comercial - ${obraSelecionada?.nome ?? 'Obra'}`,
       }
-      const fotografia = criarFotografiaProposta(revisao, configuracaoInicial)
-      const { data: propostaCriadaId, error } = await supabase.rpc('criar_proposta_de_revisao', {
-        p_orcamento_revisao_id: revisaoId,
-        p_configuracao: configuracaoInicial,
-        p_fotografia: fotografia,
-        p_duplicar: validacao.duplicar,
-      })
+      const chamada = validacao.duplicar && origemPropostaId
+        ? supabase.rpc('duplicar_proposta_editor', {
+            p_proposta_origem_id: origemPropostaId,
+            p_orcamento_revisao_id: revisaoId,
+            p_configuracao: configuracaoInicial,
+          })
+        : supabase.rpc('criar_proposta_de_revisao', {
+            p_orcamento_revisao_id: revisaoId,
+            p_configuracao: configuracaoInicial,
+            p_fotografia: {},
+            p_duplicar: validacao.duplicar,
+          })
+      const { data: propostaCriadaId, error } = await chamada
       if (error) throw error
       toast.success(validacao.duplicar ? 'Variação comercial criada.' : 'Rascunho comercial aberto a partir do orçamento.')
       onOpenChange(false)
@@ -122,23 +177,23 @@ export function NovaPropostaOrcamentoDialog({
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Obra</label>
-            <Select value={obraId} onValueChange={(valor) => { setObraId(valor); setOrcamentoId(''); setRevisaoId('') }}>
+            <Select value={obraId} disabled={Boolean(origemPropostaId)} onValueChange={(valor) => { setObraId(valor); setOrcamentoId(''); setRevisaoId('') }}>
               <SelectTrigger><SelectValue placeholder="Selecione a obra" /></SelectTrigger>
               <SelectContent>{obras.map((obra: any) => <SelectItem key={obra.id} value={obra.id}>{obra.numero ? `${obra.numero} — ` : ''}{obra.nome}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Orçamento</label>
-            <Select value={orcamentoId} disabled={!obraId} onValueChange={(valor) => { setOrcamentoId(valor); setRevisaoId('') }}>
+            <Select value={orcamentoId} disabled={!obraId || Boolean(origemPropostaId)} onValueChange={(valor) => { setOrcamentoId(valor); setRevisaoId('') }}>
               <SelectTrigger><SelectValue placeholder="Selecione o orçamento" /></SelectTrigger>
-              <SelectContent>{(orcamentosQuery.data ?? []).map((orcamento: any, indice: number) => <SelectItem key={orcamento.id} value={orcamento.id}>Orçamento {indice + 1} · {new Date(orcamento.created_at).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent>
+              <SelectContent>{orcamentos.map((orcamento, indice) => <SelectItem key={orcamento.id} value={orcamento.id}>Orçamento {indice + 1} · {new Date(orcamento.created_at).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Revisão congelada</label>
-            <Select value={revisaoId} disabled={!orcamentoId} onValueChange={setRevisaoId}>
+            <Select value={revisaoId} disabled={!orcamentoId || Boolean(origemPropostaId)} onValueChange={setRevisaoId}>
               <SelectTrigger><SelectValue placeholder="Selecione a revisão" /></SelectTrigger>
-              <SelectContent>{(revisoesQuery.data ?? []).map((revisao: any) => <SelectItem key={revisao.id} value={revisao.id}>Revisão {revisao.numero} · {new Date(revisao.created_at).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent>
+              <SelectContent>{revisoes.map((revisao) => <SelectItem key={revisao.id} value={revisao.id}>Revisão {revisao.numero} · {new Date(revisao.created_at).toLocaleDateString('pt-BR')}</SelectItem>)}</SelectContent>
             </Select>
           </div>
         </div>

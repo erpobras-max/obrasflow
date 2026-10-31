@@ -593,29 +593,46 @@ export function OrcamentoAnaliticoView({
     try {
       const atividadeAlvo = etapas.flatMap((e) => e.atividades).find((a) => a.id === atividadeId)
 
-      // 1. Deletar memoriais vinculados
-      await supabase.from('orcamento_memoriais').delete().eq('atividade_id', atividadeId)
-
-      // 2. Deletar insumos vinculados da composição
-      await supabase.from('orcamento_atividade_insumos').delete().eq('atividade_id', atividadeId)
-
-      // 3. Deletar a atividade analítica
-      const { error } = await supabase.from('orcamento_atividades').delete().eq('id', atividadeId)
-      if (error) {
-        toast.error(`Falha ao excluir no banco: ${error.message}`)
-        return
+      // 1. Tentar via RPC atômica se disponível
+      let viaRpc = false
+      try {
+        const { data: rpcOk, error: rpcErr } = await supabase.rpc('excluir_atividade_orcamento', {
+          p_atividade_id: atividadeId,
+          p_orcamento_id: orcamentoId,
+        })
+        if (!rpcErr && rpcOk) viaRpc = true
+      } catch {
+        // Fallback para queries manuais
       }
 
-      // 4. Se houver item legado correspondente, remove também (por ID, descrição ou código)
-      await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('id', atividadeId)
-      if (atividadeAlvo?.descricao) {
-        await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('descricao', atividadeAlvo.descricao)
-      }
-      if (atividadeAlvo?.codigo) {
-        await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('codigo', atividadeAlvo.codigo)
+      if (!viaRpc) {
+        // 1. Deletar memoriais vinculados
+        await supabase.from('orcamento_memoriais').delete().eq('atividade_id', atividadeId)
+
+        // 2. Deletar insumos vinculados da composição
+        await supabase.from('orcamento_atividade_insumos').delete().eq('atividade_id', atividadeId)
+
+        // 3. Deletar a atividade analítica
+        const { error } = await supabase.from('orcamento_atividades').delete().eq('id', atividadeId)
+        if (error) {
+          toast.error(`Falha ao excluir no banco: ${error.message}`)
+          return
+        }
+
+        // 4. Se houver item legado correspondente, remove também (por ID, descrição ou código)
+        await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('id', atividadeId)
+        if (atividadeAlvo?.descricao) {
+          await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('descricao', atividadeAlvo.descricao)
+        }
+        if (atividadeAlvo?.codigo) {
+          await supabase.from('orcamento_itens').delete().eq('orcamento_id', orcamentoId).eq('codigo', atividadeAlvo.codigo)
+        }
       }
 
-      // 5. Atualizar estado local imediatamente
+      // 5. Garantir que o orçamento seja marcado como analítico ativo para evitar re-migração
+      void supabase.from('orcamentos').update({ analitico_ativo: true }).eq('id', orcamentoId)
+
+      // 6. Atualizar estado local imediatamente
       setEtapas((prev) =>
         prev.map((e) => ({
           ...e,

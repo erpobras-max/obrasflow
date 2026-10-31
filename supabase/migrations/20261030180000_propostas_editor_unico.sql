@@ -56,8 +56,7 @@ AS $$
     public.has_role(p_usuario, 'admin')
     OR public.has_role(p_usuario, 'diretor')
     OR public.has_role(p_usuario, 'financeiro')
-    OR public.has_role(p_usuario, 'financeiro_civil')
-    OR public.has_role(p_usuario, 'financeiro_imobiliaria');
+    OR public.has_role(p_usuario, 'financeiro_civil');
 $$;
 
 CREATE OR REPLACE FUNCTION public.construir_fotografia_comercial(
@@ -160,6 +159,63 @@ BEGIN
     'etapas', v_etapas,
     'totalPrecoCentavos', v_total_geral
   );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.listar_origens_proposta_editor(
+  p_obra_id uuid DEFAULT NULL,
+  p_revisao_id uuid DEFAULT NULL,
+  p_incluir_fotografia boolean DEFAULT false
+)
+RETURNS TABLE(
+  obra_id uuid,
+  obra_numero text,
+  obra_nome text,
+  cliente_id uuid,
+  orcamento_id uuid,
+  orcamento_created_at timestamptz,
+  revisao_id uuid,
+  revisao_numero integer,
+  revisao_created_at timestamptz,
+  fotografia jsonb
+)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_usuario uuid := auth.uid();
+BEGIN
+  IF v_usuario IS NULL OR NOT (
+    public.pode_editar_proposta_editor(v_usuario)
+    OR public.has_role(v_usuario, 'engenharia')
+  ) THEN
+    RAISE EXCEPTION 'Permissão insuficiente para consultar origens comerciais';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    obra.id,
+    obra.numero,
+    obra.nome,
+    obra.cliente_id,
+    orc.id,
+    orc.created_at,
+    revisao.id,
+    revisao.numero,
+    revisao.created_at,
+    CASE
+      WHEN COALESCE(p_incluir_fotografia, false)
+        THEN public.construir_fotografia_comercial(revisao.id, '{}'::jsonb)
+      ELSE NULL::jsonb
+    END
+  FROM public.orcamento_revisoes revisao
+  JOIN public.orcamentos orc ON orc.id = revisao.orcamento_id
+  JOIN public.obras obra ON obra.id = orc.obra_id
+  WHERE (p_obra_id IS NULL OR obra.id = p_obra_id)
+    AND (p_revisao_id IS NULL OR revisao.id = p_revisao_id)
+  ORDER BY obra.nome, orc.created_at DESC, revisao.numero DESC;
 END;
 $$;
 
@@ -320,6 +376,56 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.duplicar_proposta_editor(
+  p_proposta_origem_id uuid,
+  p_orcamento_revisao_id uuid,
+  p_configuracao jsonb
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_usuario uuid := auth.uid();
+  v_cliente_origem uuid;
+  v_revisao_origem uuid;
+  v_cliente_revisao uuid;
+  v_proposta_id uuid;
+BEGIN
+  IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
+    RAISE EXCEPTION 'Permissão insuficiente para duplicar proposta';
+  END IF;
+  SELECT cliente_id, orcamento_revisao_id INTO v_cliente_origem, v_revisao_origem
+    FROM public.propostas
+   WHERE id = p_proposta_origem_id;
+  IF v_cliente_origem IS NULL THEN RAISE EXCEPTION 'Proposta de origem não encontrada'; END IF;
+  IF v_revisao_origem IS NULL OR v_revisao_origem <> p_orcamento_revisao_id THEN
+    RAISE EXCEPTION 'A variação deve usar a mesma revisão técnica da proposta de origem';
+  END IF;
+
+  SELECT obra.cliente_id INTO v_cliente_revisao
+    FROM public.orcamento_revisoes revisao
+    JOIN public.orcamentos orcamento ON orcamento.id = revisao.orcamento_id
+    JOIN public.obras obra ON obra.id = orcamento.obra_id
+   WHERE revisao.id = p_orcamento_revisao_id;
+  IF v_cliente_revisao IS NULL OR v_cliente_revisao <> v_cliente_origem THEN
+    RAISE EXCEPTION 'A revisão selecionada não pertence ao cliente da proposta de origem';
+  END IF;
+
+  v_proposta_id := public.criar_proposta_de_revisao(
+    p_orcamento_revisao_id,
+    p_configuracao,
+    '{}'::jsonb,
+    true
+  );
+  UPDATE public.propostas
+     SET duplicada_de_id = p_proposta_origem_id
+   WHERE id = v_proposta_id;
+  RETURN v_proposta_id;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.publicar_rascunho_proposta(
   p_proposta_id uuid,
   p_configuracao jsonb,
@@ -411,6 +517,8 @@ DECLARE
   v_usuario uuid := auth.uid();
   v_cliente_proposta uuid;
   v_cliente_revisao uuid;
+  v_obra_proposta uuid;
+  v_obra_revisao uuid;
   v_status public.status_proposta;
 BEGIN
   IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
@@ -423,13 +531,22 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.proposta_revisoes WHERE proposta_id = p_proposta_id) THEN
     RAISE EXCEPTION 'A proposta já possui histórico comercial';
   END IF;
-  SELECT obra.cliente_id INTO v_cliente_revisao
+  SELECT id INTO v_obra_proposta
+    FROM public.obras
+   WHERE proposta_id = p_proposta_id;
+  IF v_obra_proposta IS NULL THEN
+    RAISE EXCEPTION 'A proposta legada precisa estar vinculada explicitamente a uma obra';
+  END IF;
+  SELECT obra.cliente_id, obra.id INTO v_cliente_revisao, v_obra_revisao
     FROM public.orcamento_revisoes revisao
     JOIN public.orcamentos orcamento ON orcamento.id = revisao.orcamento_id
     JOIN public.obras obra ON obra.id = orcamento.obra_id
    WHERE revisao.id = p_orcamento_revisao_id;
   IF v_cliente_revisao IS NULL OR v_cliente_revisao <> v_cliente_proposta THEN
     RAISE EXCEPTION 'A revisão selecionada não pertence ao cliente da proposta';
+  END IF;
+  IF v_obra_revisao <> v_obra_proposta THEN
+    RAISE EXCEPTION 'A revisão selecionada não pertence à obra vinculada à proposta';
   END IF;
   UPDATE public.propostas
      SET orcamento_revisao_id = p_orcamento_revisao_id
@@ -451,6 +568,9 @@ DECLARE
   v_usuario uuid := auth.uid();
   v_status_atual public.status_proposta;
   v_revisao_id uuid;
+  v_orcamento_revisao_id uuid;
+  v_fotografia jsonb;
+  v_obra_id uuid;
 BEGIN
   IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
     RAISE EXCEPTION 'Permissão insuficiente para alterar status da proposta';
@@ -476,8 +596,72 @@ BEGIN
       ORDER BY numero DESC LIMIT 1
       FOR UPDATE
    )
-   RETURNING id INTO v_revisao_id;
+   RETURNING id, orcamento_revisao_id, fotografia
+        INTO v_revisao_id, v_orcamento_revisao_id, v_fotografia;
   IF v_revisao_id IS NULL THEN RAISE EXCEPTION 'Revisão enviada não encontrada'; END IF;
+
+  IF p_status = 'aceita' AND v_orcamento_revisao_id IS NOT NULL THEN
+    SELECT obra.id INTO v_obra_id
+      FROM public.orcamento_revisoes revisao
+      JOIN public.orcamentos orcamento ON orcamento.id = revisao.orcamento_id
+      JOIN public.obras obra ON obra.id = orcamento.obra_id
+     WHERE revisao.id = v_orcamento_revisao_id
+     FOR UPDATE OF obra;
+    IF v_obra_id IS NULL THEN
+      RAISE EXCEPTION 'Obra de origem da proposta não encontrada';
+    END IF;
+
+    -- Vincula antes da mudança de status. Assim, o trigger legado de aceite
+    -- encontra a obra original e não cria uma segunda obra para a proposta.
+    UPDATE public.obras
+       SET proposta_id = p_proposta_id
+     WHERE id = v_obra_id;
+    UPDATE public.obras_cronogramas
+       SET proposta_id = p_proposta_id
+     WHERE obra_id = v_obra_id;
+
+    -- O cronograma e as medições legadas consomem propostas_itens. Materializa
+    -- a fotografia comercial congelada sem reintroduzir custos/insumos.
+    DELETE FROM public.propostas_itens WHERE proposta_id = p_proposta_id;
+    INSERT INTO public.propostas_itens(
+      proposta_id, descricao, quantidade, valor_unitario, ordem, unidade,
+      etapa_codigo, etapa_nome, item_codigo, item_nome
+    )
+    WITH etapas AS (
+      SELECT etapa, etapa_ordem
+        FROM jsonb_array_elements(COALESCE(v_fotografia->'etapas', '[]'::jsonb))
+             WITH ORDINALITY AS e(etapa, etapa_ordem)
+    ), linhas AS (
+      SELECT
+        etapa,
+        atividade,
+        etapa_ordem,
+        atividade_ordem
+      FROM etapas
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(etapa->'atividades', '[]'::jsonb))
+           WITH ORDINALITY AS a(atividade, atividade_ordem)
+      UNION ALL
+      SELECT etapa, NULL::jsonb, etapa_ordem, 1::bigint
+        FROM etapas
+       WHERE jsonb_array_length(COALESCE(etapa->'atividades', '[]'::jsonb)) = 0
+    )
+    SELECT
+      p_proposta_id,
+      COALESCE(NULLIF(atividade->>'descricao', ''), NULLIF(etapa->>'nome', ''), 'Serviço'),
+      COALESCE(NULLIF(NULLIF(atividade->>'quantidade', '')::numeric, 0), 1),
+      COALESCE(
+        NULLIF(atividade->>'precoUnitarioCentavos', '')::numeric,
+        NULLIF(etapa->>'valorTotalCentavos', '')::numeric,
+        0
+      ) / 100,
+      ((etapa_ordem - 1) * 10000 + atividade_ordem)::integer,
+      COALESCE(NULLIF(atividade->>'unidade', ''), 'un'),
+      COALESCE(NULLIF(etapa->>'codigo', ''), etapa_ordem::text),
+      COALESCE(NULLIF(etapa->>'nome', ''), 'Etapa'),
+      NULLIF(atividade->>'codigo', ''),
+      COALESCE(NULLIF(atividade->>'descricao', ''), NULLIF(etapa->>'nome', ''), 'Serviço')
+    FROM linhas;
+  END IF;
 
   UPDATE public.propostas
      SET status = p_status::public.status_proposta
@@ -486,28 +670,114 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.materializar_origem_analitica_proposta(
+  p_proposta_id uuid
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_usuario uuid := auth.uid();
+  v_status public.status_proposta;
+  v_orcamento_id uuid;
+  v_revisao_id uuid;
+  v_chave text := 'proposta-legada-' || p_proposta_id::text;
+BEGIN
+  IF v_usuario IS NULL OR NOT public.pode_editar_proposta_editor(v_usuario) THEN
+    RAISE EXCEPTION 'Permissão insuficiente para migrar proposta legada';
+  END IF;
+  SELECT status INTO v_status FROM public.propostas WHERE id = p_proposta_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Proposta não encontrada'; END IF;
+  IF v_status <> 'rascunho' THEN RAISE EXCEPTION 'Somente rascunho legado pode ser migrado'; END IF;
+  IF EXISTS (SELECT 1 FROM public.proposta_revisoes WHERE proposta_id = p_proposta_id) THEN
+    RAISE EXCEPTION 'A proposta já possui histórico comercial';
+  END IF;
+
+  SELECT orcamento.id INTO v_orcamento_id
+    FROM public.obras obra
+    JOIN public.orcamentos orcamento ON orcamento.obra_id = obra.id
+   WHERE obra.proposta_id = p_proposta_id
+   ORDER BY orcamento.created_at DESC
+   LIMIT 1;
+  IF v_orcamento_id IS NULL THEN
+    RAISE EXCEPTION 'A proposta não possui obra com orçamento analítico vinculado';
+  END IF;
+
+  SELECT id INTO v_revisao_id
+    FROM public.orcamento_revisoes
+   WHERE orcamento_id = v_orcamento_id AND chave_idempotencia = v_chave;
+  IF v_revisao_id IS NULL THEN
+    INSERT INTO public.orcamento_revisoes(
+      orcamento_id, numero, chave_idempotencia, fotografia, created_by
+    )
+    SELECT
+      orcamento.id,
+      COALESCE((SELECT max(numero) + 1 FROM public.orcamento_revisoes WHERE orcamento_id = orcamento.id), 1),
+      v_chave,
+      jsonb_build_object(
+        'orcamento', to_jsonb(orcamento),
+        'etapas', COALESCE((SELECT jsonb_agg(to_jsonb(etapa) ORDER BY etapa.ordem) FROM public.orcamento_etapas etapa WHERE etapa.orcamento_id = orcamento.id), '[]'::jsonb),
+        'atividades', COALESCE((SELECT jsonb_agg(to_jsonb(atividade) ORDER BY atividade.ordem) FROM public.orcamento_atividades atividade JOIN public.orcamento_etapas etapa ON etapa.id = atividade.etapa_id WHERE etapa.orcamento_id = orcamento.id), '[]'::jsonb),
+        'insumos', COALESCE((SELECT jsonb_agg(to_jsonb(insumo) ORDER BY insumo.ordem) FROM public.orcamento_atividade_insumos insumo JOIN public.orcamento_atividades atividade ON atividade.id = insumo.atividade_id JOIN public.orcamento_etapas etapa ON etapa.id = atividade.etapa_id WHERE etapa.orcamento_id = orcamento.id), '[]'::jsonb),
+        'memoriais', COALESCE((SELECT jsonb_agg(to_jsonb(memorial) ORDER BY memorial.ordem) FROM public.orcamento_memoriais memorial JOIN public.orcamento_atividades atividade ON atividade.id = memorial.atividade_id JOIN public.orcamento_etapas etapa ON etapa.id = atividade.etapa_id WHERE etapa.orcamento_id = orcamento.id), '[]'::jsonb)
+      ),
+      v_usuario
+    FROM public.orcamentos orcamento
+    WHERE orcamento.id = v_orcamento_id
+    RETURNING id INTO v_revisao_id;
+  END IF;
+
+  UPDATE public.propostas
+     SET orcamento_revisao_id = v_revisao_id
+   WHERE id = p_proposta_id;
+  RETURN v_revisao_id;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.sanitizar_fotografia_proposta(jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.construir_fotografia_comercial(uuid,jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.listar_origens_proposta_editor(uuid,uuid,boolean) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.pode_editar_proposta_editor(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.salvar_rascunho_proposta(uuid,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.duplicar_proposta_editor(uuid,uuid,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.publicar_rascunho_proposta(uuid,jsonb,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.excluir_proposta_rascunho(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.vincular_proposta_legada_revisao(uuid,uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.alterar_status_proposta_editor(uuid,text) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.materializar_origem_analitica_proposta(uuid) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.listar_origens_proposta_editor(uuid,uuid,boolean) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.salvar_rascunho_proposta(uuid,jsonb,jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.duplicar_proposta_editor(uuid,uuid,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.publicar_rascunho_proposta(uuid,jsonb,jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.excluir_proposta_rascunho(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.vincular_proposta_legada_revisao(uuid,uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.alterar_status_proposta_editor(uuid,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.materializar_origem_analitica_proposta(uuid) TO authenticated;
 
 -- O ciclo de vida comercial só pode ser alterado pelas RPCs acima. Leituras
 -- continuam disponíveis aos perfis operacionais autorizados.
 REVOKE INSERT, UPDATE, DELETE ON public.propostas FROM authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.proposta_revisoes FROM authenticated;
-GRANT SELECT ON public.propostas, public.proposta_revisoes TO authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.propostas_itens FROM authenticated;
+GRANT SELECT ON public.propostas, public.proposta_revisoes, public.propostas_itens TO authenticated;
+
+DROP POLICY IF EXISTS proposta_editor_financeiro_civil_select ON public.propostas;
+CREATE POLICY proposta_editor_financeiro_civil_select ON public.propostas
+FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'financeiro_civil'));
+DROP POLICY IF EXISTS proposta_itens_editor_financeiro_civil_select ON public.propostas_itens;
+CREATE POLICY proposta_itens_editor_financeiro_civil_select ON public.propostas_itens
+FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'financeiro_civil'));
+DROP POLICY IF EXISTS obras_editor_financeiro_civil_select ON public.obras;
+CREATE POLICY obras_editor_financeiro_civil_select ON public.obras
+FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'financeiro_civil'));
+DROP POLICY IF EXISTS clientes_editor_financeiro_civil_select ON public.clientes;
+CREATE POLICY clientes_editor_financeiro_civil_select ON public.clientes
+FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'financeiro_civil'));
 
 ALTER TABLE public.proposta_revisoes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS analitico_gestao ON public.proposta_revisoes;
@@ -518,7 +788,6 @@ FOR SELECT TO authenticated USING (
   OR public.has_role(auth.uid(), 'diretor')
   OR public.has_role(auth.uid(), 'financeiro')
   OR public.has_role(auth.uid(), 'financeiro_civil')
-  OR public.has_role(auth.uid(), 'financeiro_imobiliaria')
   OR public.has_role(auth.uid(), 'engenharia')
 );
 
@@ -527,9 +796,6 @@ CREATE POLICY analitico_revisoes_leitura ON public.orcamento_revisoes
 FOR SELECT TO authenticated USING (
   public.has_role(auth.uid(), 'admin')
   OR public.has_role(auth.uid(), 'diretor')
-  OR public.has_role(auth.uid(), 'financeiro')
-  OR public.has_role(auth.uid(), 'financeiro_civil')
-  OR public.has_role(auth.uid(), 'financeiro_imobiliaria')
   OR public.has_role(auth.uid(), 'engenharia')
 );
 
@@ -537,10 +803,13 @@ FOR SELECT TO authenticated USING (
 -- DROP FUNCTION IF EXISTS public.excluir_proposta_rascunho(uuid);
 -- DROP FUNCTION IF EXISTS public.vincular_proposta_legada_revisao(uuid,uuid);
 -- DROP FUNCTION IF EXISTS public.alterar_status_proposta_editor(uuid,text);
+-- DROP FUNCTION IF EXISTS public.materializar_origem_analitica_proposta(uuid);
 -- DROP FUNCTION IF EXISTS public.publicar_rascunho_proposta(uuid,jsonb,jsonb);
 -- DROP FUNCTION IF EXISTS public.salvar_rascunho_proposta(uuid,jsonb,jsonb);
+-- DROP FUNCTION IF EXISTS public.duplicar_proposta_editor(uuid,uuid,jsonb);
 -- DROP FUNCTION IF EXISTS public.criar_proposta_de_revisao(uuid,jsonb,jsonb,boolean);
 -- DROP FUNCTION IF EXISTS public.pode_editar_proposta_editor(uuid);
+-- DROP FUNCTION IF EXISTS public.listar_origens_proposta_editor(uuid,uuid,boolean);
 -- DROP FUNCTION IF EXISTS public.construir_fotografia_comercial(uuid,jsonb);
 -- DROP FUNCTION IF EXISTS public.sanitizar_fotografia_proposta(jsonb);
 -- DROP TRIGGER IF EXISTS trg_proposta_revisoes_updated_at ON public.proposta_revisoes;

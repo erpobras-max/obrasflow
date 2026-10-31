@@ -399,16 +399,173 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - 17 testes automatizados de unidade aprovados cobrindo discriminação de BDI/custos, editor de proposta, orçamentos analíticos e legados, fotografias imutáveis e importações SINAPI.
   - Todos os builds e deploys no Cloudflare Workers concluídos com 100% de sucesso.
 
-## Atualização 30/10/2026 — Propostas no Editor Comercial Único (Issue #200)
 
-- **Branch isolada**: `fix/200-consolidar-propostas-editor`; nenhuma publicação ou merge realizados nesta etapa.
-- **Fluxo único**: removidos da interface o formulário manual, o catálogo e a impressão antigos. Título e ação da listagem abrem exclusivamente o Editor Comercial.
-- **Origem obrigatória**: novas propostas seguem `obra → orçamento → revisão`; repetição abre o rascunho existente e duplicação exige ação explícita.
-- **Persistência e histórico**: configuração e fotografia comercial são salvas em `proposta_revisoes`; revisões publicadas ficam congeladas, continuam visualizáveis e imprimíveis.
-- **Segurança comercial**: a RPC sanitiza recursivamente custo, BDI, insumos, coeficientes e margens antes de persistir a fotografia entregue ao cliente.
-- **Ciclo de vida atômico**: criação, salvamento, publicação, aceite/rejeição/expiração e exclusão de rascunho usam RPCs transacionais. A exclusão não remove mais a linha do cache antes da confirmação do banco.
-- **Compatibilidade legada**: proposta antiga com uma revisão possível é adaptada; múltiplas revisões exigem escolha explícita; sem origem fica bloqueada até vinculação.
-- **PROP-2026-0008**: a causa mais provável no código era a exclusão otimista somada a falhas ignoradas nas desvinculações/deletes; a confirmação sobre o registro de produção ainda depende da execução autorizada de `scripts/diagnosticar_proposta_0008.sql`. A rota agora usa somente `excluir_proposta_rascunho`.
-- **Banco**: migration `20261030180000_propostas_editor_unico.sql`, com rollback manual documentado. Os tipos Supabase devem ser regenerados pelo CLI após aplicação no schema publicado.
-- **Revisão de segurança**: fotografia comercial passou a ser reconstruída no servidor, por lista branca, diretamente da fotografia analítica plana congelada. Valores enviados pelo navegador são ignorados; DML direto nas tabelas comerciais foi revogado para `authenticated`; finanças e engenharia receberam leitura coerente, com engenharia em modo somente leitura na interface.
-- **Validação**: `node --test tests/*.test.mjs` aprovou 117/117 testes; o build Vite/Nitro/Cloudflare foi concluído com sucesso após as correções da revisão. O lint focado dos arquivos alterados passou, exceto por uma ocorrência `prefer-const` preexistente em `orcamentos.tsx`; o lint global permanece bloqueado por 72.609 ocorrências preexistentes, principalmente CRLF/Prettier. O cenário Playwright autenticado está em `tests/e2e/propostas-editor-unico.spec.ts`, foi carregado corretamente e ficou ignorado por ausência de `E2E_EMAIL`, `E2E_PASSWORD` e `E2E_PROPOSTAS_MUTATION=true` em ambiente controlado.
+## Atualização 30/10/2026 — Contratos de Empreiteiros, Dados de Empresa e Cliente, Minuta Contratual na Impressão e Estabilidade de Build
+
+- **Contratos de Empreiteiros e Medições Separadas (Issue #199)**:
+  - Criada migration aditiva e idempotente `supabase/migrations/20261031000000_contratos_empreiteiros.sql`.
+  - Definidos enums, tabelas e constraints para contratos de prestadores (`contratos_empreiteiros`), medições multi-item (`medicoes_empreiteiros`), ajustes e retenções técnicas (`retencoes_empreiteiros`), anexos e evidências fotográficas (`medicao_empreiteiro_anexos`) e tokens seguros de compartilhamento (`medicao_empreiteiro_links`).
+  - Implementadas RPCs transacionais `aprovar_medicao_empreiteiro` (cria exatamente uma conta a pagar de forma idempotente), `cancelar_medicao_empreiteiro` e `liberar_retencao_empreiteiro`.
+  - Backfill automático 1-para-1 de contratos e medições legadas sem perda de dados.
+  - Suíte de 3 testes com banco em memória PGlite aprovada cobrindo migration, constraints, RLS, concorrência, idempotência e rollback.
+- **Dados Reais da Empresa (/empresa) e Logomarca em Propostas**:
+  - `EditorPropostaComercial` consulta dinamicamente a tabela `configuracoes_empresa` (`order by id limit 1`).
+  - Logomarca recuperada do storage R2 via componente `EmpresaLogo`.
+  - Cabeçalho, capa e bloco de assinaturas exibem Nome Fantasia, Razão Social, CNPJ, Inscrição Municipal/Estadual, e-mail, telefone e endereço oficial configurados.
+- **Identificação do Cliente e Obra na Proposta**:
+  - Consulta direta a `clientes` por chave estrangeira, sem dependência frágil de join de cache do PostgREST.
+  - Dados completos do cliente (Nome, CPF/CNPJ formatado, e-mail) e da obra (nome, endereço composto e prazo previsto) exibidos no quadro do contratante e no bloco de assinaturas.
+- **Valores Reais dos Itens da Proposta**:
+  - Cálculo dinâmico do custo direto das atividades a partir dos insumos vinculados (`orcamento_atividade_insumos`) com aplicação ponderada do BDI da atividade ou geral.
+  - Fallback automático para `orcamento_itens` garantindo que os itens nunca apareçam zerados ao carregar propostas geradas de orçamentos.
+- **Minuta do Contrato no Editor e na Impressão**:
+  - Adicionada seção de **Minuta Contratual & Cláusulas Gerais** à proposta comercial, editável no painel lateral esquerdo com inicialização a partir da `clausula_padrao` cadastrada em `/empresa`.
+  - Alternador `mostrarContrato` no menu lateral para ativar/desativar a inclusão da minuta.
+  - Cláusulas formatadas e posicionadas antes do bloco de assinaturas na folha A4.
+- **Correção Definitiva da Impressão (Eliminação de Página em Branco)**:
+  - No `styles.css` e no `EditorPropostaComercial`, a folha `.proposta-print-sheet` foi configurada para `position: absolute !important; left: 0; top: 0; width: 100% !important;` durante `@media print`.
+  - Forçado `overflow: visible !important; height: auto !important; max-height: none !important;` em todos os contêineres pais, eliminando o mascaramento de layout que causava página branca no Chrome Print.
+- **Exclusão Persistente de Propostas e Composições**:
+  - `deleteMutation` em `comercial.propostas.tsx` realiza limpeza atômica de dependências (cronogramas, contratos, obras, revisões, etapas e itens) e limpa o parâmetro `propostaId` da URL para impedir reabertura.
+  - `excluirAtividade` em `orcamento-analitico-view.tsx` elimina memoriais, insumos e atividades, remove itens legados de mesmo código/descrição e assegura `analitico_ativo = true` no orçamento para prevenir re-migrações fantasmas.
+- **Estabilidade do Pipeline de Build**:
+  - Configurado `node --max-old-space-size=4096` diretamente no script de build do `package.json`, prevenindo falhas por esgotamento de memória no Cloudflare Pages.
+  - Adicionados arquivos de configuração `.nvmrc` e `.node-version` (Node 20) para assegurar o mesmo ambiente de compilação em todas as plataformas.
+- **Validação de Testes**:
+  - Todos os 96 testes do repositório aprovados com 100% de sucesso.
+  - Compilação SSR/Nitro concluída sem erros.
+
+## Atualização 30/10/2026 — Conclusão do Módulo de Contratos de Empreiteiros e Medições Multi-Itens (Issue #199)
+
+- **Separação de Navegação e Regra Mental (Medição da Obra vs Contratos de Empreiteiros)**:
+  - Menu lateral (`src/components/layout/app-sidebar.tsx`) atualizado com distinção explícita: **Medição da Obra** (`/medicoes`, avanço do cliente e contas a receber) e **Contratos de Empreiteiros** (`/contratos-empreiteiros`, avanço do terceiro e contas a pagar).
+  - Banner de transição e atalho rápido adicionados no topo de `/prestadores` direcionando diretamente para a gestão moderna de contratos.
+- **Gestão Completa de Contratos de Empreiteiros (`/contratos-empreiteiros`)**:
+  - Listagem com cartões de KPIs em tempo real: Quantidade de Contratos, Total Contratado (com aditivos), Total Medido Bruto, Saldo a Medir e percentual geral concluído.
+  - Filtros rápidos por Obra, Status e busca textual por número de contrato, objeto, obra ou prestador.
+  - Dialog de cadastro com preenchimento de Obra, Empreiteiro, Tipo (Preço Unitário ou Empreitada Global), Objeto, Datas, Retenção padrão e Adiantamento previsto.
+- **Importação de Escopo do Orçamento e Planilhas Excel**:
+  - `ImportarOrcamentoDialog`: Carrega as etapas e atividades do orçamento analítico da obra com cálculo automático do preço unitário com BDI, permitindo seleção múltipla para compor o escopo do contrato.
+  - `ImportarExcelDialog`: Parser inteligente de planilhas (`.xlsx`, `.xls`, `.csv`) que identifica colunas de descrição, unidade, quantidade, preço unitário e etapa, exibindo pré-visualização e validação antes da importação.
+- **Boletim de Medição Dinâmico (Experiência Mais Controle)**:
+  - Planilha de medição multi-itens com histórico contratado, medições anteriores aprovadas e saldo físico-financeiro restante.
+  - Entrada de medição por **Quantidade**, **Percentual (%)** ou **Valor (R$)**, recalculando instantaneamente os demais parâmetros.
+  - Detecção e alerta visual de estouro de saldo físico/financeiro.
+  - Painel de deduções com amortização de adiantamento, descontos de EPI/retrabalho e retenção técnica percentual calculada automaticamente sobre o valor bruto medido.
+  - Resumo financeiro com Valor Bruto Medido, Total de Deduções e **Valor Líquido a Pagar**.
+  - Aprovação transacional em 1 clique chamando a RPC `aprovar_medicao_empreiteiro`, que valida o saldo restante, atualiza o acumulado e cria exatamente 1 conta a pagar no módulo Financeiro.
+  - Cancelamento seguro chamando `cancelar_medicao_empreiteiro`, estornando o financeiro e restabelecendo os saldos.
+- **Controle de Retenções Técnicas e Termos Aditivos**:
+  - `RetencoesDialog`: Acompanhamento de retenções técnicas por boletim de medição, com saldo disponível e liberação controlada que gera a conta a pagar com data de vencimento programada via RPC `liberar_retencao_empreiteiro`.
+  - `AditivoDialog`: Registro de termos aditivos de quantidade, preço, prazo ou escopo com atualização automática do valor total do contrato.
+- **Relatório Imprimível / Salvar PDF**:
+  - `MedicaoRelatorioImprimir`: Folha A4 formatada com cabeçalho oficial da construtora (`configuracoes_empresa` e logo do R2), identificação completa da obra e do empreiteiro, quadro de medição discriminado, resumo financeiro e campos de assinatura formal do engenheiro fiscal e do prestador.
+- **Verificação e Testes**:
+  - 107 testes automatizados aprovados no total (100% de sucesso), cobrindo regras de conversão, limites de saldo, retenções, deduções, importação de planilhas e integridade do banco de dados em memória.
+  - Compilação do projeto (`npm run build`) validada com 0 erros no Vite e no Nitro SSR.
+
+- **Evidências Fotográficas e Link Público para o Empreiteiro (Task 7)**:
+  - Componente `MedicaoAnexos`: Permite anexar fotos do avanço físico diretamente no Cloudflare R2 por medição, com visualização em galeria e lightbox ampliado.
+  - Geração de link público instantâneo com token aleatório criptográfico de 32 caracteres hex em `medicao_empreiteiro_links`, com cópia em 1 clique para WhatsApp/e-mail.
+  - Rota pública `/medicao-empreiteiro/$token` (`src/routes/medicao-empreiteiro.$token.tsx`): Permite ao empreiteiro visualizar o boletim de medição completo com dados da obra, status, itens medidos, deduções, fotos de comprovação e botão de impressão/PDF no celular ou computador, sem necessidade de login.
+  - Manual Operacional `docs/CONTRATOS_EMPREITEIROS_OPERACAO.md` criado com fluxo detalhado passo a passo para engenheiros, gestores e fiscais de obra.
+
+- **Ajustes de Compatibilidade de Schema e Exibição de Contratos**:
+  - Ajustadas as consultas de chave estrangeira em `src/lib/contratos-empreiteiros.functions.ts` (`listarContratosEmpreiteiros` e `obterDetalhesContrato`) para selecionar as colunas reais da tabela `fornecedores` (`razao_social`, `nome_fantasia`, `cnpj`, `cpf`) e `obras` (`logradouro`, `cidade`, `uf`), sanando o erro 400 do PostgREST que mantinha a listagem em carregamento contínuo.
+  - Atualizada a listagem (`/contratos-empreiteiros`), o detalhe do contrato, o boletim de medição e a impressão de relatório para exibir `nome_fantasia || razao_social` e endereço formatado.
+  - Adicionado tratamento de erro (`isError`) e botão de repetição na tabela de contratos.
+  - Todos os 109 testes automatizados aprovados e build SSR verificado com sucesso.
+
+- **Edição e Exclusão Segura de Contratos de Empreitada (Branch feat/201-editar-excluir-contrato-empreiteiro)**:
+  - Implementadas as funções `atualizarContratoEmpreiteiro` e `excluirContratoEmpreiteiro` em `src/lib/contratos-empreiteiros.functions.ts`.
+  - Edição completa com o `ContratoEditorDialog`: permite alterar objeto, modalidade, status (`rascunho`, `em_aprovacao`, `ativo`, `concluido`, `cancelado`), datas, percentual de retenção técnica, adiantamento previsto, observações e a planilha de itens/preços negociados.
+  - Exclusão com confirmação visual via `AlertDialog` e validação estrita no servidor: impede a remoção de contratos com medições aprovadas/pagas ou retenções liberadas, protegendo a integridade fiscal e financeira.
+  - Ações de Editar e Excluir disponibilizadas no menu de contexto (`DropdownMenu`) da listagem de contratos (`/contratos-empreiteiros`) e nos botões de cabeçalho na tela de detalhes do contrato (`ContratoDetalheView`).
+  - 111 testes automatizados aprovados e build SSR verificado com sucesso.
+
+- **Correção no Editor de Propostas Comerciais (Branch fix/202-corrigir-import-editor-proposta)**:
+  - Adicionado o import de `configuracaoPropostaComercialPadrao` em `src/components/propostas/editor-proposta-comercial.tsx`, sanando o erro `ReferenceError: configuracaoPropostaComercialPadrao is not defined` disparado ao abrir a edição da proposta a partir do orçamento.
+  - 111 testes automatizados aprovados e build SSR verificado com sucesso.
+
+
+- **Importação Unificada de Itens do Orçamento da Obra (`ImportarOrcamentoDialog`) (Branch fix/203-importar-orcamento-itens)**:
+  - Corrigida a busca de itens para contratos de empreiteiros: em vez de limitar-se exclusivamente às etapas analíticas (que retornava lista vazia quando o orçamento da obra utilizava itens padrão em `orcamento_itens`), o diálogo agora realiza busca em múltiplas fontes com fallback progressivo e transparente:
+    1. Orçamento Analítico da Obra (`orcamento_etapas` + `orcamento_atividades` com cálculo dinâmico de BDI).
+    2. Orçamento Padrão/Legado da Obra (`orcamento_itens` com valor unitário e total em centavos).
+    3. Escopo Contratado da Obra via RPC oficial `public.escopo_obra(obra_id)`.
+    4. Propostas Comerciais da Obra (`propostas` + `propostas_itens` e `propostas_itens_hierarquia`).
+    5. Cronograma da Obra (`obra_cronograma`).
+  - Atualizada a função `mapearAtividadesParaItensContrato` para preservar preços unitários diretos em centavos e registrar a procedência dos itens (`origemTipo`).
+  - Adicionado campo de busca instantânea no diálogo por descrição, código ou etapa, exibição de preços unitários e valor total estimado, seleção/desmarcação dos itens visíveis e somatório em tempo real dos itens selecionados no rodapé.
+  - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
+
+
+- **Correção no Boletim de Medições, Relatório de Impressão e Ações de Contratos (Branch fix/204-medicao-relatorio-botoes-contrato)**:
+  - Sanado o erro 400 em `medicoes_terceirizados`: removida a coluna inexistente `quantidade` da consulta de acumulado em `obterDetalhesContrato` (`src/lib/contratos-empreiteiros.functions.ts`), utilizando a coluna real `quantidade_executada`.
+  - Tratamento defensivo em todas as formatações numéricas (`.toLocaleString("pt-BR")`) em `medicao-editor-sheet.tsx` e `contrato-detalhe-view.tsx`, prevenindo exceções do tipo `TypeError: Cannot read properties of undefined (reading 'toLocaleString')`.
+  - Sanada a falha `TypeError: Cannot read properties of null (reading 'url')` no componente `EmpresaLogo` (`src/components/empresa-logo.tsx`), garantindo checagem estrita de `loaded` e repassando `value={empresa?.logo_url}` em `MedicaoRelatorioImprimir` e na rota pública de medições.
+  - Disponibilizados botões visíveis de **Editar** (ícone Lápis) e **Excluir** (ícone Lixeira) diretamente em cada linha da tabela de contratos em `/contratos-empreiteiros`, além dos botões de ação no cabeçalho dos detalhes do contrato (`ContratoDetalheView`), ambos com diálogo de confirmação via `AlertDialog` e edição pelo `ContratoEditorDialog`.
+  - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
+
+
+- **Correção ao Salvar Rascunho da Proposta Comercial, Seleção de Cliente e Remoção do Botão Catálogo (Branch fix/205-proposta-salvar-rascunho-cliente-valor)**:
+  - **Identificação da causa raiz do cliente divergente e valor R$ 0,00**:
+    1. Em `src/routes/_app/orcamentos.tsx`, a consulta de obras omitia a coluna `cliente_id`, fazendo com que `obra?.cliente_id` ficasse `undefined` e caísse no fallback que buscava o primeiro cliente da base (`clientes?.[0]`), associando arbitrariamente "Francisco Rodrigues de Souza" à proposta.
+    2. Além disso, o callback `onSalvarRascunho` em `src/routes/_app/comercial.propostas.tsx` apenas emitia um toast visual, sem persistir nenhuma alteração em `propostas` nem em `propostas_itens`, mantendo o valor zerado (`R$ 0,00`) e os dados desatualizados no banco de dados.
+  - **Correções aplicadas**:
+    1. Inclusão de `cliente_id` no `.select()` da query de obras em `src/routes/_app/orcamentos.tsx` e busca direta dos dados da obra no Supabase para garantir que o cliente correto da obra seja sempre vinculado à proposta.
+    2. Cálculo antecipado e preciso do valor total estimado ao gerar a proposta a partir do orçamento analítico (com BDI e insumos) ou de itens orçados.
+    3. No `EditorPropostaComercial` (`src/components/propostas/editor-proposta-comercial.tsx`), adição de seletor dinâmico de clientes vinculados no painel de configuração comercial, permitindo conferir e trocar o cliente a qualquer momento, atualizando em tempo real o cabeçalho, bloco de contratante e assinaturas da proposta A4.
+    4. Implementação completa de `onSalvarRascunho` e `onPublicarRevisao` em `src/routes/_app/comercial.propostas.tsx`: atualiza no Supabase `propostas.valor_total` (em reais), `propostas.cliente_id`, `titulo`, `condicoes_pagamento`, sincroniza os itens em `propostas_itens` e atualiza `obras.cliente_id` quando aplicável.
+    5. Remoção do botão "Catálogo" da tela de propostas comerciais (`src/routes/_app/comercial.propostas.tsx`), conforme solicitado pelo usuário.
+    6. Atualização de `PropostaFormDialog` para também salvar `valor_total` explicitamente na criação ou edição rápida da proposta.
+  - 112 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
+
+- **Correção na Entrada de Valores da Medição e Impressão de Relatório em Branco (Branch fix/206-medicao-input-impressao-branco)**:
+  - **Identificação das causas raízes**:
+    1. *Entrada de valores travada*: No componente `MedicaoEditorSheet` (`medicao-editor-sheet.tsx`), as funções `converterEntradaMedicao` e `calcularSaldoItem` eram chamadas passando argumentos posicionais primitivos (`tipoAlteracao, valor, quantidadeContratada, precoUnitarioCentavos`), enquanto `src/lib/contratos-empreiteiros.ts` esperava objetos `{ modo, quantidade, percentual }` e `{ quantidadeContratada, precoUnitarioCentavos }`. Com isso, as propriedades resultavam em `undefined`/`NaN`, disparando reset imediato dos campos para vazio. Além disso, inputs controlados `<input type="number">` descartavam vírgulas e pontos decimais em tempo de digitação no locale pt-BR.
+    2. *Impressão/Salvar em branco*: Em `src/styles.css`, a regra `@media print { body * { visibility: hidden; } }` restaurava visibilidade apenas para seletores específicos (`.qr-print-sheet`, `.proposta-print-sheet`, `.contract-print-sheet`), ocultando qualquer outro conteúdo como `.printable-sheet` e `.medicao-print-sheet`. Adicionalmente, diálogos do Radix UI com overflow e posição fixa cortavam o documento durante a renderização do diálogo de impressão do navegador.
+  - **Correções aplicadas**:
+    1. **Polimorfismo nas funções de cálculo (`src/lib/contratos-empreiteiros.ts`)**: `converterEntradaMedicao` e `calcularSaldoItem` foram adaptadas para aceitar tanto chamadas baseadas em objetos quanto argumentos posicionais legados/diretos, mantendo total retrocompatibilidade e garantindo alias `quantidadeAcumulada` e `estouro`.
+    2. **Melhoria no input de medição (`medicao-editor-sheet.tsx`)**: Campos de quantidade e percentual migrados para `type="text" inputMode="decimal"`, gerenciando estado textual intermediário (`rawQtd`, `rawPct`), permitindo digitação fluida com vírgula ou ponto sem reset prematuro ou travamentos.
+    3. **Visibilidade e layout de impressão no CSS global (`src/styles.css`)**: Adicionados seletores `.printable-sheet, .printable-sheet *, .medicao-print-sheet, .medicao-print-sheet *` com `visibility: visible !important`, posicionamento absoluto `top: 0; left: 0; width: 100%`, remoção de sombras e `z-index: 999999 !important` para renderizar perfeitamente no preview de impressão e exportação em PDF.
+    4. **Relatório de Medição (`medicao-relatorio-imprimir.tsx` e `medicao-empreiteiro.$token.tsx`)**: Estilos dedicados `@media print` no próprio componente, folha A4 com paginação tratada e consulta retroativa de medições executadas para preencher com precisão o histórico e saldo de cada item na via impressa.
+  - 112 testes automatizados aprovados e build verificado com sucesso.
+
+- **Importação de Itens do Orçamento para Contratos de Empreiteiros e Sincronização Automática com Propostas Comerciais (Branch fix/207-importar-orcamento-contrato-e-sincronizacao-propostas)**:
+  - **Diagnóstico das causas raízes**:
+    1. *Busca de itens vazia em Contratos de Empreiteiros*: A consulta em `importar-orcamento-dialog.tsx` utilizava nomes de colunas inexistentes no banco (`bdi_padrao_percentual` em `orcamentos` e `custo_total_centavos` em `orcamento_atividades`). No Supabase/PostgREST, isso gerava HTTP 400 Bad Request (`PGRST204`), anulando o resultado e impedindo a execução dos passos analíticos e legados subsequentes. Além disso, o diálogo não disponibilizava seletor de obra para alternar entre obras ou visualizar itens globais.
+    2. *Descompasso entre Orçamento e Proposta Comercial*: Propostas geradas a partir do orçamento mantinham um snapshot estático ou itens vazios. Alterações em quantitativos, inclusões de itens, BDI ou preços unitários no orçamento não eram propagadas para a proposta em rascunho, e o editor comercial não possuía ação para sincronizar/atualizar as etapas e itens diretamente da obra.
+  - **Correções aplicadas**:
+    1. **Correção das Consultas no Diálogo de Importação (`importar-orcamento-dialog.tsx`)**:
+       - Coluna de BDI corrigida para a oficial `bdi_geral`.
+       - Em atividades analíticas, cálculo dinâmico e preciso do preço unitário com BDI a partir de `orcamento_atividade_insumos` (coeficiente x preço unitário centavos).
+       - Fallback progressivo e tolerante a falhas: Orçamento Analítico com Insumos -> Orçamento Padrão (`orcamento_itens`) -> RPC `escopo_obra` -> Propostas Comerciais -> Cronograma da Obra.
+       - Adicionado **Seletor de Obra de Origem** integrado no diálogo, permitindo alternar instantaneamente entre a obra atual, qualquer outra obra cadastrada ou "Todas as Obras (Orçamentos Globais)", com indicação visual da obra em cada linha da tabela.
+    2. **Mecanismo de Sincronização Proposta-Orçamento (`proposta-orcamento-sync.ts`)**:
+       - Criada função `sincronizarPropostaComOrcamento(propostaId, obraId)` que recalcula e atualiza as etapas, atividades, quantitativos e `valor_total` da proposta em rascunho a partir do orçamento mais recente da obra (analítico ou legado).
+       - Proteção de integridade: bloqueia alteração automática de propostas aprovadas ou formalmente enviadas.
+    3. **Botão "Atualizar do Orçamento" no Editor Comercial (`editor-proposta-comercial.tsx` e `comercial.propostas.tsx`)**:
+       - Adicionado botão de ação na barra superior e banner no painel lateral esquerdo com ícone `RefreshCw`, permitindo ao usuário sincronizar os itens com 1 clique a qualquer momento durante a elaboração do rascunho.
+    4. **Sincronização Integrada na Página de Orçamentos (`orcamentos.tsx`)**:
+       - No cálculo e persistência de totais (`syncTotalsMutation`), o valor total de propostas vinculadas em status rascunho é atualizado automaticamente.
+       - Ao clicar em "Iniciar/Editar Proposta Comercial" para uma obra com rascunho já existente, os itens e o valor da proposta são automaticamente sincronizados com o orçamento mais recente antes de abrir o editor.
+  - 115 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
+
+- **Consolidação do Editor Único de Propostas (Issue #200)**:
+  - A rota `/comercial/propostas` mantém apenas o novo editor comercial, removendo o formulário, catálogo e impressão legados da experiência principal.
+  - Criação de proposta encadeada por obra, orçamento e revisão congelada, com reutilização idempotente do rascunho comum e duplicação somente quando solicitada como variação comercial.
+  - Histórico persistente de revisões, publicação imutável, aceite/rejeição/expiração transacionais e exclusão definitiva restrita a rascunhos por admin/diretor.
+  - Correção da causa do registro que reaparecia: a exclusão agora ocorre no banco pela RPC `excluir_proposta_rascunho`, sem remoção apenas visual ou otimista.
+  - O valor e o cliente são derivados no servidor da revisão selecionada e da obra vinculada; totais, custos e preços enviados pelo navegador não são confiados.
+  - A fotografia técnica de `orcamento_revisoes` permanece restrita a admin, diretor e engenharia. O editor consulta a RPC `listar_origens_proposta_editor`, que devolve somente metadados e fotografia comercial sem insumos, coeficientes, custos ou BDI.
+  - No aceite, a proposta é associada atomicamente à obra que originou a revisão antes do trigger legado executar; o snapshot comercial é materializado em `propostas_itens`, evitando obra duplicada e abastecendo cronograma/medições com o escopo congelado.
+  - `financeiro_civil` foi alinhado no menu, na tela e nas RPCs comerciais; `financeiro_imobiliaria` permanece isolado dos dados técnicos de obras civis.
+  - O DML direto de `propostas`, `proposta_revisoes` e `propostas_itens` foi revogado de `authenticated`; alterações comerciais passam exclusivamente pelas RPCs transacionais.
+  - Propostas legadas vinculadas à obra podem materializar explicitamente o orçamento analítico atual em uma revisão segura por `materializar_origem_analitica_proposta`.
+  - O vínculo legado agora valida cliente e obra no servidor, impedindo associar uma revisão de outra obra do mesmo cliente.
+  - A variação comercial pode ser criada a partir de qualquer proposta com revisão, inclusive enviada/aceita, preservando `duplicada_de_id` da proposta escolhida.
+  - O helper temporário de sincronização direta `proposta-orcamento-sync.ts` foi removido porque conflitava com o congelamento das revisões e com as novas permissões de banco.
+  - Propostas legadas com itens continuam disponíveis em modo somente leitura; vínculos ambíguos exigem seleção explícita da revisão de origem.
+  - Integração realizada sobre a `main` atualizada até `50b4d69`, preservando as entregas posteriores de contratos de empreiteiros, medições e impressão sem reintroduzir gravações diretas inseguras no fluxo de propostas.
+  - Validação: 143/143 testes automatizados aprovados; lint focado sem erros (1 aviso preexistente em `orcamentos.tsx`); build Vite + Nitro/Cloudflare concluído com sucesso. O E2E autenticado permanece condicionado às credenciais `E2E_EMAIL` e `E2E_PASSWORD`.
