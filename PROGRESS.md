@@ -629,3 +629,31 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     - Testes de migração em banco efêmero PGlite (`tests/financeiro-transferencias-db.test.mjs`).
     - Suite completa de 160/160 testes automatizados aprovada com 100% de sucesso.
     - Build de produção SSR (`npm run build`) validado com sucesso.
+
+- **Correção no Módulo Financeiro (Branch fix/212-import-layers-e-tipagem-financeiro, Issue #212)**:
+  - **Diagnóstico**: Acesso à página `/financeiro` falhava com `ReferenceError: Layers is not defined` devido à ausência do ícone `Layers` no import de `lucide-react`.
+  - **Correção**: Import de `Layers` corrigido e tipagens `ContaReceberRow` e `ContaPagarRow` atualizadas com os campos adicionados nas Fases 1 e 2 (`conciliado`, `etapa_id`, `etapa_nome`, `parcelamento_id`, `parcela_atual`, `total_parcelas`).
+  - **Validação**: Teste unitário adicionado em `tests/financeiro-ofx.test.mjs` e suite de 161 testes aprovada. PR mesclada na `main`.
+
+- **Fase 3 do Módulo Financeiro: Fluxo de Caixa Diário/Semanal por Obra e Emissão de Recibo Profissional (Inspirado no Mais Controle - Issue #213, Branch feat/213-financeiro-fase-3-fluxo-diario-e-recibo)**:
+  - **1. Previsão de Fluxo de Caixa Diário / Semanal / Mensal com visão por Obra e Conta Bancária**:
+    - Módulo de projeção temporal `calcularFluxoCaixa` (`src/lib/fluxo-caixa.ts`):
+      - Granularidade flexível: Diário (próximos 30 ou 60 dias), Semanal (próximas 8 semanas) e Mensal (histórico dos últimos meses + projeção futura).
+      - Projeção em cascata do saldo acumulado dia a dia, semana a semana, com incorporação do saldo inicial consolidado das contas bancárias ou de uma conta específica.
+      - Alerta visual antecipado de risco de iliquidez/saldo negativo projetado (`saldoNegativo: true`, cálculo do menor saldo previsto e data em que ocorrerá o déficit).
+      - Filtro por Obra específica, permitindo apurar se um canteiro de obras específico é financeiramente autossustentável ou se necessita de aporte de capital de giro.
+      - Componente interativo `FluxoCaixaAvancado` (`src/components/financeiro/fluxo-caixa-avancado.tsx`) com 5 cards de KPIs executivos, gráfico composto Recharts com barras de entradas/saídas e linha de saldo acumulado projetado, demonstrativo analítico detalhado e modal para inspeção dos lançamentos previstos de qualquer data.
+  - **2. Emissão e Impressão de Recibo Financeiro Profissional (Comprovante de Quitação)**:
+    - Conversor de moeda para valores por extenso em português do Brasil (`src/lib/extenso.ts` e `valorPorExtenso`), suportando centavos, milhares, milhões, valores negativos e centavos isolados com tratamento das regras gramaticais brasileiras.
+    - Componente modular `ReciboFinanceiroDialog` (`src/components/financeiro/recibo-financeiro-dialog.tsx`):
+      - Recibo para Contas a Receber (quitação concedida ao cliente com plena, rasa e irrevogável quitação) e Comprovante de Quitação para Contas a Pagar (declaração de recebimento assinada pelo prestador/fornecedor).
+      - Cabeçalho corporativo com logotipo da empresa via `EmpresaLogo`, Razão Social, CNPJ, registro CREA/CAU da empresa, endereço, telefone e e-mail.
+      - Discriminação do valor em destaque numérico e transcrito por extenso.
+      - Referência detalhada com descrição do serviço, obra, etapa do orçamento/cronograma, número da parcela (ex: 2 de 12), forma de pagamento e data de liquidação.
+      - Blocos de assinaturas formais e folha estilizada para impressão A4 / PDF via `@media print` sem poluição visual nem elementos de tela.
+    - Botões de ação rápida com ícone de impressora (`Printer`) integrados em cada linha das tabelas de Contas a Receber e Contas a Pagar.
+  - **Validação**:
+    - Testes unitários para valores por extenso (`tests/extenso.test.mjs`).
+    - Testes unitários para projeção de fluxo de caixa acumulado, detecção de déficit e filtros (`tests/fluxo-caixa.test.mjs`).
+    - Suite completa de 172/172 testes automatizados aprovada com 100% de sucesso.
+    - Compilação de produção Vite e Cloudflare SSR Nitro (`npm run build`) concluída com êxito.
