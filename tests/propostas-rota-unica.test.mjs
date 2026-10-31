@@ -32,6 +32,17 @@ test('editor consulta origens por RPC sanitizada sem ler fotografia técnica dir
   assert.doesNotMatch(dialogCriacao, /from\(['"]orcamentos['"]\)/)
 })
 
+test('nova proposta informa carregamento, falha e ausência de origens elegíveis', () => {
+  assert.match(dialogCriacao, /origensQuery\.isPending/)
+  assert.match(dialogCriacao, /origensQuery\.isError/)
+  assert.match(dialogCriacao, /origensQuery\.refetch/)
+  assert.match(dialogCriacao, /obrasCadastradasQuery/)
+  assert.match(dialogCriacao, /Carregando obras e revisões/)
+  assert.match(dialogCriacao, /Nenhuma obra com orçamento e revisão congelada disponível/)
+  assert.match(dialogCriacao, /Nenhuma obra cadastrada/)
+  assert.match(dialogCriacao, /As obras cadastradas ainda não possuem orçamento com revisão congelada/)
+})
+
 test('duplicação preserva a proposta de origem e fica disponível após congelamento', () => {
   assert.match(rota, /origemPropostaId=\{duplicarOrigem\?\.id\}/)
   assert.match(rota, /revisaoInicialId=\{duplicarOrigem\?\.orcamento_revisao_id\}/)
