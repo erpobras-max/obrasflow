@@ -26,7 +26,7 @@ import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
 import { uploadR2, openR2File } from "@/lib/r2";
 import { gerarParcelasFinanceiras } from "@/lib/financeiro-parcelamento";
-import { ArrowRightLeft, Sparkles, Clock, CalendarDays } from "lucide-react";
+import { ArrowRightLeft, Sparkles, Clock, CalendarDays, Layers } from "lucide-react";
 import { TransferenciaFormDialog } from "@/components/financeiro/transferencia-form-dialog";
 import { ConciliacaoOfxDialog } from "@/components/financeiro/conciliacao-ofx-dialog";
 import { AlertasVencimentoBar } from "@/components/financeiro/alertas-vencimento-bar";
@@ -133,6 +133,12 @@ interface ContaReceberRow {
   origem?: "erp" | "imobiliaria";
   imob_locacao_id?: string | null;
   imob_cliente_id?: string | null;
+  conciliado?: boolean;
+  etapa_id?: string | null;
+  etapa_nome?: string | null;
+  parcelamento_id?: string | null;
+  parcela_atual?: number | null;
+  total_parcelas?: number | null;
 }
 
 interface ContaPagarRow {
@@ -153,6 +159,12 @@ interface ContaPagarRow {
   origem?: "erp" | "imobiliaria";
   imob_locacao_id?: string | null;
   imob_cliente_id?: string | null;
+  conciliado?: boolean;
+  etapa_id?: string | null;
+  etapa_nome?: string | null;
+  parcelamento_id?: string | null;
+  parcela_atual?: number | null;
+  total_parcelas?: number | null;
 }
 
 const fmtBRL = (v: number | null | undefined) => {
@@ -1757,9 +1769,12 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
                     .sort((a, b) => b.data_vencimento.localeCompare(a.data_vencimento))
                     .map((item) => {
                       const contaNome = contasBancarias?.find((cb: any) => cb.id === (item as any).conta_bancaria_id)?.nome || "Caixa Geral";
+                      const dataItem = (item as any).data_recebimento || (item as any).data_pagamento || item.data_vencimento;
+                      const valorItem = (item as any).valor_recebido || (item as any).valor_pago || item.valor_total;
+                      const isConciliado = Boolean((item as any).conciliado);
                       return (
                         <TableRow key={item.id}>
-                          <TableCell className="text-xs">{item.data_recebimento || item.data_pagamento || item.data_vencimento}</TableCell>
+                          <TableCell className="text-xs">{dataItem}</TableCell>
                           <TableCell className="text-xs font-mono">{(item as any).numero_documento || "—"}</TableCell>
                           <TableCell className="text-xs font-medium">
                             <span className={cn("inline-block w-2 h-2 rounded-full mr-2", item.type === "receita" ? "bg-green-500" : "bg-red-500")} />
@@ -1767,16 +1782,16 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
                           </TableCell>
                           <TableCell className="text-xs">{contaNome}</TableCell>
                           <TableCell className={cn("text-right text-xs font-mono font-bold", item.type === "receita" ? "text-green-700" : "text-red-700")}>
-                            {item.type === "receita" ? "+" : "-"}{fmtBRL(item.valor_recebido || item.valor_pago || item.valor_total)}
+                            {item.type === "receita" ? "+" : "-"}{fmtBRL(valorItem)}
                           </TableCell>
                           <TableCell className="text-center">
                             <Button
                               size="sm"
-                              variant={item.conciliado ? "default" : "outline"}
+                              variant={isConciliado ? "default" : "outline"}
                               className="h-7 text-[10px] px-2.5"
-                              onClick={() => toggleConciliado(item.id, item.type === "receita" ? "contas_receber" : "contas_pagar", item.conciliado)}
+                              onClick={() => toggleConciliado(item.id, item.type === "receita" ? "contas_receber" : "contas_pagar", isConciliado)}
                             >
-                              {item.conciliado ? "Conciliado" : "Pendente"}
+                              {isConciliado ? "Conciliado" : "Pendente"}
                             </Button>
                           </TableCell>
                         </TableRow>
