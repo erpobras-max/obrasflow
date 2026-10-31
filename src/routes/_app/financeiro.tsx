@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Loader2,
   Search,
+  Printer,
 } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
@@ -30,6 +31,8 @@ import { ArrowRightLeft, Sparkles, Clock, CalendarDays, Layers } from "lucide-re
 import { TransferenciaFormDialog } from "@/components/financeiro/transferencia-form-dialog";
 import { ConciliacaoOfxDialog } from "@/components/financeiro/conciliacao-ofx-dialog";
 import { AlertasVencimentoBar } from "@/components/financeiro/alertas-vencimento-bar";
+import { ReciboFinanceiroDialog, ContaReciboData } from "@/components/financeiro/recibo-financeiro-dialog";
+import { FluxoCaixaAvancado } from "@/components/financeiro/fluxo-caixa-avancado";
 import * as XLSX from "xlsx";
 import {
   contasReceberSchema,
@@ -530,6 +533,12 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
   const [categoriaNome, setCategoriaNome] = useState("");
   const [categoriaTipo, setCategoriaTipo] = useState<"receita" | "despesa">("receita");
   const [categoriaPaiId, setCategoriaPaiId] = useState<string>("");
+
+  // Estados para Recibo, Transferência Interna e Conciliação OFX
+  const [reciboTarget, setReciboTarget] = useState<ContaReciboData | null>(null);
+  const [reciboModalOpen, setReciboModalOpen] = useState(false);
+  const [transferenciaModalOpen, setTransferenciaModalOpen] = useState(false);
+  const [ofxModalOpen, setOfxModalOpen] = useState(false);
 
   const createBancoMutation = useMutation({
     mutationFn: async () => {
@@ -1452,6 +1461,36 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
                               <ExternalLink className="size-4" />
                             </Button>
                           )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-primary hover:text-primary hover:bg-primary/10"
+                            title="Emitir Recibo de Recebimento"
+                            onClick={() => {
+                              const nomeCli = cr.cliente_id ? clientesMap[cr.cliente_id] : cr.imob_cliente_id ? imobClientesMap[cr.imob_cliente_id] : (cr as any).cliente_nome;
+                              setReciboTarget({
+                                id: cr.id,
+                                tipo: "receber",
+                                descricao: cr.descricao,
+                                obra_id: cr.obra_id,
+                                obra_nome: cr.obra_id ? obrasMap[cr.obra_id] : undefined,
+                                cliente_id: cr.cliente_id || cr.imob_cliente_id,
+                                cliente_nome: nomeCli,
+                                valor_total: cr.valor_total,
+                                valor_liquidado: cr.valor_recebido,
+                                data_vencimento: cr.data_vencimento,
+                                data_liquidacao: cr.data_recebimento,
+                                forma_pagamento: cr.forma_pagamento,
+                                numero_documento: cr.numero_documento,
+                                etapa_nome: cr.etapa_nome,
+                                parcela_atual: cr.parcela_atual,
+                                total_parcelas: cr.total_parcelas,
+                              });
+                              setReciboModalOpen(true);
+                            }}
+                          >
+                            <Printer className="size-4" />
+                          </Button>
                           {podeEditar && cr.status !== "recebida" && cr.status !== "cancelada" && (
                             <Button
                               size="icon"
@@ -1604,6 +1643,36 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
                               <ExternalLink className="size-4" />
                             </Button>
                           )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-8 text-primary hover:text-primary hover:bg-primary/10"
+                            title="Emitir Comprovante de Quitação"
+                            onClick={() => {
+                              const nomeForn = cp.fornecedor_id ? fornecedoresMap[cp.fornecedor_id] : (cp as any).fornecedor_nome;
+                              setReciboTarget({
+                                id: cp.id,
+                                tipo: "pagar",
+                                descricao: cp.descricao,
+                                obra_id: cp.obra_id,
+                                obra_nome: cp.obra_id ? obrasMap[cp.obra_id] : undefined,
+                                fornecedor_id: cp.fornecedor_id,
+                                fornecedor_nome: nomeForn,
+                                valor_total: cp.valor_total,
+                                valor_liquidado: cp.valor_pago,
+                                data_vencimento: cp.data_vencimento,
+                                data_liquidacao: cp.data_pagamento,
+                                forma_pagamento: cp.forma_pagamento,
+                                numero_documento: cp.numero_documento,
+                                etapa_nome: cp.etapa_nome,
+                                parcela_atual: cp.parcela_atual,
+                                total_parcelas: cp.total_parcelas,
+                              });
+                              setReciboModalOpen(true);
+                            }}
+                          >
+                            <Printer className="size-4" />
+                          </Button>
                           {podeEditar && cp.status !== "paga" && cp.status !== "cancelada" && (
                             <Button
                               size="icon"
@@ -1652,92 +1721,17 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
 
         {/* FLUXO DE CAIXA TAB */}
         <TabsContent value="fluxo" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-semibold flex items-center gap-2">
-                <Calendar className="size-4 text-primary" /> Fluxo de Caixa (Últimos 6 Meses)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="h-[350px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={cashFlowData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis dataKey="month" stroke="#888888" fontSize={12} tickLine={false} />
-                    <YAxis
-                      stroke="#888888"
-                      fontSize={12}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(val) => `R$ ${val}`}
-                    />
-                    <Tooltip
-                      formatter={(value: any) =>
-                        new Intl.NumberFormat("pt-BR", {
-                          style: "currency",
-                          currency: "BRL",
-                        }).format(value)
-                      }
-                    />
-                    <Legend />
-                    <Bar dataKey="recPrev" name="Receitas Previstas" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="recReal" name="Receitas Realizadas" fill="#15803d" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="pagPrev" name="Despesas Previstas" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="pagReal" name="Despesas Realizadas" fill="#b91c1c" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Cash Flow Table */}
-              <div className="mt-6 rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Mês / Ano</TableHead>
-                      <TableHead className="text-right text-green-700">Entradas Previstas</TableHead>
-                      <TableHead className="text-right text-green-800">Entradas Realizadas</TableHead>
-                      <TableHead className="text-right text-red-700">Saídas Previstas</TableHead>
-                      <TableHead className="text-right text-red-800">Saídas Realizadas</TableHead>
-                      <TableHead className="text-right font-semibold">Net Realizado</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {cashFlowData.map((row) => {
-                      const netReal = row.recReal - row.pagReal;
-                      return (
-                        <TableRow key={row.month}>
-                          <TableCell className="font-medium">{row.month}</TableCell>
-                          <TableCell className="text-right font-mono">
-                            {fmtBRL(row.recPrev * 100)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-green-800">
-                            {fmtBRL(row.recReal * 100)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {fmtBRL(row.pagPrev * 100)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-red-800">
-                            {fmtBRL(row.pagReal * 100)}
-                          </TableCell>
-                          <TableCell
-                            className={cn(
-                              "text-right font-mono font-semibold",
-                              netReal >= 0 ? "text-green-700" : "text-red-700"
-                            )}
-                          >
-                            {fmtBRL(netReal * 100)}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+          <FluxoCaixaAvancado
+            contasReceber={contasReceber || []}
+            contasPagar={contasPagar || []}
+            contasBancarias={bankAccountsList.map((b: any) => ({
+              id: b.id,
+              nome_conta: b.nome,
+              banco: b.banco || b.tipo,
+              saldo_atual_centavos: b.saldoAtual,
+            }))}
+            obras={obras || []}
+          />
         </TabsContent>
 
         {/* CONCILIACAO TAB */}
@@ -1745,8 +1739,18 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
           <Card>
             <CardHeader className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
               <div>
-                <CardTitle className="text-base font-semibold">Conciliação Bancária Manual</CardTitle>
-                <p className="text-xs text-muted-foreground">Marque ou desmarque os lançamentos compensados no extrato.</p>
+                <CardTitle className="text-base font-semibold">Conciliação Bancária</CardTitle>
+                <p className="text-xs text-muted-foreground">Marque os lançamentos compensados no extrato ou importe via OFX.</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={() => setOfxModalOpen(true)}
+                >
+                  <Upload className="size-4" /> Importar Extrato OFX
+                </Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -1872,6 +1876,9 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-semibold text-muted-foreground">Contas & Locais Disponíveis</h3>
             <div className="flex gap-2">
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setTransferenciaModalOpen(true)}>
+                <ArrowRightLeft className="size-4" /> Transferência Interna
+              </Button>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setCategoriaFormOpen(true)}>
                 <Plus className="size-4" /> Nova Categoria DRE
               </Button>
@@ -2224,6 +2231,29 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* DIALOG DE EMISSÃO DE RECIBO FINANCEIRO */}
+      <ReciboFinanceiroDialog
+        open={reciboModalOpen}
+        onOpenChange={setReciboModalOpen}
+        conta={reciboTarget}
+      />
+
+      {/* DIALOG DE TRANSFERÊNCIA BANCÁRIA INTERNA */}
+      <TransferenciaFormDialog
+        open={transferenciaModalOpen}
+        onOpenChange={setTransferenciaModalOpen}
+        contasBancarias={contasBancarias || []}
+      />
+
+      {/* DIALOG DE CONCILIAÇÃO BANCÁRIA OFX */}
+      <ConciliacaoOfxDialog
+        open={ofxModalOpen}
+        onOpenChange={setOfxModalOpen}
+        contasBancarias={contasBancarias || []}
+        contasReceber={contasReceber || []}
+        contasPagar={contasPagar || []}
+      />
     </div>
   );
 }
