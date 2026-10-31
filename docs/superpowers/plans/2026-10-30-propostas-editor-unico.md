@@ -471,14 +471,14 @@ Expected: PASS; se depender de credenciais externas, anexar evidência do roteir
 
 Registrar Issue/branch, mudança para editor único, migration/RPCs, compatibilidade legada, causa da `PROP-2026-0008`, comandos e resultados reais. Não afirmar deploy antes do workflow de produção concluir.
 
-- [ ] **Step 6: Commit final de evidências**
+- [x] **Step 6: Commit final de evidências**
 
 ```bash
 git add tests/e2e/propostas-editor-unico.spec.ts PROGRESS.md docs/superpowers/plans/2026-10-30-propostas-editor-unico.md
 git commit -m "docs(propostas): registrar validacao do editor unico"
 ```
 
-- [ ] **Step 7: Revisar a branch antes da PR**
+- [x] **Step 7: Revisar a branch antes da PR**
 
 Run: `git diff --check origin/main...HEAD`
 
