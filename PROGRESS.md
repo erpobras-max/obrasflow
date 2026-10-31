@@ -639,4 +639,4 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Corrigido o destaque de rotas com query string, diferenciando a Central de compras de `?tab=pedidos` sem perder o destaque de páginas como `/orcamentos?obra=<id>`.
   - A mesma estrutura é reutilizada no menu desktop e na gaveta mobile.
   - Nenhuma migration ou alteração de banco foi necessária.
-  - Validação: 166/166 testes automatizados aprovados, ESLint focado sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.
+  - Validação: 167/167 testes automatizados aprovados, ESLint focado sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.
