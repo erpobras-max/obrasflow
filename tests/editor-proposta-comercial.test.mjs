@@ -4,6 +4,7 @@ import {
   configuracaoPropostaComercialPadrao,
   criarFotografiaProposta,
   proximaRevisaoProposta,
+  formatarRegistroEmpresa,
 } from '../src/lib/proposta-orcamento.functions.ts'
 
 test('configuracao comercial padrao contem textos executivos e visibilidade padrao', () => {
@@ -101,3 +102,32 @@ test('modo apenas etapa omite atividades da visualizacao', () => {
   assert.equal(foto.etapas[0].atividades.length, 0)
 })
 
+test('formatarRegistroEmpresa inclui CREA/CAU quando configurado na empresa', () => {
+  const empresaComCrea = {
+    razao_social: 'Constagro Construtora Ltda',
+    crea_cau: '123456-MG',
+    inscricao_estadual: '001234567.00-88',
+    inscricao_municipal: '98765',
+  }
+  const registro = formatarRegistroEmpresa(empresaComCrea)
+  assert.equal(registro, 'CREA/CAU: 123456-MG • IE: 001234567.00-88 • Insc. Mun.: 98765')
+})
+
+test('formatarRegistroEmpresa nao exibe CREA/CAU nem fallback fixo quando nao informado', () => {
+  const empresaSemCrea = {
+    razao_social: 'Constagro Construtora Ltda',
+    crea_cau: null,
+    inscricao_estadual: '001234567.00-88',
+    inscricao_municipal: null,
+  }
+  const registro = formatarRegistroEmpresa(empresaSemCrea)
+  assert.equal(registro, 'IE: 001234567.00-88')
+  assert.doesNotMatch(registro, /CREA/i)
+  assert.doesNotMatch(registro, /194820-SP/)
+})
+
+test('formatarRegistroEmpresa lida com empresa nula ou vazia com seguranca', () => {
+  assert.equal(formatarRegistroEmpresa(null), '')
+  assert.equal(formatarRegistroEmpresa(undefined), '')
+  assert.equal(formatarRegistroEmpresa({ crea_cau: '  ', inscricao_estadual: '' }), '')
+})

@@ -134,3 +134,19 @@ export function proximaRevisaoProposta(revisoes: Array<{ numero: number; status:
   }
   return Math.max(0, ...revisoes.map((r) => r.numero)) + 1
 }
+
+export function formatarRegistroEmpresa(empresa?: {
+  crea_cau?: string | null
+  inscricao_estadual?: string | null
+  inscricao_municipal?: string | null
+} | null): string {
+  if (!empresa) return ''
+  const creaEmpresa = empresa.crea_cau?.trim() ? `CREA/CAU: ${empresa.crea_cau.trim()}` : ''
+  return [
+    creaEmpresa,
+    empresa.inscricao_estadual?.trim() ? `IE: ${empresa.inscricao_estadual.trim()}` : '',
+    empresa.inscricao_municipal?.trim() ? `Insc. Mun.: ${empresa.inscricao_municipal.trim()}` : '',
+  ]
+    .filter(Boolean)
+    .join(' • ')
+}

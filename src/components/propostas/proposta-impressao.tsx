@@ -10,7 +10,7 @@ import { imprimirElemento } from "@/lib/impressao";
 
 type Proposta = { id:string; numero:string; titulo:string; descricao:string|null; condicoes_pagamento:string|null; observacoes:string|null; validade:string|null; valor_total:number; cliente_id:string };
 type Linha = { id:string; descricao:string; unidade:string|null; quantidade:number; valor_unitario:number; etapa_codigo:string|null; etapa_nome:string|null; item_codigo:string|null; item_nome:string|null; subitem_codigo:string|null };
-type Empresa = { razao_social:string; nome_fantasia:string|null; cnpj:string; inscricao_estadual:string|null; email:string|null; telefone:string|null; cep:string|null; logradouro:string|null; numero:string|null; complemento:string|null; bairro:string|null; cidade:string|null; uf:string|null; endereco:string; logo_url:string|null };
+type Empresa = { razao_social:string; nome_fantasia:string|null; cnpj:string; inscricao_estadual:string|null; crea_cau?:string|null; email:string|null; telefone:string|null; cep:string|null; logradouro:string|null; numero:string|null; complemento:string|null; bairro:string|null; cidade:string|null; uf:string|null; endereco:string; logo_url:string|null };
 const brl=(v:number)=>Number(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
 const enderecoEmpresa=(e:Empresa|null|undefined)=>e?[e.logradouro,e.numero,e.complemento,e.bairro,e.cidade,e.uf,e.cep].filter(Boolean).join(", ")||e.endereco:"";
 
@@ -45,7 +45,7 @@ export function PropostaImpressao({proposta,open,onOpenChange}:{proposta:Propost
          <div>
           <h1 className="text-lg font-bold">{empresa?.nome_fantasia||empresa?.razao_social||"Empresa"}</h1>
           <p>{empresa?.razao_social}</p>
-          <p>CNPJ: {empresa?.cnpj||"Não informado"}{empresa?.inscricao_estadual?` · IE: ${empresa.inscricao_estadual}`:""}</p>
+          <p>CNPJ: {empresa?.cnpj||"Não informado"}{empresa?.crea_cau?` · CREA/CAU: ${empresa.crea_cau}`:""}{empresa?.inscricao_estadual?` · IE: ${empresa.inscricao_estadual}`:""}</p>
           <p>{enderecoEmpresa(empresa)}</p>
           <p>{[empresa?.telefone,empresa?.email].filter(Boolean).join(" · ")}</p>
          </div>

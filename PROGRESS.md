@@ -551,3 +551,16 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
        - No cálculo e persistência de totais (`syncTotalsMutation`), o valor total de propostas vinculadas em status rascunho é atualizado automaticamente.
        - Ao clicar em "Iniciar/Editar Proposta Comercial" para uma obra com rascunho já existente, os itens e o valor da proposta são automaticamente sincronizados com o orçamento mais recente antes de abrir o editor.
   - 115 testes automatizados aprovados e build SSR verificado com sucesso no Vite e Cloudflare Nitro.
+
+- **Configuração Oficial de CREA/CAU da Empresa e Remoção de E-mail do Cliente na Proposta (Branch feat/208-crea-cadastro-empresa-e-remover-email-proposta)**:
+  - **Diagnóstico e necessidades**:
+    1. *Registro CREA/CAU incorreto*: O cabeçalho dos documentos de proposta comercial exibia um número de registro hardcoded ("194820-SP") quando a empresa não tinha o campo preenchido, gerando dados profissionais inverídicos para empresas cadastradas (ex: CONSTAGRO CONSTRUTORA).
+    2. *Ausência do campo no cadastro da empresa*: A tabela `configuracoes_empresa` e a tela `/empresa` não dispunham de um campo dedicado para armazenar o registro profissional oficial do responsável técnico / empresa no Conselho Regional de Engenharia e Agronomia (CREA) ou no Conselho de Arquitetura e Urbanismo (CAU).
+    3. *E-mail do cliente na proposta*: A exibição do e-mail na área "CONTRATANTE / CLIENTE" expunha e-mails placeholder ou gerados automaticamente pelo sistema, comprometendo a apresentação comercial do documento ao cliente final.
+  - **Correções aplicadas**:
+    1. **Migration no banco de dados (`20261031120000_add_crea_cau_configuracoes_empresa.sql`)**: Adicionada a coluna `crea_cau text` na tabela `public.configuracoes_empresa` com comentário explicativo.
+    2. **Cadastro da Empresa (`src/routes/_app/empresa.tsx`)**: Campo "CREA / CAU" adicionado no formulário de "Identificação e situação cadastral" com placeholder explicativo, hidratado na consulta e persistido na mutação de salvamento.
+    3. **Formatação segura do registro da empresa (`src/lib/proposta-orcamento.functions.ts`)**: Implementada a função utilitária `formatarRegistroEmpresa(empresa)`, que renderiza `CREA/CAU: <valor>` estritamente quando preenchido pela empresa, combinado com Inscrição Estadual e Inscrição Municipal, eliminando definitivamente qualquer fallback mockado ou estático.
+    4. **Remoção do e-mail do cliente na proposta (`src/components/propostas/editor-proposta-comercial.tsx`)**: Removida a linha de e-mail do bloco visual do contratante, mantendo apenas Nome e CPF/CNPJ, além da Obra, Localização e Prazo Previsto.
+    5. **Impressão da Proposta (`src/components/propostas/proposta-impressao.tsx`)**: Cabeçalho de impressão da empresa atualizado para utilizar o campo oficial `crea_cau` quando informado.
+  - 118 testes automatizados aprovados (incluindo testes unitários dedicados em `editor-proposta-comercial.test.mjs`) e build de produção verificado com sucesso no Vite e Cloudflare Nitro.

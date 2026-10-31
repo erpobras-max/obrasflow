@@ -152,9 +152,7 @@ export function EditorPropostaComercial({
 
   const nomeEmpresa = empresa?.nome_fantasia || empresa?.razao_social || 'ObrasFlow Engenharia & Construções'
   const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
-  const registroEmpresa = empresa?.inscricao_municipal
-    ? `Insc. Mun.: ${empresa.inscricao_municipal}`
-    : (empresa?.inscricao_estadual ? `IE: ${empresa.inscricao_estadual}` : '')
+  const registroEmpresa = formatarRegistroEmpresa(empresa)
   const emailEmpresa = empresa?.email || ''
   const telefoneEmpresa = (empresa?.telefone || empresa?.celular)
     ? formatTelefone(empresa.telefone || empresa.celular)
@@ -775,7 +773,6 @@ export function EditorPropostaComercial({
                   <span className="font-bold text-slate-400 uppercase text-[10px]">CONTRATANTE / CLIENTE:</span>
                   <div className="font-bold text-slate-900 mt-0.5">{clienteNome}</div>
                   <div className="text-slate-600">CPF/CNPJ: {clienteCpfCnpj || '-'}</div>
-                  <div className="text-slate-600">E-mail: {clienteEmail || '-'}</div>
                 </div>
                 <div>
                   <span className="font-bold text-slate-400 uppercase text-[10px]">OBRA / LOCALIZAÇÃO:</span>

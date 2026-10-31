@@ -46,13 +46,14 @@ interface EmpresaConfig {
   data_abertura: string | null;
   atividade_principal: string | null;
   clausula_padrao: string | null;
+  crea_cau: string | null;
 }
 
 const empty = {
   razaoSocial: "", nomeFantasia: "", cnpj: "", inscricaoEstadual: "", inscricaoMunicipal: "",
   email: "", telefone: "", celular: "", website: "", logoUrl: "",
   cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "",
-  situacaoCadastral: "", dataAbertura: "", atividadePrincipal: "", clausulaPadrao: "",
+  situacaoCadastral: "", dataAbertura: "", atividadePrincipal: "", clausulaPadrao: "", creaCau: "",
 };
 
 function EmpresaConfigPage() {
@@ -109,6 +110,7 @@ function EmpresaConfigPage() {
       dataAbertura: config.data_abertura ?? "",
       atividadePrincipal: config.atividade_principal ?? "",
       clausulaPadrao: config.clausula_padrao ?? "",
+      creaCau: config.crea_cau ?? "",
     });
   }, [config]);
 
@@ -228,6 +230,7 @@ function EmpresaConfigPage() {
         data_abertura: form.dataAbertura || null,
         atividade_principal: form.atividadePrincipal || null,
         clausula_padrao: form.clausulaPadrao.trim() || null,
+        crea_cau: form.creaCau.trim() || null,
         updated_at: new Date().toISOString(),
       };
 
@@ -269,7 +272,8 @@ function EmpresaConfigPage() {
             <Campo label="Razão social" id="razao"><Input id="razao" value={form.razaoSocial} onChange={(e) => alterar("razaoSocial", e.target.value)} /></Campo>
             <Campo label="Nome fantasia" id="fantasia"><Input id="fantasia" value={form.nomeFantasia} onChange={(e) => alterar("nomeFantasia", e.target.value)} /></Campo>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-4">
+            <Campo label="CREA / CAU" id="crea_cau"><Input id="crea_cau" placeholder="Ex: 123456-MG ou 123456/D-MG" value={form.creaCau} onChange={(e) => alterar("creaCau", e.target.value)} /></Campo>
             <Campo label="Inscrição Estadual" id="ie"><Input id="ie" value={form.inscricaoEstadual} onChange={(e) => alterar("inscricaoEstadual", e.target.value)} /></Campo>
             <Campo label="Inscrição Municipal" id="im"><Input id="im" value={form.inscricaoMunicipal} onChange={(e) => alterar("inscricaoMunicipal", e.target.value)} /></Campo>
             <Campo label="Situação cadastral" id="situacao"><Input id="situacao" value={form.situacaoCadastral} onChange={(e) => alterar("situacaoCadastral", e.target.value)} /></Campo>
