@@ -174,3 +174,11 @@ test('formatarRegistroEmpresa lida com empresa nula ou vazia com seguranca', () 
   assert.equal(formatarRegistroEmpresa(undefined), '')
   assert.equal(formatarRegistroEmpresa({ crea_cau: '  ', inscricao_estadual: '' }), '')
 })
+
+
+test('editor-proposta-comercial.tsx importa formatarRegistroEmpresa de proposta-orcamento.functions', async () => {
+  const fs = await import('node:fs')
+  const src = fs.readFileSync('src/components/propostas/editor-proposta-comercial.tsx', 'utf8')
+  assert.match(src, /formatarRegistroEmpresa/)
+  assert.match(src, /import\s*\{[^}]*formatarRegistroEmpresa[^}]*\}\s*from\s*['"]@\/lib\/proposta-orcamento\.functions['"]/)
+})
