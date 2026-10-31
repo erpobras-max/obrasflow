@@ -130,3 +130,11 @@ test('sugerirConciliacaoParaTransacao identifica correspondência exata e por da
   assert.equal(match.score, 'exato');
 });
 
+
+
+test('financeiro.tsx importa Layers e icones necessarios de lucide-react', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync('src/routes/_app/financeiro.tsx', 'utf8');
+  assert.match(src, /import\s*\{[^}]*Layers[^}]*\}\s*from\s*["']lucide-react["']/);
+  assert.match(src, /import\s*\{[^}]*ArrowRightLeft[^}]*\}\s*from\s*["']lucide-react["']/);
+});
