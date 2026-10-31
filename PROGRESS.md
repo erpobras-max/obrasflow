@@ -1,6 +1,6 @@
 # ObrasFlow ERP — estado do projeto
 
-Atualizado em 30/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
+Atualizado em 31/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
 ## 1. Rotas e páginas
 
@@ -629,3 +629,10 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     - Testes de migração em banco efêmero PGlite (`tests/financeiro-transferencias-db.test.mjs`).
     - Suite completa de 160/160 testes automatizados aprovada com 100% de sucesso.
     - Build de produção SSR (`npm run build`) validado com sucesso.
+
+- **Planejamento da evolução de Medição de Obras (Issue #206)**:
+  - Aprovada a manutenção de dois módulos separados para o usuário: Medição de Obras (cliente) e Medição de Empreiteiros (fornecedor), com um núcleo técnico compartilhado de cálculos, evidências, relatórios e timeline.
+  - Criados o desenho funcional/técnico, o plano executável em 12 tarefas e um prompt autocontido para continuidade por outra IA.
+  - O plano cobre workflow técnico/comercial/financeiro, versionamento imutável, aceite opcional do cliente, evidências, relatório configurável, mapa, indicadores planejado x realizado, portal e migração legada reversível.
+  - A primeira entrega modernizará Medição de Obras e preservará a interface atual de Empreiteiros; a convergência visual ocorrerá somente após o piloto.
+  - Esta entrega é exclusivamente documental: nenhuma migration foi aplicada, nenhuma feature flag foi ativada e nenhum comportamento de produção foi alterado.
