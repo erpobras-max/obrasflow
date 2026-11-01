@@ -227,14 +227,14 @@ export function AppSidebar({
 
       <div className="px-3 pt-3">
         <label className="relative block">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-sidebar-foreground/45" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-slate-500" />
           <input
             type="search"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             placeholder="Buscar módulo"
             aria-label="Buscar módulo"
-            className="h-8 w-full rounded-md border border-sidebar-border bg-sidebar-accent/45 pl-8 pr-2 text-xs text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/40 focus:border-sidebar-ring focus:ring-1 focus:ring-sidebar-ring"
+            className="h-8 w-full rounded-md border border-slate-300 bg-white pl-8 pr-2 text-xs text-slate-900 outline-none placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
         </label>
       </div>
