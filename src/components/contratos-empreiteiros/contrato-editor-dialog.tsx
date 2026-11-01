@@ -154,6 +154,7 @@ export function ContratoEditorDialog({
       const { data, error } = await supabase
         .from("fornecedores")
         .select("id, razao_social, nome_fantasia, especialidade")
+        .eq("classificacao", "terceirizado")
         .eq("ativo", true)
         .order("razao_social");
       if (error) throw error;

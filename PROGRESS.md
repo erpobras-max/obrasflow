@@ -675,3 +675,15 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - A busca lateral recebeu fundo branco, texto escuro, placeholder e ícone com contraste legível, além de foco azul visível para navegação por teclado.
   - Nenhuma migration ou alteração de banco foi necessária.
   - Validação: 179/179 testes automatizados aprovados, ESLint focado sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.
+
+- **Cadastro e listagem dedicados de empreiteiros (Branch `feat/cadastro-empreiteiros`)**:
+  - A rota `/prestadores` deixou de exibir a operação legada de serviços e passou a ser exclusivamente o cadastro mestre de empreiteiros.
+  - Cadastro e edição de pessoa física ou jurídica com CPF/CNPJ, nome/razão social, nome fantasia, especialidade, telefone, e-mail, avaliação e situação ativa/inativa.
+  - A classificação `terceirizado` é aplicada automaticamente, mantendo a tabela `fornecedores` como fonte única para contratos e demais módulos.
+  - Listagem com indicadores, busca tolerante a acentos por nome, documento ou especialidade e filtro por situação.
+  - Somente perfis `admin` e `compras` podem criar ou editar; os demais perfis autorizados à rota possuem consulta.
+  - O seletor de Contratos de Empreiteiros agora lista somente cadastros classificados como `terceirizado` e recebe atualização imediata após novo cadastro.
+  - A policy ampla legada de `fornecedores` foi substituída por regras condicionais: empreiteiros têm escrita para `admin`/`compras` e exclusão para `admin`, sem retirar as permissões existentes dos fornecedores comuns.
+  - A interface e os dados legados de serviços foram preservados no código e no banco, sem migration destrutiva; a operação permanece concentrada em Contratos de Empreiteiros.
+  - Testes unitários cobrem payload PF/PJ, normalização, busca, filtros e garantem que a rota não volte a montar a tela operacional antiga.
+  - Validação: 187/187 testes automatizados aprovados, ESLint focado nos arquivos novos sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.
