@@ -668,3 +668,10 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
     - Testes unitários para projeção de fluxo de caixa acumulado, detecção de déficit e filtros (`tests/fluxo-caixa.test.mjs`).
     - Suite completa de 172/172 testes automatizados aprovada com 100% de sucesso.
     - Compilação de produção Vite e Cloudflare SSR Nitro (`npm run build`) concluída com êxito.
+
+- **Clareza do cadastro de empreiteiros e da busca do menu (Branch `fix/menu-cadastro-empreiteiros`)**:
+  - O item genérico **Cadastro e serviços** foi renomeado para **Cadastro de empreiteiros**, preservando a rota existente `/prestadores` e evitando duplicação de telas ou dados.
+  - **Contratos de empreiteiros** permanece como ação separada logo abaixo, direcionando para `/contratos-empreiteiros`.
+  - A busca lateral recebeu fundo branco, texto escuro, placeholder e ícone com contraste legível, além de foco azul visível para navegação por teclado.
+  - Nenhuma migration ou alteração de banco foi necessária.
+  - Validação: 179/179 testes automatizados aprovados, ESLint focado sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.

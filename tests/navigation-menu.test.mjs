@@ -45,6 +45,18 @@ test("ambiente imobiliário mostra somente as rotas próprias do negócio", () =
   assert.ok(destinations.includes("/imobiliaria/financeiro"));
 });
 
+test("grupo empreiteiros separa cadastro e contratos com nomes explícitos", () => {
+  const group = getNavigationGroups("civil").find(({ id }) => id === "empreiteiros");
+
+  assert.deepEqual(
+    group?.items.map(({ label, to }) => ({ label, to })),
+    [
+      { label: "Cadastro de empreiteiros", to: "/prestadores" },
+      { label: "Contratos de empreiteiros", to: "/contratos-empreiteiros" },
+    ],
+  );
+});
+
 test("ambiente é derivado da rota atual e mantém o painel geral no civil", () => {
   assert.equal(getEnvironmentForHref("/imobiliaria/imoveis"), "imobiliaria");
   assert.equal(getEnvironmentForHref("/dashboard"), "civil");

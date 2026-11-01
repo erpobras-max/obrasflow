@@ -80,10 +80,15 @@ const CIVIL_GROUPS: NavigationGroup[] = [
     id: "empreiteiros",
     title: "Empreiteiros",
     items: [
-      { key: "prestadores", label: "Cadastro e serviços", icon: "hammer", to: "/prestadores" },
       {
         key: "prestadores",
-        label: "Contratos e medições",
+        label: "Cadastro de empreiteiros",
+        icon: "hammer",
+        to: "/prestadores",
+      },
+      {
+        key: "prestadores",
+        label: "Contratos de empreiteiros",
         icon: "file-check",
         to: "/contratos-empreiteiros",
       },
