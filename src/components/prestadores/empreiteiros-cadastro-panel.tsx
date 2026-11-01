@@ -431,7 +431,7 @@ export function EmpreiteirosCadastroPanel({ podeGerenciar }: { podeGerenciar: bo
                   name="avaliacao"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Avaliação (0 a 5)</FormLabel>
+                      <FormLabel>Avaliação (1 a 5)</FormLabel>
                       <FormControl>
                         <Input
                           type="number"

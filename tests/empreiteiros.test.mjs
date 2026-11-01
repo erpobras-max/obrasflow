@@ -143,6 +143,8 @@ test("contratos listam apenas terceirizados e cadastro invalida o cache integrad
 
   assert.match(contractEditor, /\.eq\("classificacao", "terceirizado"\)/);
   assert.match(panel, /queryKey: \["fornecedores-terceirizados-contratos"\]/);
+  assert.match(panel, /Avaliação \(1 a 5\)/);
+  assert.doesNotMatch(panel, /Avaliação \(0 a 5\)/);
 });
 
 test("migration limita empreiteiros e preserva permissões de fornecedores comuns", async () => {
