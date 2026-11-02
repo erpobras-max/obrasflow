@@ -1,0 +1,9 @@
+REVOKE ALL ON FUNCTION public.obter_resultado_obra(uuid, date, date, text) FROM PUBLIC, anon, authenticated;
+DROP FUNCTION IF EXISTS public.obter_resultado_obra(uuid, date, date, text);
+DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamentos;
+DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_etapas;
+DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_atividades;
+DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_atividade_insumos;
+DROP POLICY IF EXISTS resultado_obra_leitura ON public.pedidos_compra;
+DROP POLICY IF EXISTS resultado_obra_leitura ON public.pedido_itens;
+DROP TABLE IF EXISTS public.resultado_obra_apropriacoes;
