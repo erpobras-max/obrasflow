@@ -18,6 +18,7 @@ export interface ResultadoObraFiltros {
   dataInicio: string | null;
   dataFim: string | null;
   hoje?: string;
+  movimentosPreFiltrados?: boolean;
 }
 
 export interface ResultadoObraLinha {
@@ -155,6 +156,7 @@ export function classificarSaudeResultado(desvioPercentual: number | null): Resu
 }
 
 function estaNoPeriodo(linha: ResultadoObraLinha, filtros: ResultadoObraFiltros): boolean {
+  if (filtros.movimentosPreFiltrados) return true;
   if (filtros.periodo === "obra_inteira") return true;
   if (!linha.dataReferencia) return false;
   if (filtros.dataInicio && linha.dataReferencia < filtros.dataInicio) return false;
