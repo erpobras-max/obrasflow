@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { Calculator, Plus, Pencil, Trash2, HardHat, Ruler, ListTree, Boxes, Calendar, BookOpen } from "lucide-react";
+import { BarChart3, Calculator, Plus, Pencil, Trash2, HardHat, Ruler, ListTree, Boxes, Calendar, BookOpen } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client.custom";
 import { useAuth } from "@/hooks/use-auth";
@@ -17,6 +17,7 @@ import { UFS } from "@/lib/clientes.schema";
 import { buscarCep } from "@/lib/cep";
 import { formatCep } from "@/lib/validacao-documento";
 import { cn } from "@/lib/utils";
+import { criarLinkResultadoObra } from "@/lib/resultado-obra-filtros";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -96,13 +97,14 @@ const EMPTY: ObraFormValues = {
 };
 
 function ObrasPage() {
-  const { perfil, loading } = useAuth();
+  const { perfil, loading, roles } = useAuth();
   const qc = useQueryClient();
   const navigate = useNavigate();
 
   const podeEditar =
     perfil?.perfil === "admin" || perfil?.perfil === "diretor" || perfil?.perfil === "engenharia";
   const podeExcluir = perfil?.perfil === "admin" || perfil?.perfil === "diretor";
+  const podeVerResultado = roles.some((role) => canAccess(role, "financeiro"));
 
   const searchParams = Route.useSearch();
   const [formOpen, setFormOpen] = useState(false);
@@ -356,6 +358,11 @@ function ObrasPage() {
                         onClick={() => navigate({ to: "/orcamentos", search: { obra: o.id } as any })}
                       >
                         <Calculator className="size-3.5" /> Custos
+                      </Button>
+                    )}
+                    {podeVerResultado && (
+                      <Button asChild size="sm" variant="outline" className="h-8 gap-1 border-emerald-500/40 text-emerald-700 hover:bg-emerald-50" title="Abrir o cockpit de resultado financeiro da obra">
+                        <a href={criarLinkResultadoObra(o.id)}><BarChart3 className="size-3.5" /> Resultado</a>
                       </Button>
                     )}
                     {podeEditar && (

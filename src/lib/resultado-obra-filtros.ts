@@ -26,6 +26,15 @@ export interface ResultadoObraSearchParams {
   fim?: unknown;
 }
 
+export interface ResultadoObraUrlSearchState {
+  tab?: FinanceiroTab;
+  obra?: string;
+  regime?: ResultadoObraRegime;
+  periodo?: ResultadoObraPeriodo;
+  inicio?: string;
+  fim?: string;
+}
+
 const TABS = new Set<FinanceiroTab>([
   "receber",
   "pagar",
@@ -82,8 +91,8 @@ export function parseResultadoObraSearch(
 
 export function serializarResultadoObraSearch(
   filtros: ResultadoObraSearchState,
-): Record<string, string> {
-  const search: Record<string, string> = {
+): ResultadoObraUrlSearchState {
+  const search: ResultadoObraUrlSearchState = {
     tab: filtros.tab,
     regime: filtros.regime,
     periodo: filtros.periodo,
@@ -94,4 +103,19 @@ export function serializarResultadoObraSearch(
     if (filtros.dataFim) search.fim = filtros.dataFim;
   }
   return search;
+}
+
+export function normalizarResultadoObraUrlSearch(
+  search: ResultadoObraSearchParams | null | undefined,
+): ResultadoObraUrlSearchState {
+  return serializarResultadoObraSearch(parseResultadoObraSearch(search));
+}
+
+export function criarLinkResultadoObra(obraId: string): string {
+  const filtros = parseResultadoObraSearch({ tab: "resultado", obra: obraId });
+  const search = serializarResultadoObraSearch(filtros);
+  const pares = Object.entries(search).filter(
+    (entrada): entrada is [string, string] => typeof entrada[1] === "string",
+  );
+  return `/financeiro?${new URLSearchParams(pares).toString()}`;
 }

@@ -33,6 +33,15 @@ import { ConciliacaoOfxDialog } from "@/components/financeiro/conciliacao-ofx-di
 import { AlertasVencimentoBar } from "@/components/financeiro/alertas-vencimento-bar";
 import { ReciboFinanceiroDialog, ContaReciboData } from "@/components/financeiro/recibo-financeiro-dialog";
 import { FluxoCaixaAvancado } from "@/components/financeiro/fluxo-caixa-avancado";
+import { ResultadoObrasCockpit } from "@/components/financeiro/resultado-obras-cockpit";
+import {
+  parseResultadoObraSearch,
+  normalizarResultadoObraUrlSearch,
+  serializarResultadoObraSearch,
+  type FinanceiroTab,
+  type ResultadoObraSearchState,
+} from "@/lib/resultado-obra-filtros";
+import type { ResultadoObraFiltros } from "@/lib/resultado-obra";
 import * as XLSX from "xlsx";
 import {
   contasReceberSchema,
@@ -110,11 +119,25 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/_app/financeiro")({
+  validateSearch: normalizarResultadoObraUrlSearch,
   component: FinanceiroCivilPage,
 });
 
 function FinanceiroCivilPage() {
-  return <FinanceiroPage forcedOrigin="erp" />;
+  const search = parseResultadoObraSearch(Route.useSearch());
+  const navigate = Route.useNavigate();
+  const atualizarSearch = (proximo: ResultadoObraSearchState) =>
+    navigate({ search: serializarResultadoObraSearch(proximo), replace: true });
+
+  return (
+    <FinanceiroPage
+      forcedOrigin="erp"
+      activeTabControl={search.tab}
+      onTabChange={(tab) => atualizarSearch({ ...search, tab })}
+      resultadoFiltros={search}
+      onResultadoFiltrosChange={(filtros) => atualizarSearch({ ...filtros, tab: "resultado" })}
+    />
+  );
 }
 
 interface ContaReceberRow {
@@ -213,7 +236,19 @@ const EMPTY_PAGAR = {
   numero_documento: "",
 };
 
-export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobiliaria" }) {
+export function FinanceiroPage({
+  forcedOrigin,
+  activeTabControl,
+  onTabChange,
+  resultadoFiltros,
+  onResultadoFiltrosChange,
+}: {
+  forcedOrigin?: "erp" | "imobiliaria";
+  activeTabControl?: FinanceiroTab;
+  onTabChange?: (tab: FinanceiroTab) => void;
+  resultadoFiltros?: ResultadoObraFiltros;
+  onResultadoFiltrosChange?: (filtros: ResultadoObraFiltros) => void;
+}) {
   const { roles } = useAuth();
   const qc = useQueryClient();
   const isAdminOrDirector = roles.includes("admin") || roles.includes("diretor");
@@ -226,7 +261,13 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
   const podeEditar = canAccessCivil || canAccessImobiliaria;
   const podeExcluir = isAdminOrDirector;
 
-  const [activeTab, setActiveTab] = useState("receber");
+  const [internalActiveTab, setInternalActiveTab] = useState<FinanceiroTab>("receber");
+  const activeTab = activeTabControl ?? internalActiveTab;
+  const setActiveTab = (tab: string) => {
+    const proxima = tab as FinanceiroTab;
+    if (onTabChange) onTabChange(proxima);
+    else setInternalActiveTab(proxima);
+  };
   const [receberFormOpen, setReceberFormOpen] = useState(false);
   const [pagarFormOpen, setPagarFormOpen] = useState(false);
   const [receberEditTarget, setReceberEditTarget] = useState<ContaReceberRow | null>(null);
@@ -1324,14 +1365,17 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
 
       {/* Primary Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6 max-w-[850px]">
-          <TabsTrigger value="receber">Contas a Receber</TabsTrigger>
-          <TabsTrigger value="pagar">Contas a Pagar</TabsTrigger>
-          <TabsTrigger value="fluxo">Fluxo de Caixa</TabsTrigger>
-          <TabsTrigger value="conciliacao">Conciliação</TabsTrigger>
-          <TabsTrigger value="dre">DRE Simplificado</TabsTrigger>
-          <TabsTrigger value="contas">Contas Bancárias</TabsTrigger>
-        </TabsList>
+        <div className="w-full overflow-x-auto pb-1">
+          <TabsList className={cn("grid w-full", forcedOrigin === "erp" ? "min-w-[980px] grid-cols-7" : "min-w-[850px] grid-cols-6")}>
+            <TabsTrigger value="receber">Contas a Receber</TabsTrigger>
+            <TabsTrigger value="pagar">Contas a Pagar</TabsTrigger>
+            <TabsTrigger value="fluxo">Fluxo de Caixa</TabsTrigger>
+            <TabsTrigger value="conciliacao">Conciliação</TabsTrigger>
+            {forcedOrigin === "erp" && <TabsTrigger value="resultado">Resultado da Obra</TabsTrigger>}
+            <TabsTrigger value="dre">DRE Simplificado</TabsTrigger>
+            <TabsTrigger value="contas">Contas Bancárias</TabsTrigger>
+          </TabsList>
+        </div>
 
         {/* CONTAS A RECEBER TAB */}
         <TabsContent value="receber" className="space-y-4">
@@ -1812,6 +1856,12 @@ export function FinanceiroPage({ forcedOrigin }: { forcedOrigin?: "erp" | "imobi
             </CardContent>
           </Card>
         </TabsContent>
+
+        {forcedOrigin === "erp" && resultadoFiltros && onResultadoFiltrosChange && (
+          <TabsContent value="resultado" className="space-y-4">
+            <ResultadoObrasCockpit filtros={resultadoFiltros} onFiltrosChange={onResultadoFiltrosChange} />
+          </TabsContent>
+        )}
 
         {/* DRE TAB */}
         <TabsContent value="dre" className="space-y-4">

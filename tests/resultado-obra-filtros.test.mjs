@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  criarLinkResultadoObra,
   parseResultadoObraSearch,
   serializarResultadoObraSearch,
 } from "../src/lib/resultado-obra-filtros.ts";
@@ -101,6 +102,18 @@ test("até hoje preserva limite final mesmo sem data inicial", () => {
   });
   assert.equal(busca.fim, "2026-11-02");
   assert.equal(parseResultadoObraSearch(busca).dataFim, "2026-11-02");
+});
+
+test("atalho da obra abre diretamente a aba Resultado com a obra selecionada", () => {
+  assert.equal(
+    criarLinkResultadoObra("123e4567-e89b-42d3-a456-426614174000"),
+    "/financeiro?tab=resultado&regime=competencia&periodo=obra_inteira&obra=123e4567-e89b-42d3-a456-426614174000",
+  );
+  assert.equal(
+    parseResultadoObraSearch({ tab: "resultado", obra: "123e4567-e89b-42d3-a456-426614174000" })
+      .tab,
+    "resultado",
+  );
 });
 
 test("query key muda com obra, regime e datas", () => {
