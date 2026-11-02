@@ -90,6 +90,19 @@ test("serializador produz query string estável e reversível", () => {
   assert.deepEqual(parseResultadoObraSearch(busca), filtros);
 });
 
+test("até hoje preserva limite final mesmo sem data inicial", () => {
+  const busca = serializarResultadoObraSearch({
+    tab: "resultado",
+    obraId: OBRA_ID,
+    regime: "competencia",
+    periodo: "ate_hoje",
+    dataInicio: null,
+    dataFim: "2026-11-02",
+  });
+  assert.equal(busca.fim, "2026-11-02");
+  assert.equal(parseResultadoObraSearch(busca).dataFim, "2026-11-02");
+});
+
 test("query key muda com obra, regime e datas", () => {
   const base = {
     obraId: OBRA_ID,

@@ -89,9 +89,9 @@ export function serializarResultadoObraSearch(
     periodo: filtros.periodo,
   };
   if (filtros.obraId) search.obra = filtros.obraId;
-  if (filtros.periodo !== "obra_inteira" && filtros.dataInicio && filtros.dataFim) {
-    search.inicio = filtros.dataInicio;
-    search.fim = filtros.dataFim;
+  if (filtros.periodo !== "obra_inteira") {
+    if (filtros.dataInicio) search.inicio = filtros.dataInicio;
+    if (filtros.dataFim) search.fim = filtros.dataFim;
   }
   return search;
 }
