@@ -9,6 +9,8 @@ import {
   Folder,
   DollarSign,
   FileSignature,
+  FileText,
+  ClipboardCheck,
   LogOut,
   Boxes,
 } from "lucide-react";
@@ -97,6 +99,8 @@ function PortalLayout() {
     { label: "Contratos", icon: FileSignature, to: "/portal/contratos" },
     ...(selectedObraId
       ? [
+          { label: "Proposta", icon: FileText, to: "/portal/proposta" },
+          { label: "Decisões", icon: ClipboardCheck, to: "/portal/decisoes" },
           { label: "Maquete 3D", icon: Boxes, to: "/portal/projeto" },
           { label: "Fotos", icon: Image, to: "/portal/fotos" },
           { label: "Documentos", icon: Folder, to: "/portal/documentos" },

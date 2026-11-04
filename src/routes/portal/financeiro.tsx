@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Loader2, DollarSign, Calendar, AlertTriangle, CheckCircle2, TrendingUp } from "lucide-react";
+import { Loader2, DollarSign, Calendar, AlertTriangle, CheckCircle2, TrendingUp, ExternalLink } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
 import { supabase } from "@/integrations/supabase/client.custom";
@@ -9,6 +9,7 @@ import { usePortalContext } from "@/hooks/use-portal-context";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -26,6 +27,7 @@ interface ContaReceberRow {
   data_vencimento: string;
   data_recebimento: string | null;
   valor_recebido: number | null; // centavos
+  link_pagamento: string | null;
   status: StatusReceber;
 }
 
@@ -44,7 +46,7 @@ function PortalFinanceiro() {
     queryFn: async () => {
       let query = (supabase as any)
         .from("contas_receber")
-        .select("id, descricao, valor_total, data_vencimento, data_recebimento, valor_recebido, status")
+        .select("id, descricao, valor_total, data_vencimento, data_recebimento, valor_recebido, link_pagamento, status")
         .order("data_vencimento", { ascending: true });
 
       if (obraId) {
@@ -187,12 +189,13 @@ function PortalFinanceiro() {
                 <TableHead className="text-xs font-bold text-slate-500">Pagamento</TableHead>
                 <TableHead className="text-xs font-bold text-slate-500">Status</TableHead>
                 <TableHead className="text-right text-xs font-bold text-slate-500">Valor</TableHead>
+                <TableHead className="text-right text-xs font-bold text-slate-500">Ação</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {contasReceber && contasReceber.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-10 text-muted-foreground text-sm">
+                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
                     <DollarSign className="size-8 mx-auto mb-2 opacity-30" />
                     Nenhum lançamento financeiro registrado para esta obra.
                   </TableCell>
@@ -214,6 +217,13 @@ function PortalFinanceiro() {
                     </TableCell>
                     <TableCell className="text-right font-mono font-bold text-xs sm:text-sm text-slate-700">
                       {fmtBRL(l.valor_total)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {l.link_pagamento && l.status !== "recebida" && (
+                        <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => window.open(l.link_pagamento, "_blank", "noopener,noreferrer")}>
+                          Pagar agora <ExternalLink className="size-3" />
+                        </Button>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

@@ -18,10 +18,12 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalIndexRouteImport } from './routes/portal/index'
 import { Route as ReservarTokenRouteImport } from './routes/reservar.$token'
+import { Route as PortalPropostaRouteImport } from './routes/portal/proposta'
 import { Route as PortalProjetoRouteImport } from './routes/portal/projeto'
 import { Route as PortalFotosRouteImport } from './routes/portal/fotos'
 import { Route as PortalFinanceiroRouteImport } from './routes/portal/financeiro'
 import { Route as PortalDocumentosRouteImport } from './routes/portal/documentos'
+import { Route as PortalDecisoesRouteImport } from './routes/portal/decisoes'
 import { Route as PortalContratosRouteImport } from './routes/portal/contratos'
 import { Route as MedicaoEmpreiteiroTokenRouteImport } from './routes/medicao-empreiteiro.$token'
 import { Route as ImovelPublicoTokenRouteImport } from './routes/imovel-publico.$token'
@@ -116,6 +118,11 @@ const ReservarTokenRoute = ReservarTokenRouteImport.update({
   path: '/reservar/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PortalPropostaRoute = PortalPropostaRouteImport.update({
+  id: '/proposta',
+  path: '/proposta',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalProjetoRoute = PortalProjetoRouteImport.update({
   id: '/projeto',
   path: '/projeto',
@@ -134,6 +141,11 @@ const PortalFinanceiroRoute = PortalFinanceiroRouteImport.update({
 const PortalDocumentosRoute = PortalDocumentosRouteImport.update({
   id: '/documentos',
   path: '/documentos',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalDecisoesRoute = PortalDecisoesRouteImport.update({
+  id: '/decisoes',
+  path: '/decisoes',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalContratosRoute = PortalContratosRouteImport.update({
@@ -423,10 +435,12 @@ export interface FileRoutesByFullPath {
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/medicao-empreiteiro/$token': typeof MedicaoEmpreiteiroTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
+  '/portal/decisoes': typeof PortalDecisoesRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
   '/portal/projeto': typeof PortalProjetoRoute
+  '/portal/proposta': typeof PortalPropostaRoute
   '/reservar/$token': typeof ReservarTokenRoute
   '/portal/': typeof PortalIndexRoute
   '/comercial/clientes': typeof AppComercialClientesRoute
@@ -485,10 +499,12 @@ export interface FileRoutesByTo {
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/medicao-empreiteiro/$token': typeof MedicaoEmpreiteiroTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
+  '/portal/decisoes': typeof PortalDecisoesRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
   '/portal/projeto': typeof PortalProjetoRoute
+  '/portal/proposta': typeof PortalPropostaRoute
   '/reservar/$token': typeof ReservarTokenRoute
   '/portal': typeof PortalIndexRoute
   '/comercial/clientes': typeof AppComercialClientesRoute
@@ -550,10 +566,12 @@ export interface FileRoutesById {
   '/imovel-publico/$token': typeof ImovelPublicoTokenRoute
   '/medicao-empreiteiro/$token': typeof MedicaoEmpreiteiroTokenRoute
   '/portal/contratos': typeof PortalContratosRoute
+  '/portal/decisoes': typeof PortalDecisoesRoute
   '/portal/documentos': typeof PortalDocumentosRoute
   '/portal/financeiro': typeof PortalFinanceiroRoute
   '/portal/fotos': typeof PortalFotosRoute
   '/portal/projeto': typeof PortalProjetoRoute
+  '/portal/proposta': typeof PortalPropostaRoute
   '/reservar/$token': typeof ReservarTokenRoute
   '/portal/': typeof PortalIndexRoute
   '/_app/comercial/clientes': typeof AppComercialClientesRoute
@@ -615,10 +633,12 @@ export interface FileRouteTypes {
     | '/imovel-publico/$token'
     | '/medicao-empreiteiro/$token'
     | '/portal/contratos'
+    | '/portal/decisoes'
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
     | '/portal/projeto'
+    | '/portal/proposta'
     | '/reservar/$token'
     | '/portal/'
     | '/comercial/clientes'
@@ -677,10 +697,12 @@ export interface FileRouteTypes {
     | '/imovel-publico/$token'
     | '/medicao-empreiteiro/$token'
     | '/portal/contratos'
+    | '/portal/decisoes'
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
     | '/portal/projeto'
+    | '/portal/proposta'
     | '/reservar/$token'
     | '/portal'
     | '/comercial/clientes'
@@ -741,10 +763,12 @@ export interface FileRouteTypes {
     | '/imovel-publico/$token'
     | '/medicao-empreiteiro/$token'
     | '/portal/contratos'
+    | '/portal/decisoes'
     | '/portal/documentos'
     | '/portal/financeiro'
     | '/portal/fotos'
     | '/portal/projeto'
+    | '/portal/proposta'
     | '/reservar/$token'
     | '/portal/'
     | '/_app/comercial/clientes'
@@ -851,6 +875,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ReservarTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/portal/proposta': {
+      id: '/portal/proposta'
+      path: '/proposta'
+      fullPath: '/portal/proposta'
+      preLoaderRoute: typeof PortalPropostaRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/portal/projeto': {
       id: '/portal/projeto'
       path: '/projeto'
@@ -877,6 +908,13 @@ declare module '@tanstack/react-router' {
       path: '/documentos'
       fullPath: '/portal/documentos'
       preLoaderRoute: typeof PortalDocumentosRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/portal/decisoes': {
+      id: '/portal/decisoes'
+      path: '/decisoes'
+      fullPath: '/portal/decisoes'
+      preLoaderRoute: typeof PortalDecisoesRouteImport
       parentRoute: typeof PortalRoute
     }
     '/portal/contratos': {
@@ -1354,19 +1392,23 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 interface PortalRouteChildren {
   PortalContratosRoute: typeof PortalContratosRoute
+  PortalDecisoesRoute: typeof PortalDecisoesRoute
   PortalDocumentosRoute: typeof PortalDocumentosRoute
   PortalFinanceiroRoute: typeof PortalFinanceiroRoute
   PortalFotosRoute: typeof PortalFotosRoute
   PortalProjetoRoute: typeof PortalProjetoRoute
+  PortalPropostaRoute: typeof PortalPropostaRoute
   PortalIndexRoute: typeof PortalIndexRoute
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
   PortalContratosRoute: PortalContratosRoute,
+  PortalDecisoesRoute: PortalDecisoesRoute,
   PortalDocumentosRoute: PortalDocumentosRoute,
   PortalFinanceiroRoute: PortalFinanceiroRoute,
   PortalFotosRoute: PortalFotosRoute,
   PortalProjetoRoute: PortalProjetoRoute,
+  PortalPropostaRoute: PortalPropostaRoute,
   PortalIndexRoute: PortalIndexRoute,
 }
 

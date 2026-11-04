@@ -18,6 +18,7 @@ export function CronogramaProprietario({ obraId }: { obraId: string }) {
   });
   const hoje = format(new Date(), "yyyy-MM-dd");
   const dataBR = (v: string | null) => v ? v.split("-").reverse().join("/") : "A definir";
+  const proximosMarcos = (data ?? []).filter((etapa) => etapa.data_fim && etapa.data_fim >= hoje).slice(0, 3);
   return <Card>
     <CardHeader><CardTitle>Cronograma das etapas</CardTitle>
       <p className="text-sm text-muted-foreground">Prazos combinados e execução informada pela equipe. Uma etapa fica com prazo vencido quando a data final passa e a meta ainda não foi atingida.</p>
@@ -26,6 +27,7 @@ export function CronogramaProprietario({ obraId }: { obraId: string }) {
       {isLoading && <p>Carregando cronograma…</p>}
       {error && <p role="alert" className="text-destructive">Não foi possível carregar o cronograma. Tente novamente.</p>}
       {data?.length === 0 && <p className="text-sm text-muted-foreground">O planejamento das etapas ainda não foi disponibilizado.</p>}
+      {proximosMarcos.length > 0 && <div className="mb-5 rounded-lg border bg-slate-50 p-4"><p className="text-sm font-semibold">Próximos marcos</p><p className="mt-1 text-xs text-muted-foreground">Linha do tempo das próximas entregas previstas.</p><div className="mt-3 grid gap-2 sm:grid-cols-3">{proximosMarcos.map((etapa) => <div key={etapa.id} className="border-l-2 border-primary pl-3 text-sm"><p className="font-medium">{etapa.nome}</p><p className="text-xs text-muted-foreground">Até {dataBR(etapa.data_fim)}</p></div>)}</div></div>}
       <div className="space-y-4">{data?.map(e => {
         const situacao = situacaoEtapa(e, hoje);
         return <section key={e.id} className="rounded-lg border p-4">

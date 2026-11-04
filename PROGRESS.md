@@ -94,7 +94,7 @@ Não há Edge Functions versionadas em `supabase/functions` neste checkout. A ap
 - Upload de arquivos e fotos: integrado ao armazenamento configurado para empresa/imóveis; conferir a configuração de produção do R2 e URLs públicas/protegidas.
 - Contratos: geração e visualização implementadas; o fluxo público permite leitura e assinatura manuscrita.
 - Assinatura digital: assinatura por mouse/toque e link público implementados; ainda é recomendável adicionar trilha de auditoria e validade jurídica conforme a política da empresa.
-- Portal do cliente: contratos, documentos, fotos, financeiro e andamento das obras vinculadas estão disponíveis.
+- Portal do cliente: contratos, documentos, fotos, financeiro e andamento das obras vinculadas estão disponíveis. A evolução inclui proposta comercial sanitizada, decisões registradas por obra, marcos do cronograma e link externo de pagamento quando publicado pelo financeiro.
 - Cobrança: parcelas, taxas e formas de pagamento estão modeladas; integrações bancárias/gateway e baixa automática dependem da configuração externa.
 - Lembretes automáticos: ainda dependem de uma rotina agendada/Edge Function e de um provedor de e-mail/SMS/WhatsApp.
 
