@@ -6,4 +6,5 @@ DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_atividades;
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_atividade_insumos;
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.pedidos_compra;
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.pedido_itens;
+DROP POLICY IF EXISTS resultado_obra_revisao_comercial_leitura ON public.proposta_revisoes;
 DROP TABLE IF EXISTS public.resultado_obra_apropriacoes;

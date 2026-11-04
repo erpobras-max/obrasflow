@@ -322,6 +322,29 @@ test("migration cria apropriação auditável, RLS e RPC somente de leitura", as
   }
 });
 
+test("leitura direta das fontes do cockpit respeita o acesso à obra", async () => {
+  const db = await criarBancoBase();
+  try {
+    await aplicarMigration(db);
+    const ids = await semearCenario(db);
+    const outraObra = (await db.query("INSERT INTO obras(nome) VALUES ('Obra restrita') RETURNING id")).rows[0].id;
+    const outroOrcamento = (await db.query("INSERT INTO orcamentos(obra_id) VALUES ($1) RETURNING id", [outraObra])).rows[0].id;
+    await db.query("INSERT INTO orcamento_etapas(orcamento_id,codigo,nome) VALUES ($1,'1','Restrita')", [outroOrcamento]);
+    await db.query("INSERT INTO pedidos_compra(obra_id,status) VALUES ($1,'aberto')", [outraObra]);
+    await db.exec(`
+      SET ROLE authenticated;
+      SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',false);
+      SELECT set_config('request.jwt.claim.role','financeiro',false);
+      SELECT set_config('request.jwt.claim.obra_id','${ids.obraId}',false);
+    `);
+    assert.equal((await db.query("SELECT * FROM orcamentos")).rows.length, 1);
+    assert.equal((await db.query("SELECT * FROM orcamento_etapas")).rows.length, 3);
+    assert.equal((await db.query("SELECT * FROM pedidos_compra")).rows.length, 2);
+  } finally {
+    await db.close();
+  }
+});
+
 test("RPC consolida etapa canônica, compras, contratos e receita sem esconder dados parciais", async () => {
   const db = await criarBancoBase();
   try {
@@ -347,22 +370,22 @@ test("RPC consolida etapa canônica, compras, contratos e receita sem esconder d
     const receita = linhas.filter((item) => item.origem === "receita");
     assert.equal(receita.length, 1, "fontes de receita inferiores não devem ser somadas");
     assert.equal(Number(receita[0].valor_receita_centavos), 100000);
-    assert.equal(receita[0].metadados.receita_fonte, "proposta_aceita");
+    assert.equal(receita[0].metadados.receita_fonte, "revisao_comercial_aceita");
     assert.equal(
       (await db.query("SELECT * FROM proposta_revisoes")).rows.length,
-      0,
-      "cockpit não deve abrir leitura direta da fotografia comercial para o financeiro",
+      1,
+      "financeiro só lê a revisão comercial ligada à obra autorizada",
     );
 
     const pedidoNovo = linhas.find((item) => item.origem_id === ids.pedidoNovoId);
-    assert.equal(Number(pedidoNovo.valor_comprometido_centavos), 800);
-    assert.equal(Number(pedidoNovo.valor_realizado_centavos), 200);
+    assert.equal(Number(pedidoNovo.valor_comprometido_centavos), 1000);
+    assert.equal(Number(pedidoNovo.valor_realizado_centavos), 0);
     assert.equal(pedidoNovo.legado_sem_saldo, false);
     assert.equal(pedidoNovo.etapa_id, ids.etapaFundacao, "apropriação explícita deve prevalecer");
 
     const pedidoLegado = linhas.find((item) => item.origem_id === ids.pedidoLegadoId);
-    assert.equal(Number(pedidoLegado.valor_comprometido_centavos), 600);
-    assert.equal(pedidoLegado.legado_sem_saldo, false);
+    assert.equal(Number(pedidoLegado.valor_comprometido_centavos), 1000);
+    assert.equal(pedidoLegado.legado_sem_saldo, true);
     const pedidoSemSaldo = linhas.find((item) => item.origem_id === ids.pedidoLegadoSemSaldoId);
     assert.equal(Number(pedidoSemSaldo.valor_comprometido_centavos), 500);
     assert.equal(pedidoSemSaldo.legado_sem_saldo, true);
@@ -418,6 +441,11 @@ test("regimes e período usam obrigação na competência e liquidação no caix
     ).rows[0];
     assert.equal(Number(caixa.valor_realizado_centavos), 300);
     assert.equal(Number(caixa.valor_pago_centavos), 300);
+    const apoioFisico = await db.query(
+      "SELECT * FROM obter_resultado_obra($1,'2026-10-20','2026-10-20','caixa') WHERE origem IN ('pedido','contrato')",
+      [ids.obraId],
+    );
+    assert.ok(apoioFisico.rows.every((item) => Number(item.valor_realizado_centavos) === 0));
     assert.equal(caixa.data_referencia.toISOString().slice(0, 10), "2026-10-20");
   } finally {
     await db.close();

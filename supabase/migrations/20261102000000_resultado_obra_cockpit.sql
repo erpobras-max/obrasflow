@@ -93,25 +93,37 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.resultado_obra_apropriacoes TO au
 -- leitura das fontes que o cockpit precisa, sem ampliar escrita ou acesso a clientes.
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamentos;
 CREATE POLICY resultado_obra_leitura ON public.orcamentos FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil'));
+  USING ((public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil')) AND EXISTS (SELECT 1 FROM public.obras obra WHERE obra.id = orcamentos.obra_id));
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_etapas;
 CREATE POLICY resultado_obra_leitura ON public.orcamento_etapas FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil'));
+  USING ((public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil')) AND EXISTS (SELECT 1 FROM public.orcamentos orc JOIN public.obras obra ON obra.id = orc.obra_id WHERE orc.id = orcamento_etapas.orcamento_id));
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_atividades;
 CREATE POLICY resultado_obra_leitura ON public.orcamento_atividades FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil'));
+  USING ((public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil')) AND EXISTS (SELECT 1 FROM public.orcamento_etapas etapa JOIN public.orcamentos orc ON orc.id = etapa.orcamento_id JOIN public.obras obra ON obra.id = orc.obra_id WHERE etapa.id = orcamento_atividades.etapa_id));
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.orcamento_atividade_insumos;
 CREATE POLICY resultado_obra_leitura ON public.orcamento_atividade_insumos FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil'));
+  USING ((public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil')) AND EXISTS (SELECT 1 FROM public.orcamento_atividades atividade JOIN public.orcamento_etapas etapa ON etapa.id = atividade.etapa_id JOIN public.orcamentos orc ON orc.id = etapa.orcamento_id JOIN public.obras obra ON obra.id = orc.obra_id WHERE atividade.id = orcamento_atividade_insumos.atividade_id));
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.pedidos_compra;
 CREATE POLICY resultado_obra_leitura ON public.pedidos_compra FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil'));
+  USING ((public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil')) AND EXISTS (SELECT 1 FROM public.obras obra WHERE obra.id = pedidos_compra.obra_id));
 DROP POLICY IF EXISTS resultado_obra_leitura ON public.pedido_itens;
 CREATE POLICY resultado_obra_leitura ON public.pedido_itens FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil'));
+  USING ((public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil')) AND EXISTS (SELECT 1 FROM public.pedidos_compra pedido JOIN public.obras obra ON obra.id = pedido.obra_id WHERE pedido.id = pedido_itens.pedido_id));
 
 GRANT SELECT ON public.orcamentos, public.orcamento_etapas, public.orcamento_atividades,
   public.orcamento_atividade_insumos, public.pedidos_compra, public.pedido_itens TO authenticated;
+
+DROP POLICY IF EXISTS resultado_obra_revisao_comercial_leitura ON public.proposta_revisoes;
+CREATE POLICY resultado_obra_revisao_comercial_leitura ON public.proposta_revisoes FOR SELECT TO authenticated
+  USING (
+    (public.has_role(auth.uid(), 'admin') OR public.has_role(auth.uid(), 'diretor') OR public.has_role(auth.uid(), 'financeiro') OR public.has_role(auth.uid(), 'financeiro_civil'))
+    AND EXISTS (
+      SELECT 1 FROM public.propostas proposta
+      JOIN public.obras obra ON obra.proposta_id = proposta.id
+      WHERE proposta.id = proposta_revisoes.proposta_id
+    )
+  );
+GRANT SELECT ON public.proposta_revisoes TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.obter_resultado_obra(
   p_obra_id uuid,
@@ -192,14 +204,23 @@ BEGIN
   ),
   receita_candidatas AS (
     SELECT 1 AS prioridade,
-           proposta.id AS origem_id,
-           'Proposta comercial aceita'::text AS descricao,
-           round(proposta.valor_total * 100)::bigint AS valor,
-           'proposta_aceita'::text AS fonte
+           COALESCE(revisao.id, proposta.id) AS origem_id,
+           'Revisão comercial aceita'::text AS descricao,
+           COALESCE(NULLIF(revisao.fotografia->>'totalPrecoCentavos', '')::bigint, round(proposta.valor_total * 100)::bigint) AS valor,
+           CASE WHEN revisao.id IS NULL THEN 'proposta_aceita_legada' ELSE 'revisao_comercial_aceita' END::text AS fonte
       FROM public.obras obra
       JOIN public.propostas proposta ON proposta.id = obra.proposta_id
+      LEFT JOIN LATERAL (
+        SELECT pr.id, pr.fotografia
+          FROM public.proposta_revisoes pr
+         WHERE pr.proposta_id = proposta.id
+           AND pr.status = 'aceita'
+         ORDER BY pr.id DESC
+         LIMIT 1
+      ) revisao ON true
      WHERE obra.id = p_obra_id
-       AND proposta.status = 'aceita'
+       AND (proposta.status = 'aceita' OR revisao.id IS NOT NULL)
+     ORDER BY revisao.id DESC NULLS LAST, proposta.id DESC
      LIMIT 1
   ),
   receita_contrato AS (
@@ -255,11 +276,19 @@ BEGIN
        AND conta.status <> 'cancelada'
      GROUP BY conta.pedido_id
   ),
+  contas_vinculadas AS (
+    SELECT COALESCE(conta.cotacao_pedido_id, conta.medicao_empreiteiro_id) AS vinculo_id,
+           sum(conta.valor_total)::bigint AS valor_obrigacao
+      FROM public.contas_pagar conta
+     WHERE conta.obra_id = p_obra_id
+       AND conta.status <> 'cancelada'
+       AND (conta.cotacao_pedido_id IS NOT NULL OR conta.medicao_empreiteiro_id IS NOT NULL)
+     GROUP BY COALESCE(conta.cotacao_pedido_id, conta.medicao_empreiteiro_id)
+  ),
   pedidos_legados AS (
     SELECT pedido.id,
            COALESCE(NULLIF(sum(item.quantidade * item.valor_unit), 0), pedido.valor_total)::bigint AS total,
-           COALESCE(conta.realizado, 0)::bigint AS realizado,
-           (conta.pedido_id IS NULL) AS legado_sem_saldo,
+           true AS legado_sem_saldo,
            pedido.created_at::date AS data_referencia,
            apropriacao.orcamento_etapa_id AS etapa_id
       FROM public.pedidos_compra pedido
@@ -269,37 +298,39 @@ BEGIN
         ON apropriacao.origem_tipo = 'pedido_compra' AND apropriacao.origem_id = pedido.id
      WHERE pedido.obra_id = p_obra_id
        AND pedido.status <> 'cancelado'
-     GROUP BY pedido.id, pedido.valor_total, pedido.created_at, conta.realizado,
+      GROUP BY pedido.id, pedido.valor_total, pedido.created_at, conta.realizado,
               conta.pedido_id, apropriacao.orcamento_etapa_id
   ),
   pedidos_novos AS (
     SELECT pedido.id,
-           sum(greatest(item.quantidade - item.qtd_recebida, 0) * item.valor_unitario)::bigint AS comprometido,
-           sum(least(item.qtd_recebida, item.quantidade) * item.valor_unitario)::bigint AS realizado,
+           greatest(sum(item.quantidade * item.valor_unitario) - COALESCE(vinculo.valor_obrigacao, 0), 0)::bigint AS comprometido,
            pedido.created_at::date AS data_referencia,
            apropriacao.orcamento_etapa_id AS etapa_id
       FROM public.cotacoes_pedidos pedido
       JOIN public.cotacoes_pedidos_itens item ON item.pedido_id = pedido.id
       LEFT JOIN public.resultado_obra_apropriacoes apropriacao
         ON apropriacao.origem_tipo = 'cotacao_pedido' AND apropriacao.origem_id = pedido.id
+      LEFT JOIN contas_vinculadas vinculo ON vinculo.vinculo_id = pedido.id
      WHERE pedido.obra_id = p_obra_id
        AND pedido.status <> 'cancelado'
-     GROUP BY pedido.id, pedido.created_at, apropriacao.orcamento_etapa_id
+     GROUP BY pedido.id, pedido.created_at, apropriacao.orcamento_etapa_id, vinculo.valor_obrigacao
   ),
   medicoes_contrato AS (
     SELECT medicao.id, medicao.contrato_empreiteiro_id,
            medicao.valor_bruto_centavos,
            COALESCE(medicao.periodo_fim, medicao.created_at::date) AS data_referencia,
+           COALESCE(vinculo.valor_obrigacao, 0)::bigint AS valor_obrigacao,
            apropriacao.orcamento_etapa_id AS etapa_id
       FROM public.medicoes_empreiteiros medicao
       LEFT JOIN public.resultado_obra_apropriacoes apropriacao
         ON apropriacao.origem_tipo = 'medicao_empreiteiro' AND apropriacao.origem_id = medicao.id
+      LEFT JOIN contas_vinculadas vinculo ON vinculo.vinculo_id = medicao.id
      WHERE medicao.status IN ('aprovada', 'paga')
   ),
   contratos_obra AS (
     SELECT contrato.id, contrato.objeto,
            greatest(
-             contrato.valor_total_atual_centavos - COALESCE(sum(medicao.valor_bruto_centavos), 0),
+             contrato.valor_total_atual_centavos - COALESCE(sum(medicao.valor_obrigacao), 0),
              0
            )::bigint AS comprometido,
            apropriacao.orcamento_etapa_id AS etapa_id,
@@ -379,7 +410,7 @@ BEGIN
     SELECT p_obra_id, obra.nome, pedido.etapa_id, etapa.nome,
            'pedido', pedido.id, NULL::uuid, 'Pedido de compra (cotação)',
            pedido.data_referencia, NULL::date, 0::bigint, 0::bigint, 0::bigint,
-           pedido.comprometido, pedido.realizado, 0::bigint, NULL::numeric,
+           pedido.comprometido, 0::bigint, 0::bigint, NULL::numeric,
            false, false, '/suprimentos/cotacoes'::text,
            jsonb_build_object('fluxo', 'cotacao')
       FROM pedidos_novos pedido
@@ -390,7 +421,7 @@ BEGIN
     SELECT p_obra_id, obra.nome, pedido.etapa_id, etapa.nome,
            'pedido', pedido.id, NULL::uuid, 'Pedido de compra legado',
            pedido.data_referencia, NULL::date, 0::bigint, 0::bigint, 0::bigint,
-           greatest(pedido.total - pedido.realizado, 0)::bigint, 0::bigint, 0::bigint,
+           pedido.total, 0::bigint, 0::bigint,
            NULL::numeric, pedido.legado_sem_saldo, false, '/compras/pedidos'::text,
            jsonb_build_object('fluxo', 'legado')
       FROM pedidos_legados pedido
@@ -412,7 +443,7 @@ BEGIN
     SELECT p_obra_id, obra.nome, medicao.etapa_id, etapa.nome,
            'contrato', medicao.id, NULL::uuid, 'Medição de empreiteiro',
            medicao.data_referencia, NULL::date, 0::bigint, 0::bigint, 0::bigint,
-           0::bigint, medicao.valor_bruto_centavos, 0::bigint, NULL::numeric,
+           0::bigint, 0::bigint, 0::bigint, NULL::numeric,
            false, false, '/contratos-empreiteiros'::text,
            jsonb_build_object('tipo', 'medicao_empreiteiro')
       FROM medicoes_contrato medicao
@@ -431,17 +462,6 @@ BEGIN
       JOIN public.obras obra ON obra.id = p_obra_id
       LEFT JOIN etapas etapa ON etapa.id = conta.etapa_id
 
-    UNION ALL
-    SELECT p_obra_id, obra.nome, etapa.id, etapa.nome,
-           'avanco', md5(p_obra_id::text || etapa.id::text)::uuid, NULL::uuid,
-           'Avanço físico informado na obra', CURRENT_DATE, NULL::date, 0::bigint,
-           0::bigint, 0::bigint, 0::bigint, 0::bigint, 0::bigint,
-           obra.progresso::numeric, false, false, '/obras'::text,
-           jsonb_build_object('fonte', 'obra.progresso')
-      FROM public.obras obra
-      JOIN etapas etapa ON true
-     WHERE obra.id = p_obra_id
-       AND obra.progresso > 0
   )
   SELECT * FROM linhas;
 END;
