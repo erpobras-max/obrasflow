@@ -475,8 +475,10 @@ function AuthPage() {
                 </div>
               ) : !pendingAccess ? (
                 <div className="mt-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs leading-5 text-amber-950">
-                  <ShieldCheck className="mt-0.5 size-4 shrink-0" />O documento localiza uma conta
-                  autorizada e libera diretamente o portal correspondente.
+                  <ShieldCheck className="mt-0.5 size-4 shrink-0" />
+                  {area === "employee"
+                    ? "O CPF identifica o funcionário cadastrado e libera o acesso ao ponto, sem criar uma conta."
+                    : "O documento localiza uma conta autorizada e libera diretamente o portal correspondente."}
                 </div>
               ) : null)}
           </div>
