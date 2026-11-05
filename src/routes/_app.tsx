@@ -15,6 +15,7 @@ export const Route = createFileRoute("/_app")({
 function AppLayout() {
   const navigate = useNavigate();
   const currentHref = useRouterState({ select: (state) => state.location.href });
+  const currentPathname = useRouterState({ select: (state) => state.location.pathname });
   const { loading, user, perfil, roles } = useAuth();
 
   useEffect(() => {
@@ -25,7 +26,7 @@ function AppLayout() {
   }, [loading, user?.id]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && currentPathname !== "/auth") {
       navigate({ to: "/auth", search: { redirect: currentHref }, replace: true });
     }
     else if (!loading && perfil?.ativo === false) {
@@ -36,7 +37,7 @@ function AppLayout() {
     } else if (!loading && roles.length > 0 && roles.every((role) => role === "funcionario")) {
       navigate({ to: "/ponto" as any, replace: true });
     }
-  }, [loading, user, perfil?.ativo, roles, navigate, currentHref]);
+  }, [loading, user, perfil?.ativo, roles, navigate, currentHref, currentPathname]);
 
   if (loading || !user) {
     return (

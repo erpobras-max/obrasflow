@@ -23,7 +23,7 @@ test.describe("Acesso público", () => {
 
   test("direciona rota interna protegida ao acesso", async ({ page }) => {
     await page.goto("/imobiliaria/vendas");
-    await expect(page).toHaveURL(/\/auth$/);
+    await expect(page).toHaveURL(/\/auth\?redirect=%2Fimobiliaria%2Fvendas$/);
     await expect(page.getByRole("heading", { name: "Entre na sua conta" })).toBeVisible();
   });
 
