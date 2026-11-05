@@ -140,10 +140,10 @@ function ObrasPage() {
     enabled: !loading && !!perfil,
   });
 
-  const { data: clientes } = useQuery({
-    queryKey: ["clientes-opt"],
-    staleTime: 1000 * 60 * 10,
-    refetchOnWindowFocus: false,
+  const { data: clientes, isLoading: clientesLoading, error: clientesError, refetch: refetchClientes } = useQuery({
+    queryKey: ["obras-clientes-opt"],
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clientes").select("id,nome").is("deleted_at", null).order("nome");
@@ -394,9 +394,11 @@ function ObrasPage() {
 
       <ObraFormDialog
         open={formOpen}
-        onOpenChange={(o) => { setFormOpen(o); if (!o) setEditTarget(null); }}
+        onOpenChange={(o) => { setFormOpen(o); if (o) void refetchClientes(); if (!o) setEditTarget(null); }}
         target={editTarget}
         clientes={clientes ?? []}
+        clientesLoading={clientesLoading}
+        clientesError={clientesError}
         contratos={contratos ?? []}
         usuarios={usuarios ?? []}
         onSuccess={() => qc.invalidateQueries({ queryKey: ["obras"] })}
@@ -422,12 +424,14 @@ function ObrasPage() {
 }
 
 function ObraFormDialog({
-  open, onOpenChange, target, clientes, contratos, usuarios, onSuccess,
+  open, onOpenChange, target, clientes, clientesLoading, clientesError, contratos, usuarios, onSuccess,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   target: ObraRow | null;
   clientes: ClienteOpt[];
+  clientesLoading: boolean;
+  clientesError: Error | null;
   contratos: ContratoOpt[];
   usuarios: UsuarioOpt[];
   onSuccess: () => void;
@@ -574,10 +578,13 @@ function ObraFormDialog({
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger></FormControl>
                         <SelectContent>
+                          {clientesLoading && <SelectItem value="_loading" disabled>Carregando clientes…</SelectItem>}
+                          {!clientesLoading && clientes.length === 0 && <SelectItem value="_empty" disabled>Nenhum cliente ativo encontrado</SelectItem>}
                           {clientes.map((c) => (<SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
+                      {clientesError && <p className="text-xs text-destructive">Não foi possível carregar clientes: {clientesError.message}</p>}
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="contrato_id" render={({ field }) => (
