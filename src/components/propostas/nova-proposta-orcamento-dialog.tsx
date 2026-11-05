@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase as client } from '@/integrations/supabase/client.custom'
 import {
   configuracaoPropostaComercialPadrao,
+  tiposProposta,
+  type TipoProposta,
 } from '@/lib/proposta-orcamento.functions'
 import { validarSelecaoNovaProposta } from '@/lib/propostas/proposta-criacao'
 
@@ -56,6 +58,7 @@ export function NovaPropostaOrcamentoDialog({
   revisaoInicialId,
 }: NovaPropostaOrcamentoDialogProps) {
   const [obraId, setObraId] = useState('')
+  const [tipoProposta, setTipoProposta] = useState<TipoProposta | ''>('')
   const [orcamentoId, setOrcamentoId] = useState('')
   const [revisaoId, setRevisaoId] = useState('')
   const [salvando, setSalvando] = useState(false)
@@ -63,6 +66,7 @@ export function NovaPropostaOrcamentoDialog({
   useEffect(() => {
     if (!open) {
       setObraId('')
+      setTipoProposta('')
       setOrcamentoId('')
       setRevisaoId('')
     }
@@ -153,6 +157,7 @@ export function NovaPropostaOrcamentoDialog({
   }, [open, origensQuery.data, revisaoInicialId])
 
   const confirmar = async () => {
+    if (!tipoProposta) { toast.error('Selecione o tipo da proposta.'); return }
     const validacao = validarSelecaoNovaProposta({ obraId, orcamentoId, revisaoId, duplicar })
     if (!validacao.ok) {
       toast.error(validacao.mensagem)
@@ -168,6 +173,7 @@ export function NovaPropostaOrcamentoDialog({
       const obraSelecionada = obras.find((obra: any) => obra.id === obraId)
       const configuracaoInicial = {
         ...configuracaoPropostaComercialPadrao,
+        tipoProposta,
         tituloProposta: `Proposta Comercial - ${obraSelecionada?.nome ?? 'Obra'}`,
       }
       const chamada = validacao.duplicar && origemPropostaId
@@ -184,7 +190,19 @@ export function NovaPropostaOrcamentoDialog({
           })
       const { data: propostaCriadaId, error } = await chamada
       if (error) throw error
-      toast.success(validacao.duplicar ? 'Variação comercial criada.' : 'Rascunho comercial aberto a partir do orçamento.')
+      const { data: revisaoCriada, error: erroRevisao } = await supabase
+        .from('proposta_revisoes')
+        .select('configuracao')
+        .eq('proposta_id', propostaCriadaId)
+        .order('numero', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (erroRevisao) throw erroRevisao
+      if ((revisaoCriada?.configuracao?.tipoProposta ?? 'Obra') !== tipoProposta) {
+        toast.info('Uma proposta já existente foi aberta. Confira o tipo no editor e salve caso queira alterá-lo.')
+      } else {
+        toast.success(validacao.duplicar ? 'Variação comercial criada.' : 'Rascunho comercial aberto a partir do orçamento.')
+      }
       onOpenChange(false)
       onCriada(propostaCriadaId)
     } catch (erro) {
@@ -204,6 +222,13 @@ export function NovaPropostaOrcamentoDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium" htmlFor="novo-tipo-proposta">Tipo da proposta *</label>
+            <select id="novo-tipo-proposta" value={tipoProposta} onChange={(e) => setTipoProposta(e.target.value as TipoProposta)} className="h-10 w-full rounded-md border bg-background px-3 text-sm">
+              <option value="">Selecione o tipo</option>
+              {tiposProposta.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+            </select>
+          </div>
           {carregandoOrigens && (
             <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -256,7 +281,7 @@ export function NovaPropostaOrcamentoDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={confirmar} disabled={salvando || !revisaoId}>{salvando ? 'Criando…' : 'Criar e abrir editor'}</Button>
+          <Button onClick={confirmar} disabled={salvando || !revisaoId || !tipoProposta}>{salvando ? 'Criando…' : 'Criar e abrir editor'}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -37,6 +37,8 @@ import {
 } from '@/components/ui/dialog'
 import {
   normalizarConfiguracaoProposta,
+  tiposProposta,
+  type TipoProposta,
   formatarRegistroEmpresa,
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
@@ -365,6 +367,12 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
                 />
               </div>
 
+              <div className="pt-2">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1" htmlFor="tipo-proposta">Tipo da proposta</label>
+                <select id="tipo-proposta" value={config.tipoProposta} disabled={somenteLeitura} onChange={(e) => updateConfig({ tipoProposta: e.target.value as TipoProposta })} className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-900">
+                  {tiposProposta.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+                </select>
+              </div>
               <div className="pt-2">
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                   Título Comercial da Proposta:
