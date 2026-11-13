@@ -698,3 +698,13 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Permissões: a RPC exige usuário autenticado, papel financeiro/diretivo e acesso à obra; engenharia e cliente não recebem leitura financeira. A interface não oferece edição, exclusão, pagamento ou outra mutação.
   - Limitações documentadas: registros legados sem saldo ou vínculo permanecem identificados como qualidade parcial; a receita usa a revisão comercial aceita vinculada por `obras.proposta_id`, com fallback para o valor da proposta e para fontes financeiras quando os legados não possuem a revisão ou o vínculo.
   - Validação até esta etapa: 212/212 testes automatizados aprovados; testes de migration/RLS/rollback, domínio, filtros e apresentação aprovados; builds Vite, SSR e Nitro/Cloudflare concluídos. A validação online depende da aplicação da migration e do deploy desta entrega.
+
+- **Proposta comercial independente da obra (Issue #220, Branch `feat/220-proposta-independente-obra`)**:
+  - Nova proposta manual pode ser criada com cliente, título, classificação, descrição, valor, validade e condições sem exigir obra ou orçamento técnico.
+  - O fluxo legado baseado em obra + orçamento + revisão congelada permanece disponível para compatibilidade.
+  - Classificação persistida em `propostas.tipo_proposta`, incluindo `Reforma`; somente `Obra` cria obra após aceite.
+  - Reforma, Projeto, Serviço, Regularização, Vistoria, Consultoria e Outro são aprovados sem criar obra ou contrato automaticamente.
+  - Conversão manual em obra usa RPC idempotente `converter_proposta_em_obra` e permite complementar nome, endereço e status.
+  - Aprovação usa wrapper idempotente para retries/cliques duplicados; itemização detalhada de propostas manuais permanece como evolução posterior, enquanto o MVP publica pelo valor total informado.
+  - Migration `20261113120000_proposta_independente_obra.sql` torna a origem técnica opcional para propostas manuais, corrige o gatilho legado e adiciona RPCs/RLS.
+  - Validação concluída: 193/193 testes automatizados aprovados e build Vite/Nitro/Cloudflare concluído com sucesso.

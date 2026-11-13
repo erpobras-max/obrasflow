@@ -37,7 +37,7 @@ interface PropostaRow {
   status: StatusProposta
   validade: string | null
   orcamento_revisao_id: string | null
-  proposta_revisoes?: Array<{ numero: number; configuracao: { tipoProposta?: string } | null }>
+  tipo_proposta?: string | null
 }
 interface ClienteOpt { id: string; nome: string }
 const brl = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -72,7 +72,7 @@ function PropostasPage() {
     queryKey: ['propostas'],
     refetchOnMount: 'always',
     queryFn: async () => {
-      const { data, error } = await supabase.from('propostas').select('*,proposta_revisoes(numero,configuracao)').order('created_at', { ascending: false })
+      const { data, error } = await supabase.from('propostas').select('*').order('created_at', { ascending: false })
       if (error) throw error
       return (data ?? []) as PropostaRow[]
     },
@@ -116,7 +116,7 @@ function PropostasPage() {
 
   const decidirMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: 'aceita' | 'rejeitada' | 'expirada' }) => {
-      const { error } = await supabase.rpc('alterar_status_proposta_editor', {
+      const { error } = await supabase.rpc('alterar_status_proposta_editor_idempotente', {
         p_proposta_id: id,
         p_status: status,
       })
@@ -124,6 +124,21 @@ function PropostasPage() {
     },
     onSuccess: async (_, variaveis) => {
       toast.success(variaveis.status === 'aceita' ? 'Proposta aceita.' : variaveis.status === 'rejeitada' ? 'Proposta rejeitada.' : 'Proposta expirada.')
+      await queryClient.invalidateQueries({ queryKey: ['propostas'] })
+    },
+    onError: (erro: Error) => toast.error(erro.message),
+  })
+
+  const converterMutation = useMutation({
+    mutationFn: async ({ id, nome, endereco, status }: { id: string; nome: string; endereco: string; status: string }) => {
+      const { error } = await supabase.rpc('converter_proposta_em_obra', {
+        p_proposta_id: id,
+        p_dados: { nome, endereco, status },
+      })
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      toast.success('Obra criada a partir da proposta.')
       await queryClient.invalidateQueries({ queryKey: ['propostas'] })
     },
     onError: (erro: Error) => toast.error(erro.message),
@@ -139,17 +154,24 @@ function PropostasPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">Propostas</h1><p className="text-sm text-muted-foreground">Propostas comerciais geradas exclusivamente de revisões de orçamento.</p></div>{podeEditar && <Button onClick={() => setNovaOpen(true)}><Plus className="size-4" /> Nova proposta</Button>}</header>
+      <header className="flex flex-wrap items-end justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">Propostas</h1><p className="text-sm text-muted-foreground">Crie a proposta primeiro; a obra só nasce quando uma proposta do tipo Obra é aprovada.</p></div>{podeEditar && <Button onClick={() => setNovaOpen(true)}><Plus className="size-4" /> Nova proposta</Button>}</header>
       <div className="flex flex-wrap gap-2">
         <Select value={statusFilter} onValueChange={(valor) => setStatusFilter(valor as 'all' | StatusProposta)}><SelectTrigger className="w-48"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Todos os status</SelectItem>{statusPropostaEnum.options.map((status) => <SelectItem key={status} value={status}>{STATUS_PROPOSTA_LABEL[status]}</SelectItem>)}</SelectContent></Select>
         <Select value={clienteFilter} onValueChange={setClienteFilter}><SelectTrigger className="w-64"><SelectValue placeholder="Todos os clientes" /></SelectTrigger><SelectContent><SelectItem value="all">Todos os clientes</SelectItem>{(clientesQuery.data ?? []).map((cliente) => <SelectItem key={cliente.id} value={cliente.id}>{cliente.nome}</SelectItem>)}</SelectContent></Select>
       </div>
-      <div className="rounded-md border bg-card overflow-hidden"><Table><TableHeader><TableRow><TableHead>Número</TableHead><TableHead>Título</TableHead><TableHead>Tipo</TableHead><TableHead>Cliente</TableHead><TableHead>Status</TableHead><TableHead>Validade</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader><TableBody>
-        {propostasQuery.isLoading ? <TableRow><TableCell colSpan={8}><Skeleton className="h-9 w-full" /></TableCell></TableRow> : filtradas.length === 0 ? <TableRow><TableCell colSpan={8} className="py-12 text-center text-muted-foreground"><FileText className="size-8 mx-auto mb-2 opacity-50" />Nenhuma proposta encontrada</TableCell></TableRow> : filtradas.map((proposta) => <TableRow key={proposta.id}><TableCell className="font-mono text-xs">{proposta.numero}</TableCell><TableCell><button className="font-medium text-primary hover:underline inline-flex items-center gap-2" onClick={() => abrirEditor(proposta.id)}><FileText className="size-4" />{proposta.titulo}</button></TableCell><TableCell>{[...(proposta.proposta_revisoes ?? [])].sort((a, b) => b.numero - a.numero)[0]?.configuracao?.tipoProposta ?? 'Obra'}</TableCell><TableCell>{clientesMap[proposta.cliente_id] ?? '—'}</TableCell><TableCell><Badge variant="outline" className={cn('text-xs', STATUS_PROPOSTA_BADGE[proposta.status])}>{STATUS_PROPOSTA_LABEL[proposta.status]}</Badge></TableCell><TableCell>{proposta.validade ? new Date(`${proposta.validade}T12:00:00`).toLocaleDateString('pt-BR') : '—'}</TableCell><TableCell className="text-right font-mono">{brl(Number(proposta.valor_total))}</TableCell><TableCell><div className="flex justify-end gap-1">
+      <div className="rounded-md border bg-card overflow-hidden"><Table><TableHeader><TableRow><TableHead>Número</TableHead><TableHead>Título</TableHead><TableHead>Cliente</TableHead><TableHead>Status</TableHead><TableHead>Validade</TableHead><TableHead className="text-right">Valor</TableHead><TableHead className="text-right">Ações</TableHead></TableRow></TableHeader><TableBody>
+        {propostasQuery.isLoading ? <TableRow><TableCell colSpan={7}><Skeleton className="h-9 w-full" /></TableCell></TableRow> : filtradas.length === 0 ? <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground"><FileText className="size-8 mx-auto mb-2 opacity-50" />Nenhuma proposta encontrada</TableCell></TableRow> : filtradas.map((proposta) => <TableRow key={proposta.id}><TableCell className="font-mono text-xs">{proposta.numero}</TableCell><TableCell><button className="font-medium text-primary hover:underline inline-flex items-center gap-2" onClick={() => abrirEditor(proposta.id)}><FileText className="size-4" />{proposta.titulo}</button><div className="mt-1"><Badge variant="secondary" className="text-[10px]">{proposta.tipo_proposta || 'Obra'}</Badge></div></TableCell><TableCell>{clientesMap[proposta.cliente_id] ?? '—'}</TableCell><TableCell><Badge variant="outline" className={cn('text-xs', STATUS_PROPOSTA_BADGE[proposta.status])}>{STATUS_PROPOSTA_LABEL[proposta.status]}</Badge></TableCell><TableCell>{proposta.validade ? new Date(`${proposta.validade}T12:00:00`).toLocaleDateString('pt-BR') : '—'}</TableCell><TableCell className="text-right font-mono">{brl(Number(proposta.valor_total))}</TableCell><TableCell><div className="flex justify-end gap-1">
           <Button size="icon" variant="ghost" title="Abrir editor" onClick={() => abrirEditor(proposta.id)}><Pencil className="size-4" /></Button>
           {podeEditar && proposta.orcamento_revisao_id && <Button size="icon" variant="ghost" title="Criar variação desta proposta" onClick={() => setDuplicarOrigem(proposta)}><Copy className="size-4" /></Button>}
           {proposta.status === 'enviada' && podeEditar && <><Button size="icon" variant="ghost" title="Aceitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'aceita' })}><CheckCircle2 className="size-4 text-emerald-600" /></Button><Button size="icon" variant="ghost" title="Rejeitar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'rejeitada' })}><XCircle className="size-4 text-amber-600" /></Button><Button size="icon" variant="ghost" title="Expirar" onClick={() => decidirMutation.mutate({ id: proposta.id, status: 'expirada' })}><Clock3 className="size-4 text-slate-500" /></Button></>}
-          {proposta.status === 'aceita' && <><Button size="icon" variant="ghost" title="Abrir obras" onClick={() => navigate({ to: '/obras', search: { busca: proposta.numero, clienteId: undefined } })}><HardHat className="size-4" /></Button><Button size="icon" variant="ghost" title="Abrir contratos" onClick={() => navigate({ to: '/comercial/contratos', search: { propostaId: proposta.id, clienteId: proposta.cliente_id } })}><FileSignature className="size-4" /></Button></>}
+          {proposta.status === 'aceita' && proposta.tipo_proposta === 'Obra' && <><Button size="icon" variant="ghost" title="Abrir obras" onClick={() => navigate({ to: '/obras', search: { busca: proposta.numero, clienteId: undefined } })}><HardHat className="size-4" /></Button><Button size="icon" variant="ghost" title="Abrir contratos" onClick={() => navigate({ to: '/comercial/contratos', search: { propostaId: proposta.id, clienteId: proposta.cliente_id } })}><FileSignature className="size-4" /></Button></>}
+          {proposta.status === 'aceita' && proposta.tipo_proposta !== 'Obra' && podeEditar && <Button size="icon" variant="ghost" title="Converter em obra" onClick={() => {
+            const nome = window.prompt('Nome da obra', proposta.titulo)
+            if (!nome?.trim()) return
+            const endereco = window.prompt('Endereço da obra (opcional)', '') ?? ''
+            const status = window.prompt('Status: planejamento, em_andamento, pausada, concluida ou cancelada', 'planejamento') ?? 'planejamento'
+            converterMutation.mutate({ id: proposta.id, nome: nome.trim(), endereco: endereco.trim(), status: status.trim() })
+          }}><HardHat className="size-4" /></Button>}
           {proposta.status === 'rascunho' && podeExcluir && <Button size="icon" variant="ghost" title="Excluir rascunho" onClick={() => setDeleteId(proposta.id)}><Trash2 className="size-4 text-destructive" /></Button>}
         </div></TableCell></TableRow>)}
       </TableBody></Table></div>
