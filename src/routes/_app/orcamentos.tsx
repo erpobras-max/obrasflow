@@ -829,6 +829,21 @@ function OrcamentosPage() {
       if (!batches.length) throw new Error("Não encontrei uma combinação de Código, Descrição, Unidade e Preço nas planilhas do ZIP.");
       const total = batches.reduce((sum, batch) => sum + batch.rows.length, 0);
       let imported = 0;
+      const tables = [...new Set(batches.map((batch) => batch.table))];
+      const competencies = [...new Set(batches.flatMap((batch) => batch.rows.map((row) => row.mes_referencia)))];
+      setImportStatus("Limpando registros inválidos da competência antes da atualização...");
+      for (const table of tables) {
+        for (const competence of competencies) {
+          const { error } = await supabase
+            .from(table)
+            .delete()
+            .eq("fonte", refSource)
+            .eq("uf", automaticUF)
+            .eq("mes_referencia", competence)
+            .eq("codigo", "0");
+          if (error) throw error;
+        }
+      }
       for (const batch of batches) {
         for (let offset = 0; offset < batch.rows.length; offset += 500) {
           const chunk = batch.rows.slice(offset, offset + 500);
