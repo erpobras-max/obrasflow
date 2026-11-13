@@ -52,27 +52,32 @@ const enderecoObra = (obra: any) =>
 const fotografiaDoEditor = (proposta: PropostaEditorData, config: ConfiguracaoPropostaComercial) => {
   if (!proposta.orcamentoRevisaoId) {
     const itens = config.manualItens ?? []
-    const atividades: any[] = []
     const raizes = itens.filter((item) => item.tipo !== 'subitem' || !itens.some((pai) => pai.id === item.parentId))
-    raizes.forEach((pai, indicePai) => {
+    const grupos = new Map<string, typeof itens>()
+    raizes.forEach((pai) => {
+      const etapa = pai.etapa?.trim() || 'Geral'
       const filhos = itens.filter((item) => item.tipo === 'subitem' && item.parentId === pai.id)
-      const ordenados = [pai, ...filhos]
-      ordenados.forEach((item, indiceFilho) => atividades.push({
-      id: item.id,
-      codigo: indiceFilho === 0 ? String(indicePai + 1).padStart(2, '0') : `${String(indicePai + 1).padStart(2, '0')}.${indiceFilho}`,
-      descricao: item.descricao,
-      unidade: item.unidade,
-      quantidade: item.quantidade,
-      precoUnitarioCentavos: item.valorUnitarioCentavos,
-      precoTotalCentavos: Math.round(item.quantidade * item.valorUnitarioCentavos),
-      }))
+      grupos.set(etapa, [...(grupos.get(etapa) ?? []), pai, ...filhos])
     })
-    const totalPrecoCentavos = atividades.reduce((total, item) => total + item.precoTotalCentavos, 0)
+    const etapas = [...grupos.entries()].map(([nome, grupo], indiceEtapa) => {
+      const codigoEtapa = String(indiceEtapa + 1).padStart(2, '0')
+      const atividades = grupo.map((item, indiceItem) => ({
+        id: item.id,
+        codigo: item.tipo === 'subitem' ? `${codigoEtapa}.${indiceItem}` : codigoEtapa,
+        descricao: item.descricao,
+        unidade: item.unidade,
+        quantidade: item.quantidade,
+        precoUnitarioCentavos: item.valorUnitarioCentavos,
+        precoTotalCentavos: Math.round(item.quantidade * item.valorUnitarioCentavos),
+      }))
+      return { id: `manual-etapa-${nome}`, codigo: codigoEtapa, nome, valorTotalCentavos: atividades.reduce((total, item) => total + item.precoTotalCentavos, 0), atividades }
+    })
+    const totalPrecoCentavos = etapas.reduce((total, etapa) => total + etapa.valorTotalCentavos, 0)
     return {
       orcamentoRevisaoId: null,
       totalPrecoCentavos,
       itens,
-      etapas: [{ id: 'itens-comerciais', codigo: '01', nome: 'Itens comerciais', valorTotalCentavos: totalPrecoCentavos, atividades }],
+      etapas,
     }
   }
   return {
@@ -177,6 +182,7 @@ export function usePropostaEditor(propostaId: string | null) {
             id: typeof item.id === 'string' ? item.id : `manual-item-${indice + 1}`,
             tipo: item.tipo === 'subitem' ? 'subitem' : 'item',
             parentId: typeof item.parentId === 'string' ? item.parentId : null,
+            etapa: typeof item.etapa === 'string' && item.etapa.trim() ? item.etapa.trim() : 'Geral',
             descricao: typeof item.descricao === 'string' ? item.descricao : '',
             unidade: typeof item.unidade === 'string' ? item.unidade : 'un',
             quantidade: Number(item.quantidade) > 0 ? Number(item.quantidade) : 1,
