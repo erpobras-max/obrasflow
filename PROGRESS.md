@@ -707,9 +707,15 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Teste de persistência e build de produção aprovados.
 
 - **Subitens comerciais e referências SINAPI na proposta (Issue #223)**:
-  - Propostas manuais permitem adicionar, editar e remover itens; a descrição fica em linha própria para evitar sobreposição.
-  - Itens podem receber subitens vinculados, com numeração hierárquica (01, 01.1) na proposta publicada.
-  - O editor consulta composições e insumos SINAPI da competência mais recente disponível para preencher descrição, unidade e custo.
-  - A sincronização oficial processa o pacote ZIP da Caixa e importa as planilhas válidas em lotes, mantendo o upload manual como fallback.
-  - A fotografia manual é normalizada no servidor e o total da proposta é recalculado a partir dos itens.
-  - Validação: testes focados, `git diff --check` e build Vite/Nitro/Cloudflare concluídos com sucesso.
+  - Itens manuais agora aceitam subitens vinculados a um item pai, com códigos comerciais hierárquicos (01, 01.1) na proposta.
+  - Layout do editor foi reorganizado para impedir sobreposição da descrição e facilitar edição em telas estreitas.
+  - O editor consulta composições e insumos SINAPI da competência mais recente disponível para preencher itens manuais.
+  - A sincronização oficial deixou de inserir exemplos fixos e passou a baixar o pacote ZIP da Caixa, processar planilhas válidas e importar composições/insumos em lotes.
+  - Validação: build Vite/Nitro/Cloudflare concluído; propostas publicadas continuam congeladas e novas revisões usam a competência atual.
+
+- **Importação automática do pacote SINAPI (PR #226)**:
+  - O importador aceita o ZIP oficial da CAIXA e percorre todas as planilhas e abas válidas do pacote.
+  - Código, descrição, unidade, preço/custo, competência e tipo (insumo ou composição) são identificados automaticamente.
+  - Os registros são deduplicados por código e atualizados em lotes de 500, sem exigir a seleção manual mostrada no diálogo anterior.
+  - Arquivos avulsos Excel/CSV continuam disponíveis com mapeamento manual como fallback.
+  - PR #226 integrado à `main` no commit `53c72be`; build de produção aprovado.

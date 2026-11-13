@@ -66,6 +66,81 @@ const parseQuantity = (val: any): number => {
   return isNaN(num) ? 0 : num;
 };
 
+const normalizeCatalogText = (value: unknown) => String(value ?? "")
+  .toLowerCase()
+  .normalize("NFD")
+  .replace(/[\u0300-\u036f]/g, "")
+  .replace(/[^a-z0-9]+/g, " ")
+  .trim();
+
+type CatalogColumnMap = {
+  codigo: number;
+  descricao: number;
+  unidade: number;
+  valor: number;
+  classe: number;
+};
+
+const detectCatalogColumns = (rows: any[][], requestedUF = "SP"): { headerIndex: number; headers: string[]; mapping: CatalogColumnMap } | null => {
+  let best: { headerIndex: number; headers: string[]; mapping: CatalogColumnMap; score: number } | null = null;
+
+  for (let rowIndex = 0; rowIndex < Math.min(rows.length, 60); rowIndex++) {
+    const row = rows[rowIndex];
+    if (!Array.isArray(row) || !row.length) continue;
+    const headers = row.map((cell, index) => String(cell ?? `Coluna ${index + 1}`).trim());
+    const mapping: CatalogColumnMap = { codigo: -1, descricao: -1, unidade: -1, valor: -1, classe: -1 };
+
+    headers.forEach((header, index) => {
+      const text = normalizeCatalogText(header);
+      if (mapping.codigo < 0 && /^(codigo|cod|item|id)( |$)/.test(text)) mapping.codigo = index;
+      if (mapping.descricao < 0 && (text.includes("descricao") || text.includes("descrição") || text.includes("nome do insumo") || text.includes("nome da composicao"))) mapping.descricao = index;
+      if (mapping.unidade < 0 && (text === "un" || text.includes("unidade") || text.includes("unid"))) mapping.unidade = index;
+      if (mapping.valor < 0 && (text.includes("preco mediano") || text.includes("preco") || text.includes("custo total") || text.includes("valor unitario") || text.includes("valor"))) mapping.valor = index;
+      if (mapping.classe < 0 && (text.includes("classe") || text.includes("grupo") || text.includes("tipo"))) mapping.classe = index;
+    });
+
+    // SINAPI's official workbooks are wide: each UF is a price column. For
+    // input sheets the UF is in the same header row; for composition sheets
+    // the UF is one row above repeated "Custo (R$)" columns.
+    if (mapping.valor < 0) {
+      const uf = requestedUF.toUpperCase();
+      const ufRowIndex = rows.slice(Math.max(0, rowIndex - 4), rowIndex + 1).findIndex((candidate) =>
+        Array.isArray(candidate) && candidate.some((cell) => String(cell ?? "").trim().toUpperCase() === uf)
+      );
+      if (ufRowIndex >= 0) {
+        const candidate = rows[Math.max(0, rowIndex - 4) + ufRowIndex] ?? [];
+        const ufColumn = candidate.findIndex((cell) => String(cell ?? "").trim().toUpperCase() === uf);
+        if (ufColumn >= 0) {
+          // On composition sheets the row immediately below the UF contains
+          // the paired cost column at the same index.
+          mapping.valor = ufColumn;
+        }
+      }
+    }
+
+    const score = [mapping.codigo, mapping.descricao, mapping.unidade, mapping.valor].filter((index) => index >= 0).length;
+    if (!best || score > best.score) best = { headerIndex: rowIndex, headers, mapping, score };
+  }
+
+  if (!best || best.score < 4) return null;
+  return { headerIndex: best.headerIndex, headers: best.headers, mapping: best.mapping };
+};
+
+const detectCatalogType = (fileName: string, headers: string[]): "insumos" | "composicoes" => {
+  const name = normalizeCatalogText(fileName);
+  const headerText = headers.map(normalizeCatalogText).join(" ");
+  if (name.includes("compos") || name.includes("sintet") || headerText.includes("custo total")) return "composicoes";
+  return "insumos";
+};
+
+const detectCatalogCompetence = (fileName: string, fallback: string) => {
+  const name = fileName.toUpperCase();
+  const matches = [name.match(/(20\d{2})[_-]?(0[1-9]|1[0-2])(?:\D|$)/), name.match(/(0[1-9]|1[0-2])[_-]?(20\d{2})(?:\D|$)/)];
+  if (matches[0]) return `${matches[0][2]}/${matches[0][1]}`;
+  if (matches[1]) return `${matches[1][1]}/${matches[1][2]}`;
+  return fallback;
+};
+
 function OrcamentosPage() {
   const navigate = useNavigate();
   const { perfil, user } = useAuth();
@@ -89,13 +164,17 @@ function OrcamentosPage() {
   const [refSearch, setRefSearch] = useState("");
   const [refSource, setRefSource] = useState<"sinapi" | "sicro">("sinapi");
   const [refType, setRefType] = useState<"insumos" | "composicoes">("insumos");
-  const [refUF, setRefUF] = useState("SP");
-  const [refMes, setRefMes] = useState("05/2026");
+  const [refUF, setRefUF] = useState("MG");
+  const [refMes, setRefMes] = useState(() => {
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  });
 
   // Dynamic list of reference months from 2024 to 2026
   const availableMonths = useMemo(() => {
     const list = [];
-    for (let year = 2024; year <= 2026; year++) {
+    const currentYear = new Date().getFullYear();
+    for (let year = 2024; year <= currentYear; year++) {
       for (let month = 1; month <= 12; month++) {
         const mStr = String(month).padStart(2, "0");
         list.push(`${mStr}/${year}`);
@@ -321,40 +400,17 @@ function OrcamentosPage() {
   const sincronizarSinapiOficial = async () => {
     setIsSincronizandoSinapi(true);
     try {
-      const pagina = await fetch('https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/referencias-precos-insumos/Paginas/default.aspx', { headers: { accept: 'text/html' } });
-      if (!pagina.ok) throw new Error(`Caixa respondeu ${pagina.status}`);
-      const html = await pagina.text();
-      const links = [...html.matchAll(/href=["']([^"']+\.zip)["']/gi)].map((match) => new URL(match[1], 'https://www.caixa.gov.br')).filter((url) => ['caixa.gov.br', 'www.caixa.gov.br'].includes(url.hostname.toLowerCase()) && /sinapi/i.test(url.href));
-      if (!links.length) throw new Error('Nenhum pacote SINAPI oficial foi encontrado');
-      const pacoteUrl = links.sort((a, b) => b.href.localeCompare(a.href))[0].href;
-      const pacote = await fetch(pacoteUrl);
-      if (!pacote.ok) throw new Error(`Falha ao baixar pacote SINAPI (${pacote.status})`);
-      const zip = await JSZip.loadAsync(await pacote.arrayBuffer());
-      const planilhas = Object.keys(zip.files).filter((nome) => /\.(xlsx|xls)$/i.test(nome) && !nome.includes('__MACOSX'));
-      if (!planilhas.length) throw new Error('O pacote SINAPI não contém planilhas');
-      const composicoes: any[] = []; const insumos: any[] = [];
-      for (const nome of planilhas) {
-        const workbook = XLSX.read(await zip.files[nome].async('arraybuffer'), { type: 'array' });
-        const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }) as any[][];
-        const indiceCabecalho = linhas.findIndex((linha) => String(linha?.join(' ') ?? '').toLowerCase().includes('descri') && String(linha?.join(' ') ?? '').toLowerCase().includes('unid'));
-        if (indiceCabecalho < 0) continue;
-        const cabecalho = linhas[indiceCabecalho].map((celula) => String(celula ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-        const coluna = (termos: string[]) => cabecalho.findIndex((valor) => termos.some((termo) => valor.includes(termo)));
-        const codigo = coluna(['codigo', 'cod']); const descricao = coluna(['descricao']); const unidade = coluna(['unidade', 'unid']); const preco = coluna(['preco', 'custo', 'valor', 'mediano']);
-        if ([codigo, descricao, unidade, preco].some((valor) => valor < 0)) continue;
-        const ehComposicao = /compos|servic|sintet/i.test(nome) || cabecalho.some((valor) => valor.includes('custo total'));
-        for (const linha of linhas.slice(indiceCabecalho + 1)) {
-          const codigoValor = String(linha[codigo] ?? '').trim(); const descricaoValor = String(linha[descricao] ?? '').trim();
-          if (!codigoValor || !descricaoValor) continue;
-          const registro = { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: codigoValor, descricao: descricaoValor, unidade: String(linha[unidade] ?? 'un').trim() || 'un' };
-          const valor = parseCurrencyToCentavos(linha[preco]); if (!valor) continue;
-          if (ehComposicao) composicoes.push({ ...registro, custo_total: valor, tipo_classe: null }); else insumos.push({ ...registro, preco_mediano: valor });
-        }
-      }
-      if (!composicoes.length && !insumos.length) throw new Error('Nenhuma linha válida foi encontrada nas planilhas SINAPI');
-      for (let i = 0; i < composicoes.length; i += 500) { const { error } = await supabase.from('referencia_composicoes').upsert(composicoes.slice(i, i + 500), { onConflict: 'fonte,uf,mes_referencia,codigo' }); if (error) throw error; }
-      for (let i = 0; i < insumos.length; i += 500) { const { error } = await supabase.from('referencia_insumos').upsert(insumos.slice(i, i + 500), { onConflict: 'fonte,uf,mes_referencia,codigo' }); if (error) throw error; }
-      toast.success(`SINAPI completo importado: ${composicoes.length} composições e ${insumos.length} insumos (${refUF} - ${refMes}).`);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão expirada. Entre novamente no sistema.');
+      const resposta = await fetch('/api/sinapi/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uf: refUF, mes: refMes }),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok || !resultado.ok) throw new Error(resultado.erro || `Falha na sincronização (${resposta.status})`);
+      toast.success(`SINAPI completo importado: ${resultado.composicoes} composições e ${resultado.insumos} insumos (${refUF} - ${resultado.competencia}).`);
       qc.invalidateQueries({ queryKey: ["reference-catalog"] });
     } catch (err: any) {
       toast.error('Erro ao sincronizar SINAPI: ' + err.message);
@@ -685,8 +741,123 @@ function OrcamentosPage() {
   };
 
   // Handle SINAPI/SICRO catalog file parsing and batched uploading
+  const importSinapiZipAutomatically = async (file: File) => {
+    setIsImporting(true);
+    setImportProgress(0);
+    setImportStatus("Lendo o pacote SINAPI e procurando planilhas...");
+
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const zipMetadata = parseMetadataFromFileName(file.name);
+      const automaticUF = zipMetadata.detectedUF || refUF;
+      const automaticType = zipMetadata.detectedType;
+      const automaticMes = zipMetadata.detectedMes || refMes;
+      if (zipMetadata.detectedUF) setRefUF(zipMetadata.detectedUF);
+      if (zipMetadata.detectedMes) setRefMes(zipMetadata.detectedMes);
+      const spreadsheetNames = Object.keys(zip.files).filter((name) => {
+        const lower = name.toLowerCase();
+        return !zip.files[name].dir && !lower.includes("__macosx") &&
+          (lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".xlsm") || lower.endsWith(".csv"));
+      });
+
+      if (!spreadsheetNames.length) throw new Error("Nenhuma planilha (.xlsx, .xls ou .csv) foi encontrada no ZIP.");
+
+      const batches: Array<{ table: string; rows: any[]; type: "insumos" | "composicoes"; fileName: string }> = [];
+      let skipped = 0;
+      for (const [index, name] of spreadsheetNames.entries()) {
+        setImportStatus(`Analisando ${index + 1} de ${spreadsheetNames.length}: ${name.split("/").pop()}`);
+        const fileKey = normalizeCatalogText(name);
+        if (fileKey.includes("mao de obra") || fileKey.includes("familias") || fileKey.includes("manutenc")) { skipped++; continue; }
+        const bytes = await zip.files[name].async("uint8array");
+        const workbook = XLSX.read(bytes, { type: "array" });
+        const compositionCodeByDescription = new Map<string, string>();
+        const analyticSheet = workbook.Sheets[workbook.SheetNames.find((sheet) => normalizeCatalogText(sheet).startsWith("analitico")) ?? ""];
+        if (analyticSheet) {
+          const analyticRows = XLSX.utils.sheet_to_json(analyticSheet, { header: 1, defval: "" }) as any[][];
+          const analyticHeader = analyticRows.findIndex((row) => Array.isArray(row) && row.some((cell) => normalizeCatalogText(cell).includes("codigo da composicao")));
+          if (analyticHeader >= 0) {
+            for (const row of analyticRows.slice(analyticHeader + 1)) {
+              const code = String(row[1] ?? "").trim();
+              const itemType = String(row[2] ?? "").trim();
+              const description = String(row[4] ?? "").trim();
+              if (code && code !== "0" && !itemType && description) compositionCodeByDescription.set(normalizeCatalogText(description), code);
+            }
+          }
+        }
+        for (const sheetName of workbook.SheetNames) {
+          const sheetKey = normalizeCatalogText(sheetName);
+          // These are auxiliary reports without a single catalog price. The
+          // canonical ISD/ICD/ISE and CSD/CCD/CSE sheets are handled below.
+          if (["menu", "busca", "coeficientes", "manutencoes", "analitico com custo"].includes(sheetKey)) { skipped++; continue; }
+          const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" }) as any[][];
+          const detected = detectCatalogColumns(rows, automaticUF);
+          if (!detected) { skipped++; continue; }
+
+          const innerName = normalizeCatalogText(`${name} ${sheetName}`);
+          const innerHasExplicitType = innerName.includes("insumo") || innerName.includes("compos") || innerName.includes("sintet");
+          const officialSheetType = /^(isd|icd|ise)$/.test(sheetKey)
+            ? "insumos"
+            : /^(csd|ccd|cse)$/.test(sheetKey)
+              ? "composicoes"
+              : null;
+          if (officialSheetType && !["isd", "csd"].includes(sheetKey)) { skipped++; continue; }
+          const type = officialSheetType ?? (innerHasExplicitType
+            ? detectCatalogType(`${name} ${sheetName}`, detected.headers)
+            : (automaticType ?? detectCatalogType(`${file.name} ${name} ${sheetName}`, detected.headers)));
+          const competence = detectCatalogCompetence(`${file.name} ${name} ${sheetName}`, automaticMes);
+          const source = refSource;
+          const uf = automaticUF;
+          const table = type === "composicoes" ? "referencia_composicoes" : "referencia_insumos";
+          const seen = new Set<string>();
+          const payload = rows.slice(detected.headerIndex + 1).flatMap((row) => {
+            const descricao = String(row[detected.mapping.descricao] ?? "").trim();
+            const rawCode = String(row[detected.mapping.codigo] ?? "").trim();
+            const code = type === "composicoes" && (rawCode === "0" || !rawCode)
+              ? compositionCodeByDescription.get(normalizeCatalogText(descricao)) ?? ""
+              : rawCode;
+            if (!code || !descricao || seen.has(code)) return [];
+            seen.add(code);
+            const base = { fonte: source, uf, mes_referencia: competence, codigo: code, descricao, unidade: String(row[detected.mapping.unidade] ?? "").trim() || "un" };
+            return [type === "composicoes"
+              ? { ...base, custo_total: parseCurrencyToCentavos(row[detected.mapping.valor]), tipo_classe: detected.mapping.classe >= 0 ? String(row[detected.mapping.classe] ?? "").trim() || null : null }
+              : { ...base, preco_mediano: parseCurrencyToCentavos(row[detected.mapping.valor]) }];
+          });
+          if (payload.length) batches.push({ table, rows: payload, type, fileName: `${name} / ${sheetName}` });
+        }
+      }
+
+      if (!batches.length) throw new Error("Não encontrei uma combinação de Código, Descrição, Unidade e Preço nas planilhas do ZIP.");
+      const total = batches.reduce((sum, batch) => sum + batch.rows.length, 0);
+      let imported = 0;
+      for (const batch of batches) {
+        for (let offset = 0; offset < batch.rows.length; offset += 500) {
+          const chunk = batch.rows.slice(offset, offset + 500);
+          const { error } = await supabase.from(batch.table).upsert(chunk, { onConflict: "fonte,uf,mes_referencia,codigo" });
+          if (error) throw error;
+          imported += chunk.length;
+          setImportProgress(Math.round((imported / total) * 100));
+          setImportStatus(`Atualizando ${batch.type === "insumos" ? "insumos" : "composições"}: ${imported} de ${total}`);
+        }
+      }
+
+      const types = [...new Set(batches.map((batch) => batch.type))].map((type) => type === "insumos" ? "insumos" : "composições").join(" e ");
+      toast.success(`SINAPI atualizado automaticamente: ${imported.toLocaleString("pt-BR")} registros (${types}).${skipped ? ` ${skipped} planilha(s) ignorada(s).` : ""}`);
+      qc.invalidateQueries({ queryKey: ["reference-catalog"] });
+      setImportCatalogOpen(false);
+      setParsedRows([]);
+    } finally {
+      setIsImporting(false);
+      setImportProgress(0);
+      setImportStatus("");
+    }
+  };
+
   const handleCatalogFileChange = async (file: File) => {
     try {
+      if (file.name.toLowerCase().endsWith(".zip")) {
+        await importSinapiZipAutomatically(file);
+        return;
+      }
       const { detectedUF, detectedMes, detectedType } = parseMetadataFromFileName(file.name);
       
       let typeToUse = refType;
@@ -707,54 +878,7 @@ function OrcamentosPage() {
       let arrayBuffer: ArrayBuffer;
       let fileName = file.name;
 
-      if (file.name.toLowerCase().endsWith(".zip")) {
-        toast.info("Processando arquivo ZIP do SINAPI...");
-        const zip = await JSZip.loadAsync(file);
-        
-        // Try to find actual price/synthetic spreadsheets first (exclude representativeness/coefficients/analytics)
-        let excelFiles = Object.keys(zip.files).filter((name) => {
-          const lower = name.toLowerCase();
-          const isExcel = lower.endsWith(".xlsx") || lower.endsWith(".xls");
-          const isMac = lower.includes("__macosx");
-          const isExcludeKeyword = lower.includes("representat") || 
-                                   lower.includes("coef") || 
-                                   lower.includes("analitico") ||
-                                   lower.includes("grupo") ||
-                                   lower.includes("classe");
-          return isExcel && !isMac && !isExcludeKeyword;
-        });
-
-        // Fall back to any excel file if no price-specific files found
-        if (excelFiles.length === 0) {
-          excelFiles = Object.keys(zip.files).filter(
-            (name) => (name.toLowerCase().endsWith(".xlsx") || name.toLowerCase().endsWith(".xls")) && !name.includes("__MACOSX")
-          );
-        }
-
-        if (excelFiles.length === 0) {
-          toast.error("Nenhuma planilha Excel encontrada dentro do arquivo ZIP.");
-          return;
-        }
-
-        // Try to find the file that matches the typeToUse (insumos vs composicoes)
-        let targetFile = excelFiles[0];
-        const isCompo = typeToUse === "composicoes";
-        const keyword = isCompo ? "composi" : "insumo";
-
-        const matchingFile = excelFiles.find((name) =>
-          name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").includes(keyword)
-        );
-
-        if (matchingFile) {
-          targetFile = matchingFile;
-        }
-
-        toast.info(`Extraindo planilha: ${targetFile.split("/").pop()}`);
-        arrayBuffer = await zip.files[targetFile].async("arraybuffer");
-        fileName = targetFile;
-      } else {
-        arrayBuffer = await file.arrayBuffer();
-      }
+      arrayBuffer = await file.arrayBuffer();
 
       const data = new Uint8Array(arrayBuffer);
       const workbook = XLSX.read(data, { type: "array" });
@@ -1734,7 +1858,7 @@ function OrcamentosPage() {
           <DialogHeader>
             <DialogTitle>Importar Catálogo Público (SINAPI/SICRO)</DialogTitle>
             <DialogDescription>
-              Insira arquivos oficiais de insumos ou composições. Os itens serão processados em lotes progressivos para atualização do banco.
+              Envie o ZIP oficial da CAIXA: o sistema identifica automaticamente as planilhas, cabeçalhos, competência, insumos e composições e atualiza a base. O mapeamento abaixo fica disponível apenas para arquivos avulsos.
             </DialogDescription>
           </DialogHeader>
 
@@ -1824,7 +1948,7 @@ function OrcamentosPage() {
                     Clique para selecionar planilha ou arquivo ZIP do SINAPI
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Suporta planilhas Excel (.xlsx, .xls), CSV ou pacotes compactados ZIP do SINAPI
+                    Recomendado: ZIP completo da competência SINAPI. Também aceita Excel (.xlsx, .xls), CSV ou ZIP de planilhas.
                   </div>
                 </label>
               </div>
