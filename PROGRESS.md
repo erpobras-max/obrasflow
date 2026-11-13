@@ -713,3 +713,10 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - A sincronização oficial processa o pacote ZIP da Caixa e importa as planilhas válidas em lotes, mantendo o upload manual como fallback.
   - A fotografia manual é normalizada no servidor e o total da proposta é recalculado a partir dos itens.
   - Validação: testes focados, `git diff --check` e build Vite/Nitro/Cloudflare concluídos com sucesso.
+
+- **Importação automática do pacote SINAPI (PR #226)**:
+  - O importador aceita o ZIP oficial da CAIXA e percorre todas as planilhas e abas válidas do pacote.
+  - Código, descrição, unidade, preço/custo, competência e tipo (insumo ou composição) são identificados automaticamente.
+  - Os registros são deduplicados por código e atualizados em lotes de 500, sem exigir a seleção manual mostrada no diálogo anterior.
+  - Arquivos avulsos Excel/CSV continuam disponíveis com mapeamento manual como fallback.
+  - PR #226 integrado à `main` no commit `53c72be`; build de produção aprovado.
