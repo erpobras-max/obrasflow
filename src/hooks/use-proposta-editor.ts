@@ -52,14 +52,21 @@ const enderecoObra = (obra: any) =>
 const fotografiaDoEditor = (proposta: PropostaEditorData, config: ConfiguracaoPropostaComercial) => {
   if (!proposta.orcamentoRevisaoId) {
     const itens = config.manualItens ?? []
-    const atividades = itens.map((item) => ({
+    const atividades: any[] = []
+    const raizes = itens.filter((item) => item.tipo !== 'subitem' || !itens.some((pai) => pai.id === item.parentId))
+    raizes.forEach((pai, indicePai) => {
+      const filhos = itens.filter((item) => item.tipo === 'subitem' && item.parentId === pai.id)
+      const ordenados = [pai, ...filhos]
+      ordenados.forEach((item, indiceFilho) => atividades.push({
       id: item.id,
+      codigo: indiceFilho === 0 ? String(indicePai + 1).padStart(2, '0') : `${String(indicePai + 1).padStart(2, '0')}.${indiceFilho}`,
       descricao: item.descricao,
       unidade: item.unidade,
       quantidade: item.quantidade,
       precoUnitarioCentavos: item.valorUnitarioCentavos,
       precoTotalCentavos: Math.round(item.quantidade * item.valorUnitarioCentavos),
-    }))
+      }))
+    })
     const totalPrecoCentavos = atividades.reduce((total, item) => total + item.precoTotalCentavos, 0)
     return {
       orcamentoRevisaoId: null,
@@ -168,6 +175,8 @@ export function usePropostaEditor(propostaId: string | null) {
         if (!orcamentoRevisaoId && configuracaoAtiva.manualItens.length === 0 && Array.isArray(ativa.fotografia.itens)) {
           configuracaoAtiva.manualItens = ativa.fotografia.itens.map((item: any, indice: number) => ({
             id: typeof item.id === 'string' ? item.id : `manual-item-${indice + 1}`,
+            tipo: item.tipo === 'subitem' ? 'subitem' : 'item',
+            parentId: typeof item.parentId === 'string' ? item.parentId : null,
             descricao: typeof item.descricao === 'string' ? item.descricao : '',
             unidade: typeof item.unidade === 'string' ? item.unidade : 'un',
             quantidade: Number(item.quantidade) > 0 ? Number(item.quantidade) : 1,

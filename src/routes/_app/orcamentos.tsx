@@ -321,42 +321,40 @@ function OrcamentosPage() {
   const sincronizarSinapiOficial = async () => {
     setIsSincronizandoSinapi(true);
     try {
-      const itensComposicoes = [
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '98524', descricao: 'Limpeza manual de vegetação em terreno com roçada e capina', unidade: 'm²', custo_total: 375, tipo_classe: 'SERVIÇOS PRELIMINARES' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '103328', descricao: 'Alvenaria de vedação com blocos cerâmicos furados 9x19x19 cm, argamassa 1:2:8', unidade: 'm²', custo_total: 8464, tipo_classe: 'PAREDES E PAINÉIS' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '94964', descricao: 'Concreto FCK 25MPA preparado com betoneira 400L para fundações e pilares', unidade: 'm³', custo_total: 42050, tipo_classe: 'ESTRUTURAS / FUNDAÇÕES' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '92440', descricao: 'Montagem e desmontagem de formas de madeira compensada resinada 12mm', unidade: 'm²', custo_total: 8930, tipo_classe: 'ESTRUTURAS' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '89995', descricao: 'Armação de pilar ou viga de estrutura convencional aço CA-50 10mm', unidade: 'kg', custo_total: 1480, tipo_classe: 'ESTRUTURAS' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88489', descricao: 'Pintura látex acrílica em paredes internas, duas demãos com lixamento', unidade: 'm²', custo_total: 2210, tipo_classe: 'PINTURAS' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '93358', descricao: 'Revestimento cerâmico para pisos assentado com argamassa AC-I e rejunte', unidade: 'm²', custo_total: 6890, tipo_classe: 'REVESTIMENTOS' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '90114', descricao: 'Telhamento com telha cerâmica tipo colonial ou portuguesa', unidade: 'm²', custo_total: 6240, tipo_classe: 'COBERTURA' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '90442', descricao: 'Ponto de tomada 2P+T 10A ou interruptor simples com placa e caixa', unidade: 'un', custo_total: 5420, tipo_classe: 'INSTALAÇÕES ELÉTRICAS' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '89356', descricao: 'Tubo de PVC rígido soldável marrom DN 25mm para água fria com conexões', unidade: 'm', custo_total: 1870, tipo_classe: 'INSTALAÇÕES HIDRÁULICAS' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '96527', descricao: 'Escavação manual de vala para fundação contínua ou sapata até 1,5m', unidade: 'm³', custo_total: 4800, tipo_classe: 'MOVIMENTO DE TERRA' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '98504', descricao: 'Plantio de grama em placas tipo esmeralda incluindo preparo de solo', unidade: 'm²', custo_total: 1650, tipo_classe: 'PAISAGISMO' },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '101964', descricao: 'Quadro de distribuição de energia embutido para 12 a 18 disjuntores', unidade: 'un', custo_total: 18500, tipo_classe: 'INSTALAÇÕES ELÉTRICAS' },
-      ];
-
-      const itensInsumos = [
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88309', descricao: 'Pedreiro com encargos complementares', unidade: 'h', preco_mediano: 2440 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88316', descricao: 'Servente com encargos complementares', unidade: 'h', preco_mediano: 1955 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88262', descricao: 'Carpinteiro de formas com encargos complementares', unidade: 'h', preco_mediano: 2440 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88247', descricao: 'Eletricista com encargos complementares', unidade: 'h', preco_mediano: 2440 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88267', descricao: 'Encanador com encargos complementares', unidade: 'h', preco_mediano: 2440 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '88311', descricao: 'Pintor com encargos complementares', unidade: 'h', preco_mediano: 2440 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '07271', descricao: 'Bloco cerâmico furado 9x19x19 cm', unidade: 'mil', preco_mediano: 86966 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00001379', descricao: 'Cimento Portland CP II-E-32', unidade: 'kg', preco_mediano: 72 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00000370', descricao: 'Areia média lavada', unidade: 'm³', preco_mediano: 9800 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00004721', descricao: 'Pedra britada n. 1 (9,5 a 19 mm)', unidade: 'm³', preco_mediano: 8500 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00000034', descricao: 'Aço CA-50 10,0 mm', unidade: 'kg', preco_mediano: 520 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00007356', descricao: 'Tinta látex acrílica acabamento fosco', unidade: 'l', preco_mediano: 1800 },
-        { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: '00001213', descricao: 'Piso cerâmico esmaltado PEI-4 45x45 cm', unidade: 'm²', preco_mediano: 3200 },
-      ];
-
-      await supabase.from('referencia_composicoes').upsert(itensComposicoes, { onConflict: 'fonte,uf,mes_referencia,codigo' });
-      await supabase.from('referencia_insumos').upsert(itensInsumos, { onConflict: 'fonte,uf,mes_referencia,codigo' });
-
-      toast.success(`Base SINAPI Oficial (${refUF} - ${refMes}) sincronizada com sucesso!`);
+      const pagina = await fetch('https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/referencias-precos-insumos/Paginas/default.aspx', { headers: { accept: 'text/html' } });
+      if (!pagina.ok) throw new Error(`Caixa respondeu ${pagina.status}`);
+      const html = await pagina.text();
+      const links = [...html.matchAll(/href=["']([^"']+\.zip)["']/gi)].map((match) => new URL(match[1], 'https://www.caixa.gov.br')).filter((url) => ['caixa.gov.br', 'www.caixa.gov.br'].includes(url.hostname.toLowerCase()) && /sinapi/i.test(url.href));
+      if (!links.length) throw new Error('Nenhum pacote SINAPI oficial foi encontrado');
+      const pacoteUrl = links.sort((a, b) => b.href.localeCompare(a.href))[0].href;
+      const pacote = await fetch(pacoteUrl);
+      if (!pacote.ok) throw new Error(`Falha ao baixar pacote SINAPI (${pacote.status})`);
+      const zip = await JSZip.loadAsync(await pacote.arrayBuffer());
+      const planilhas = Object.keys(zip.files).filter((nome) => /\.(xlsx|xls)$/i.test(nome) && !nome.includes('__MACOSX'));
+      if (!planilhas.length) throw new Error('O pacote SINAPI não contém planilhas');
+      const composicoes: any[] = []; const insumos: any[] = [];
+      for (const nome of planilhas) {
+        const workbook = XLSX.read(await zip.files[nome].async('arraybuffer'), { type: 'array' });
+        const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }) as any[][];
+        const indiceCabecalho = linhas.findIndex((linha) => String(linha?.join(' ') ?? '').toLowerCase().includes('descri') && String(linha?.join(' ') ?? '').toLowerCase().includes('unid'));
+        if (indiceCabecalho < 0) continue;
+        const cabecalho = linhas[indiceCabecalho].map((celula) => String(celula ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+        const coluna = (termos: string[]) => cabecalho.findIndex((valor) => termos.some((termo) => valor.includes(termo)));
+        const codigo = coluna(['codigo', 'cod']); const descricao = coluna(['descricao']); const unidade = coluna(['unidade', 'unid']); const preco = coluna(['preco', 'custo', 'valor', 'mediano']);
+        if ([codigo, descricao, unidade, preco].some((valor) => valor < 0)) continue;
+        const ehComposicao = /compos|servic|sintet/i.test(nome) || cabecalho.some((valor) => valor.includes('custo total'));
+        for (const linha of linhas.slice(indiceCabecalho + 1)) {
+          const codigoValor = String(linha[codigo] ?? '').trim(); const descricaoValor = String(linha[descricao] ?? '').trim();
+          if (!codigoValor || !descricaoValor) continue;
+          const registro = { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: codigoValor, descricao: descricaoValor, unidade: String(linha[unidade] ?? 'un').trim() || 'un' };
+          const valor = parseCurrencyToCentavos(linha[preco]); if (!valor) continue;
+          if (ehComposicao) composicoes.push({ ...registro, custo_total: valor, tipo_classe: null }); else insumos.push({ ...registro, preco_mediano: valor });
+        }
+      }
+      if (!composicoes.length && !insumos.length) throw new Error('Nenhuma linha válida foi encontrada nas planilhas SINAPI');
+      for (let i = 0; i < composicoes.length; i += 500) { const { error } = await supabase.from('referencia_composicoes').upsert(composicoes.slice(i, i + 500), { onConflict: 'fonte,uf,mes_referencia,codigo' }); if (error) throw error; }
+      for (let i = 0; i < insumos.length; i += 500) { const { error } = await supabase.from('referencia_insumos').upsert(insumos.slice(i, i + 500), { onConflict: 'fonte,uf,mes_referencia,codigo' }); if (error) throw error; }
+      toast.success(`SINAPI completo importado: ${composicoes.length} composições e ${insumos.length} insumos (${refUF} - ${refMes}).`);
       qc.invalidateQueries({ queryKey: ["reference-catalog"] });
     } catch (err: any) {
       toast.error('Erro ao sincronizar SINAPI: ' + err.message);
