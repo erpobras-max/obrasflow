@@ -49,11 +49,31 @@ const enderecoObra = (obra: any) =>
     .filter(Boolean)
     .join(', ') || obra?.endereco || ''
 
-const fotografiaDoEditor = (proposta: PropostaEditorData) => ({
-  orcamentoRevisaoId: proposta.orcamentoRevisaoId,
-  totalPrecoCentavos: proposta.etapas.reduce((total, etapa) => total + etapa.valorTotalCentavos, 0),
-  etapas: proposta.etapas,
-})
+const fotografiaDoEditor = (proposta: PropostaEditorData, config: ConfiguracaoPropostaComercial) => {
+  if (!proposta.orcamentoRevisaoId) {
+    const itens = config.manualItens ?? []
+    const atividades = itens.map((item) => ({
+      id: item.id,
+      descricao: item.descricao,
+      unidade: item.unidade,
+      quantidade: item.quantidade,
+      precoUnitarioCentavos: item.valorUnitarioCentavos,
+      precoTotalCentavos: Math.round(item.quantidade * item.valorUnitarioCentavos),
+    }))
+    const totalPrecoCentavos = atividades.reduce((total, item) => total + item.precoTotalCentavos, 0)
+    return {
+      orcamentoRevisaoId: null,
+      totalPrecoCentavos,
+      itens,
+      etapas: [{ id: 'itens-comerciais', codigo: '01', nome: 'Itens comerciais', valorTotalCentavos: totalPrecoCentavos, atividades }],
+    }
+  }
+  return {
+    orcamentoRevisaoId: proposta.orcamentoRevisaoId,
+    totalPrecoCentavos: proposta.etapas.reduce((total, etapa) => total + etapa.valorTotalCentavos, 0),
+    etapas: proposta.etapas,
+  }
+}
 
 async function consultarOuFalhar(query: PromiseLike<any>) {
   const { data, error } = await query
@@ -144,12 +164,22 @@ export function usePropostaEditor(propostaId: string | null) {
           revisaoNumero: ativa.numero,
         }
         const editorData = adaptarFotografiaParaEditor(ativa.fotografia, contexto)
+        const configuracaoAtiva = normalizarConfiguracaoProposta(ativa.configuracao)
+        if (!orcamentoRevisaoId && configuracaoAtiva.manualItens.length === 0 && Array.isArray(ativa.fotografia.itens)) {
+          configuracaoAtiva.manualItens = ativa.fotografia.itens.map((item: any, indice: number) => ({
+            id: typeof item.id === 'string' ? item.id : `manual-item-${indice + 1}`,
+            descricao: typeof item.descricao === 'string' ? item.descricao : '',
+            unidade: typeof item.unidade === 'string' ? item.unidade : 'un',
+            quantidade: Number(item.quantidade) > 0 ? Number(item.quantidade) : 1,
+            valorUnitarioCentavos: Math.round(Number(item.valorUnitarioCentavos ?? item.valor_unitario ?? 0) * (item.valorUnitarioCentavos == null ? 100 : 1)),
+          }))
+        }
         return {
           estado: { tipo: 'pronta', proposta: editorData },
           revisoesPersistidas: revisoes,
           revisoesOrcamento: [],
           contexto,
-          configuracao: normalizarConfiguracaoProposta(ativa.configuracao),
+          configuracao: configuracaoAtiva,
           fotografia: ativa.fotografia,
           revisaoSelecionadaId: ativa.id,
           somenteLeitura: false,
@@ -252,7 +282,7 @@ export function usePropostaEditor(propostaId: string | null) {
           }),
         )
       }
-      const fotografia = fotografiaDoEditor(proposta)
+      const fotografia = fotografiaDoEditor(proposta, config)
       if (publicar && consulta.data.revisoesPersistidas.length === 0) {
         await consultarOuFalhar(
           supabase.rpc('salvar_rascunho_proposta', {

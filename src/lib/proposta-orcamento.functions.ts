@@ -47,6 +47,15 @@ export interface ConfiguracaoPropostaComercial extends ConfiguracaoPropostaBase 
   etapasOcultas: string[]
   atividadesOcultas: string[]
   observacoesEtapa: Record<string, string>
+  manualItens: ItemManualProposta[]
+}
+
+export interface ItemManualProposta {
+  id: string
+  descricao: string
+  unidade: string
+  quantidade: number
+  valorUnitarioCentavos: number
 }
 
 export type TipoProposta = 'Obra' | 'Reforma' | 'Projeto' | 'Serviço' | 'Regularização' | 'Vistoria' | 'Consultoria' | 'Outro'
@@ -83,6 +92,7 @@ export const configuracaoPropostaComercialPadrao: ConfiguracaoPropostaComercial 
   etapasOcultas: [],
   atividadesOcultas: [],
   observacoesEtapa: {},
+  manualItens: [],
 })
 
 const registroTexto = (valor: unknown): Record<string, string> => {
@@ -140,6 +150,18 @@ export function normalizarConfiguracaoProposta(
     etapasOcultas: lista('etapasOcultas'),
     atividadesOcultas: lista('atividadesOcultas'),
     observacoesEtapa: registroTexto(origem.observacoesEtapa),
+    manualItens: Array.isArray(origem.manualItens)
+      ? origem.manualItens.map((item, indice) => {
+          const registro = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+          return {
+            id: typeof registro.id === 'string' ? registro.id : `item-manual-${indice + 1}`,
+            descricao: typeof registro.descricao === 'string' ? registro.descricao : '',
+            unidade: typeof registro.unidade === 'string' ? registro.unidade : 'un',
+            quantidade: Number.isFinite(Number(registro.quantidade)) ? Math.max(0, Number(registro.quantidade)) : 1,
+            valorUnitarioCentavos: Number.isFinite(Number(registro.valorUnitarioCentavos)) ? Math.max(0, Math.round(Number(registro.valorUnitarioCentavos))) : 0,
+          }
+        })
+      : [],
   }
 }
 
