@@ -321,40 +321,17 @@ function OrcamentosPage() {
   const sincronizarSinapiOficial = async () => {
     setIsSincronizandoSinapi(true);
     try {
-      const pagina = await fetch('https://www.caixa.gov.br/poder-publico/modernizacao-gestao/sinapi/referencias-precos-insumos/Paginas/default.aspx', { headers: { accept: 'text/html' } });
-      if (!pagina.ok) throw new Error(`Caixa respondeu ${pagina.status}`);
-      const html = await pagina.text();
-      const links = [...html.matchAll(/href=["']([^"']+\.zip)["']/gi)].map((match) => new URL(match[1], 'https://www.caixa.gov.br')).filter((url) => ['caixa.gov.br', 'www.caixa.gov.br'].includes(url.hostname.toLowerCase()) && /sinapi/i.test(url.href));
-      if (!links.length) throw new Error('Nenhum pacote SINAPI oficial foi encontrado');
-      const pacoteUrl = links.sort((a, b) => b.href.localeCompare(a.href))[0].href;
-      const pacote = await fetch(pacoteUrl);
-      if (!pacote.ok) throw new Error(`Falha ao baixar pacote SINAPI (${pacote.status})`);
-      const zip = await JSZip.loadAsync(await pacote.arrayBuffer());
-      const planilhas = Object.keys(zip.files).filter((nome) => /\.(xlsx|xls)$/i.test(nome) && !nome.includes('__MACOSX'));
-      if (!planilhas.length) throw new Error('O pacote SINAPI não contém planilhas');
-      const composicoes: any[] = []; const insumos: any[] = [];
-      for (const nome of planilhas) {
-        const workbook = XLSX.read(await zip.files[nome].async('arraybuffer'), { type: 'array' });
-        const linhas = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 }) as any[][];
-        const indiceCabecalho = linhas.findIndex((linha) => String(linha?.join(' ') ?? '').toLowerCase().includes('descri') && String(linha?.join(' ') ?? '').toLowerCase().includes('unid'));
-        if (indiceCabecalho < 0) continue;
-        const cabecalho = linhas[indiceCabecalho].map((celula) => String(celula ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
-        const coluna = (termos: string[]) => cabecalho.findIndex((valor) => termos.some((termo) => valor.includes(termo)));
-        const codigo = coluna(['codigo', 'cod']); const descricao = coluna(['descricao']); const unidade = coluna(['unidade', 'unid']); const preco = coluna(['preco', 'custo', 'valor', 'mediano']);
-        if ([codigo, descricao, unidade, preco].some((valor) => valor < 0)) continue;
-        const ehComposicao = /compos|servic|sintet/i.test(nome) || cabecalho.some((valor) => valor.includes('custo total'));
-        for (const linha of linhas.slice(indiceCabecalho + 1)) {
-          const codigoValor = String(linha[codigo] ?? '').trim(); const descricaoValor = String(linha[descricao] ?? '').trim();
-          if (!codigoValor || !descricaoValor) continue;
-          const registro = { fonte: 'sinapi', uf: refUF, mes_referencia: refMes, codigo: codigoValor, descricao: descricaoValor, unidade: String(linha[unidade] ?? 'un').trim() || 'un' };
-          const valor = parseCurrencyToCentavos(linha[preco]); if (!valor) continue;
-          if (ehComposicao) composicoes.push({ ...registro, custo_total: valor, tipo_classe: null }); else insumos.push({ ...registro, preco_mediano: valor });
-        }
-      }
-      if (!composicoes.length && !insumos.length) throw new Error('Nenhuma linha válida foi encontrada nas planilhas SINAPI');
-      for (let i = 0; i < composicoes.length; i += 500) { const { error } = await supabase.from('referencia_composicoes').upsert(composicoes.slice(i, i + 500), { onConflict: 'fonte,uf,mes_referencia,codigo' }); if (error) throw error; }
-      for (let i = 0; i < insumos.length; i += 500) { const { error } = await supabase.from('referencia_insumos').upsert(insumos.slice(i, i + 500), { onConflict: 'fonte,uf,mes_referencia,codigo' }); if (error) throw error; }
-      toast.success(`SINAPI completo importado: ${composicoes.length} composições e ${insumos.length} insumos (${refUF} - ${refMes}).`);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão expirada. Entre novamente no sistema.');
+      const resposta = await fetch('/api/sinapi/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uf: refUF, mes: refMes }),
+      });
+      const resultado = await resposta.json().catch(() => ({}));
+      if (!resposta.ok || !resultado.ok) throw new Error(resultado.erro || `Falha na sincronização (${resposta.status})`);
+      toast.success(`SINAPI completo importado: ${resultado.composicoes} composições e ${resultado.insumos} insumos (${refUF} - ${resultado.competencia}).`);
       qc.invalidateQueries({ queryKey: ["reference-catalog"] });
     } catch (err: any) {
       toast.error('Erro ao sincronizar SINAPI: ' + err.message);
