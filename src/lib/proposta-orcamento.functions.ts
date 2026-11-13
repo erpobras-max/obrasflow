@@ -23,6 +23,7 @@ export const configuracaoPropostaPadrao: ConfiguracaoPropostaBase = Object.freez
 export type ConfiguracaoProposta = ConfiguracaoPropostaBase
 
 export interface ConfiguracaoPropostaComercial extends ConfiguracaoPropostaBase {
+  tipoProposta: TipoProposta
   mostrarCapa: boolean
   mostrarLogo: boolean
   mostrarDadosEmpresa: boolean
@@ -48,8 +49,13 @@ export interface ConfiguracaoPropostaComercial extends ConfiguracaoPropostaBase 
   observacoesEtapa: Record<string, string>
 }
 
+export type TipoProposta = 'Obra' | 'Reforma' | 'Projeto' | 'Serviço' | 'Regularização' | 'Vistoria' | 'Consultoria' | 'Outro'
+
+export const tiposProposta: TipoProposta[] = ['Obra', 'Reforma', 'Projeto', 'Serviço', 'Regularização', 'Vistoria', 'Consultoria', 'Outro']
+
 export const configuracaoPropostaComercialPadrao: ConfiguracaoPropostaComercial = Object.freeze({
   ...configuracaoPropostaPadrao,
+  tipoProposta: 'Obra',
   mostrarCapa: false,
   mostrarLogo: true,
   mostrarDadosEmpresa: true,
@@ -99,8 +105,12 @@ export function normalizarConfiguracaoProposta(
     typeof origem[chave] === 'string' ? (origem[chave] as string) : (base[chave] as string)
   const lista = (chave: 'etapasOcultas' | 'atividadesOcultas') =>
     Array.isArray(origem[chave]) ? origem[chave].filter((item): item is string => typeof item === 'string') : []
+  const tipoProposta: TipoProposta = tiposProposta.includes(origem.tipoProposta as TipoProposta)
+    ? origem.tipoProposta as TipoProposta
+    : base.tipoProposta
 
   return {
+    tipoProposta,
     mostrarEtapas: booleano('mostrarEtapas'),
     mostrarAtividades: booleano('mostrarAtividades'),
     mostrarQuantidades: booleano('mostrarQuantidades'),

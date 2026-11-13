@@ -3,7 +3,10 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 
-const migrationUrl = new URL('../supabase/migrations/20261030180000_propostas_editor_unico.sql', import.meta.url)
+const migrationUrls = [
+  new URL('../supabase/migrations/20261030180000_propostas_editor_unico.sql', import.meta.url),
+  new URL('../supabase/migrations/20261113120000_proposta_independente_obra.sql', import.meta.url),
+]
 const USER_ID = '10000000-0000-0000-0000-000000000001'
 
 async function criarBanco() {
@@ -24,8 +27,10 @@ async function criarBanco() {
 
     CREATE TABLE clientes(id uuid PRIMARY KEY DEFAULT gen_random_uuid(), nome text NOT NULL);
     CREATE TABLE obras(
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(), numero text, nome text NOT NULL,
-      cliente_id uuid NOT NULL REFERENCES clientes(id), proposta_id uuid
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(), numero text, nome text NOT NULL, descricao text,
+      cliente_id uuid NOT NULL REFERENCES clientes(id), proposta_id uuid, status text,
+      orcamento numeric NOT NULL DEFAULT 0, progresso numeric NOT NULL DEFAULT 0,
+      valor_executado numeric NOT NULL DEFAULT 0, observacoes text, created_by uuid
     );
     CREATE TABLE orcamentos(
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), obra_id uuid NOT NULL REFERENCES obras(id),
@@ -57,8 +62,9 @@ async function criarBanco() {
     CREATE SEQUENCE propostas_numero_seq;
     CREATE TABLE propostas(
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(), numero text NOT NULL UNIQUE DEFAULT '',
-      cliente_id uuid NOT NULL REFERENCES clientes(id), titulo text NOT NULL,
+      cliente_id uuid NOT NULL REFERENCES clientes(id), titulo text NOT NULL, descricao text,
       valor_total numeric(14,2) NOT NULL DEFAULT 0, status status_proposta NOT NULL DEFAULT 'rascunho',
+      validade date, condicoes_pagamento text, observacoes text,
       created_by uuid, orcamento_revisao_id uuid REFERENCES orcamento_revisoes(id),
       data_envio date, created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
     );
@@ -126,7 +132,7 @@ async function criarBanco() {
     SELECT set_config('request.jwt.claim.sub','${USER_ID}',false);
     SELECT set_config('request.jwt.claim.role','admin',false);
   `)
-  await db.exec(await readFile(migrationUrl, 'utf8'))
+  for (const migrationUrl of migrationUrls) await db.exec(await readFile(migrationUrl, 'utf8'))
   return db
 }
 
@@ -254,6 +260,67 @@ test('nega DML direto nas tabelas comerciais ao papel authenticated', async () =
         assert.equal(permitido, false, `${tabela} não deve permitir ${privilegio} direto`)
       }
     }
+  } finally {
+    await db.close()
+  }
+})
+
+test('cria proposta manual sem obra ou revisão técnica', async () => {
+  const db = await criarBanco()
+  try {
+    const clienteId = (await db.query("INSERT INTO clientes(nome) VALUES ('Cliente manual') RETURNING id")).rows[0].id
+    const propostaId = (await db.query(
+      `SELECT criar_proposta_manual($1,$2,$3,$4,$5,$6,$7,$8) AS id`,
+      [clienteId, 'Reforma do apartamento', 'Reforma', 'Pintura e adequações', 3500, '2026-12-31', 'Pagamento à vista', JSON.stringify([{ descricao: 'Pintura', quantidade: 1, valor_unitario: 3500 }])],
+    )).rows[0].id
+
+    const proposta = (await db.query(
+      'SELECT cliente_id,titulo,valor_total,orcamento_revisao_id,status FROM propostas WHERE id=$1',
+      [propostaId],
+    )).rows[0]
+    assert.equal(proposta.cliente_id, clienteId)
+    assert.equal(proposta.titulo, 'Reforma do apartamento')
+    assert.equal(Number(proposta.valor_total), 3500)
+    assert.equal(proposta.orcamento_revisao_id, null)
+    assert.equal(proposta.status, 'rascunho')
+    assert.equal(Number((await db.query('SELECT count(*) AS total FROM obras')).rows[0].total), 0)
+  } finally {
+    await db.close()
+  }
+})
+
+test('aceitar reforma não cria obra automaticamente', async () => {
+  const db = await criarBanco()
+  try {
+    const clienteId = (await db.query("INSERT INTO clientes(nome) VALUES ('Cliente reforma') RETURNING id")).rows[0].id
+    const propostaId = (await db.query(
+      `SELECT criar_proposta_manual($1,$2,$3,$4,$5,$6,$7,$8) AS id`,
+      [clienteId, 'Pequena reforma', 'Reforma', 'Serviço residencial', 1200, null, null, JSON.stringify([])],
+    )).rows[0].id
+    await db.query('SELECT publicar_rascunho_proposta($1,$2,$3)', [propostaId, '{}', '{}'])
+    await db.query("SELECT alterar_status_proposta_editor($1,'aceita')", [propostaId])
+    assert.equal((await db.query('SELECT status FROM propostas WHERE id=$1', [propostaId])).rows[0].status, 'aceita')
+    assert.equal(Number((await db.query('SELECT count(*) AS total FROM obras WHERE proposta_id=$1', [propostaId])).rows[0].total), 0)
+  } finally {
+    await db.close()
+  }
+})
+
+test('converte manualmente serviço aprovado em uma única obra', async () => {
+  const db = await criarBanco()
+  try {
+    const clienteId = (await db.query("INSERT INTO clientes(nome) VALUES ('Cliente conversão') RETURNING id")).rows[0].id
+    const propostaId = (await db.query(
+      `SELECT criar_proposta_manual($1,$2,$3,$4,$5,$6,$7,$8) AS id`,
+      [clienteId, 'Projeto executivo', 'Projeto', 'Projeto complementar', 5000, null, null, JSON.stringify([])],
+    )).rows[0].id
+    await db.query('SELECT publicar_rascunho_proposta($1,$2,$3)', [propostaId, '{}', '{}'])
+    await db.query("SELECT alterar_status_proposta_editor($1,'aceita')", [propostaId])
+    const primeira = (await db.query("SELECT converter_proposta_em_obra($1,$2) AS id", [propostaId, JSON.stringify({ nome: 'Projeto convertido' })])).rows[0].id
+    const segunda = (await db.query("SELECT converter_proposta_em_obra($1,$2) AS id", [propostaId, JSON.stringify({ nome: 'Outro nome' })])).rows[0].id
+    assert.equal(primeira, segunda)
+    assert.equal(Number((await db.query('SELECT count(*) AS total FROM obras WHERE proposta_id=$1', [propostaId])).rows[0].total), 1)
+    assert.equal((await db.query('SELECT nome FROM obras WHERE id=$1', [primeira])).rows[0].nome, 'Projeto convertido')
   } finally {
     await db.close()
   }
@@ -517,6 +584,10 @@ test('sincroniza aceite, rejeição e expiração somente a partir de revisão e
       const propostaId = await criarPublicada()
       assert.equal(
         (await db.query('SELECT alterar_status_proposta_editor($1,$2) AS ok', [propostaId, status])).rows[0].ok,
+        true,
+      )
+      assert.equal(
+        (await db.query('SELECT alterar_status_proposta_editor_idempotente($1,$2) AS ok', [propostaId, status])).rows[0].ok,
         true,
       )
       const proposta = (await db.query('SELECT status FROM propostas WHERE id=$1', [propostaId])).rows[0]

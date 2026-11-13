@@ -6,9 +6,11 @@ const rota = await readFile(new URL('../src/routes/_app/comercial.propostas.tsx'
 const hookEditor = await readFile(new URL('../src/hooks/use-proposta-editor.ts', import.meta.url), 'utf8')
 const dialogCriacao = await readFile(new URL('../src/components/propostas/nova-proposta-orcamento-dialog.tsx', import.meta.url), 'utf8')
 
-test('rota usa somente editor persistente e criação pelo orçamento', () => {
+test('rota usa editor persistente e criação manual antes do orçamento', () => {
   assert.match(rota, /NovaPropostaOrcamentoDialog/)
   assert.match(rota, /usePropostaEditor/)
+  assert.match(dialogCriacao, /criar_proposta_manual/)
+  assert.match(dialogCriacao, /Proposta manual/)
   assert.doesNotMatch(rota, /PropostaFormDialog|PropostaImpressao|CatalogoPropostas|react-hook-form/)
   assert.doesNotMatch(rota, /setEditTarget|setPrintTarget|Abrir Editor Comercial/)
 })

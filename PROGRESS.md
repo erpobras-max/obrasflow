@@ -687,3 +687,14 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - A interface e os dados legados de serviços foram preservados no código e no banco, sem migration destrutiva; a operação permanece concentrada em Contratos de Empreiteiros.
   - Testes unitários cobrem payload PF/PJ, normalização, busca, filtros e garantem que a rota não volte a montar a tela operacional antiga.
   - Validação: 187/187 testes automatizados aprovados, ESLint focado nos arquivos novos sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.
+
+- **Proposta comercial independente da obra (Issue #220, Branch `feat/220-proposta-independente-obra`)**:
+  - Nova proposta manual pode ser criada com cliente, título, classificação, descrição, valor, validade e condições sem exigir obra ou orçamento técnico.
+  - O fluxo legado baseado em obra + orçamento + revisão congelada permanece disponível para compatibilidade.
+  - Classificação persistida em `propostas.tipo_proposta`, incluindo `Reforma`; somente `Obra` cria obra após aceite.
+  - Reforma, Projeto, Serviço, Regularização, Vistoria, Consultoria e Outro são aprovados sem criar obra ou contrato automaticamente.
+  - Conversão manual em obra usa RPC idempotente `converter_proposta_em_obra` e permite complementar o nome da obra.
+  - A aprovação usa wrapper idempotente para retries/cliques duplicados; a itemização detalhada de propostas manuais permanece como evolução posterior, enquanto o MVP permite publicar pelo valor total informado.
+  - Migration `20261113120000_proposta_independente_obra.sql` torna a origem técnica opcional para propostas manuais, corrige o gatilho legado e adiciona RPCs/RLS.
+  - Editor adapta itens comerciais manuais e a listagem identifica a classificação; propostas aceitas não-Obra não exibem atalho enganoso para Obras.
+  - Validação concluída: 193/193 testes automatizados aprovados, 38/38 testes focados de editor/rota/adaptador aprovados, `git diff --check` sem erros nos arquivos da feature e build Vite/Nitro/Cloudflare concluído com sucesso.

@@ -77,3 +77,16 @@ test('honra a revisão legada escolhida explicitamente mesmo quando existem múl
   ]
   assert.deepEqual(resolverCandidatasLegado(candidatas, 'r2'), { tipo: 'unica', revisaoId: 'r2' })
 })
+
+test('adapta itens comerciais de proposta manual para etapa editável', () => {
+  const editor = adaptarFotografiaParaEditor({
+    manual: true,
+    itens: [{ id: 'i1', descricao: 'Pintura', quantidade: 2, valor_unitario: 1250 }],
+    totalPrecoCentavos: 250000,
+  }, { propostaId: 'p-manual', numero: 'PROP-1', status: 'rascunho', clienteNome: 'Cliente' })
+
+  assert.equal(editor.etapas.length, 1)
+  assert.equal(editor.etapas[0].nome, 'Itens comerciais')
+  assert.equal(editor.etapas[0].atividades[0].descricao, 'Pintura')
+  assert.equal(editor.etapas[0].atividades[0].precoTotalCentavos, 250000)
+})
