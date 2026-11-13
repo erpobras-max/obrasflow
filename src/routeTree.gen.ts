@@ -54,6 +54,7 @@ import { Route as AppContratosEmpreiteirosRouteImport } from './routes/_app/cont
 import { Route as AppComprasRouteImport } from './routes/_app/compras'
 import { Route as AppComercialRouteImport } from './routes/_app/comercial'
 import { Route as AppCotacoesIndexRouteImport } from './routes/_app/cotacoes/index'
+import { Route as ApiSinapiSyncRouteImport } from './routes/api.sinapi.sync'
 import { Route as ApiSinapiCronRouteImport } from './routes/api.sinapi.cron'
 import { Route as AppVendasPedidosRouteImport } from './routes/_app/vendas.pedidos'
 import { Route as AppProjeto3dIdRouteImport } from './routes/_app/projeto3d.$id'
@@ -297,6 +298,11 @@ const AppCotacoesIndexRoute = AppCotacoesIndexRouteImport.update({
   path: '/cotacoes/',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiSinapiSyncRoute = ApiSinapiSyncRouteImport.update({
+  id: '/api/sinapi/sync',
+  path: '/api/sinapi/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSinapiCronRoute = ApiSinapiCronRouteImport.update({
   id: '/api/sinapi/cron',
   path: '/api/sinapi/cron',
@@ -445,6 +451,7 @@ export interface FileRoutesByFullPath {
   '/projeto3d/$id': typeof AppProjeto3dIdRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
   '/api/sinapi/cron': typeof ApiSinapiCronRoute
+  '/api/sinapi/sync': typeof ApiSinapiSyncRoute
   '/cotacoes/': typeof AppCotacoesIndexRoute
   '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
@@ -507,6 +514,7 @@ export interface FileRoutesByTo {
   '/projeto3d/$id': typeof AppProjeto3dIdRoute
   '/vendas/pedidos': typeof AppVendasPedidosRoute
   '/api/sinapi/cron': typeof ApiSinapiCronRoute
+  '/api/sinapi/sync': typeof ApiSinapiSyncRoute
   '/cotacoes': typeof AppCotacoesIndexRoute
   '/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
@@ -572,6 +580,7 @@ export interface FileRoutesById {
   '/_app/projeto3d/$id': typeof AppProjeto3dIdRoute
   '/_app/vendas/pedidos': typeof AppVendasPedidosRoute
   '/api/sinapi/cron': typeof ApiSinapiCronRoute
+  '/api/sinapi/sync': typeof ApiSinapiSyncRoute
   '/_app/cotacoes/': typeof AppCotacoesIndexRoute
   '/_app/cotacoes/$cotacaoId/comparativo': typeof AppCotacoesCotacaoIdComparativoRoute
 }
@@ -637,6 +646,7 @@ export interface FileRouteTypes {
     | '/projeto3d/$id'
     | '/vendas/pedidos'
     | '/api/sinapi/cron'
+    | '/api/sinapi/sync'
     | '/cotacoes/'
     | '/cotacoes/$cotacaoId/comparativo'
   fileRoutesByTo: FileRoutesByTo
@@ -699,6 +709,7 @@ export interface FileRouteTypes {
     | '/projeto3d/$id'
     | '/vendas/pedidos'
     | '/api/sinapi/cron'
+    | '/api/sinapi/sync'
     | '/cotacoes'
     | '/cotacoes/$cotacaoId/comparativo'
   id:
@@ -763,6 +774,7 @@ export interface FileRouteTypes {
     | '/_app/projeto3d/$id'
     | '/_app/vendas/pedidos'
     | '/api/sinapi/cron'
+    | '/api/sinapi/sync'
     | '/_app/cotacoes/'
     | '/_app/cotacoes/$cotacaoId/comparativo'
   fileRoutesById: FileRoutesById
@@ -784,6 +796,7 @@ export interface RootRouteChildren {
   MedicaoEmpreiteiroTokenRoute: typeof MedicaoEmpreiteiroTokenRoute
   ReservarTokenRoute: typeof ReservarTokenRoute
   ApiSinapiCronRoute: typeof ApiSinapiCronRoute
+  ApiSinapiSyncRoute: typeof ApiSinapiSyncRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1103,6 +1116,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCotacoesIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/sinapi/sync': {
+      id: '/api/sinapi/sync'
+      path: '/api/sinapi/sync'
+      fullPath: '/api/sinapi/sync'
+      preLoaderRoute: typeof ApiSinapiSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/sinapi/cron': {
       id: '/api/sinapi/cron'
       path: '/api/sinapi/cron'
@@ -1390,6 +1410,7 @@ const rootRouteChildren: RootRouteChildren = {
   MedicaoEmpreiteiroTokenRoute: MedicaoEmpreiteiroTokenRoute,
   ReservarTokenRoute: ReservarTokenRoute,
   ApiSinapiCronRoute: ApiSinapiCronRoute,
+  ApiSinapiSyncRoute: ApiSinapiSyncRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
