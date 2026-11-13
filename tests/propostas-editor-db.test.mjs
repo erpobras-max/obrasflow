@@ -289,6 +289,26 @@ test('cria proposta manual sem obra ou revisão técnica', async () => {
   }
 })
 
+test('salva itens manuais e recalcula o valor total no servidor', async () => {
+  const db = await criarBanco()
+  try {
+    const clienteId = (await db.query("INSERT INTO clientes(nome) VALUES ('Cliente itens') RETURNING id")).rows[0].id
+    const propostaId = (await db.query(
+      `SELECT criar_proposta_manual($1,$2,$3,$4,$5,$6,$7,$8) AS id`,
+      [clienteId, 'Serviço por itens', 'Serviço', null, 0, null, null, JSON.stringify([])],
+    )).rows[0].id
+    const fotografia = { itens: [
+      { id: 'item-1', descricao: 'Pintura', unidade: 'm²', quantidade: 10, valorUnitarioCentavos: 1250 },
+      { id: 'item-2', descricao: 'Massa', unidade: 'm²', quantidade: 5, valorUnitarioCentavos: 800 },
+    ] }
+    await db.query('SELECT salvar_rascunho_proposta($1,$2,$3)', [propostaId, JSON.stringify({ manualItens: fotografia.itens }), JSON.stringify(fotografia)])
+    assert.equal(Number((await db.query('SELECT valor_total FROM propostas WHERE id=$1', [propostaId])).rows[0].valor_total), 165)
+    assert.equal(Number((await db.query("SELECT fotografia->>'totalPrecoCentavos' AS total FROM proposta_revisoes WHERE proposta_id=$1", [propostaId])).rows[0].total), 16500)
+  } finally {
+    await db.close()
+  }
+})
+
 test('aceitar reforma não cria obra automaticamente', async () => {
   const db = await criarBanco()
   try {
