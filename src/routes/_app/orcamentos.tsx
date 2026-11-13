@@ -95,7 +95,8 @@ const detectCatalogColumns = (rows: any[][], requestedUF = "SP"): { headerIndex:
       if (mapping.codigo < 0 && /^(codigo|cod|item|id)( |$)/.test(text)) mapping.codigo = index;
       if (mapping.descricao < 0 && (text.includes("descricao") || text.includes("descrição") || text.includes("nome do insumo") || text.includes("nome da composicao"))) mapping.descricao = index;
       if (mapping.unidade < 0 && (text === "un" || text.includes("unidade") || text.includes("unid"))) mapping.unidade = index;
-      if (mapping.valor < 0 && (text.includes("preco mediano") || text.includes("preco") || text.includes("custo total") || text.includes("valor unitario") || text.includes("valor"))) mapping.valor = index;
+      const isNonNumericMetadata = text.includes("origem") || text.includes("situacao") || text.includes("fonte") || text.includes("percentual") || text.includes("%as");
+      if (mapping.valor < 0 && !isNonNumericMetadata && (text.includes("preco mediano") || text.includes("preco") || text.includes("custo total") || text.includes("valor unitario") || text.includes("valor"))) mapping.valor = index;
       if (mapping.classe < 0 && (text.includes("classe") || text.includes("grupo") || text.includes("tipo"))) mapping.classe = index;
     });
 
