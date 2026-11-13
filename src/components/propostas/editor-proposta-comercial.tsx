@@ -122,6 +122,21 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
   const [modoImpressao, setModoImpressao] = useState(false)
   const [historicoOpen, setHistoricoOpen] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [buscaSinapi, setBuscaSinapi] = useState('')
+  const referenciasSinapiQuery = useQuery({
+    queryKey: ['proposta-manual-sinapi', buscaSinapi],
+    enabled: !proposta.orcamentoRevisaoId && buscaSinapi.trim().length >= 2,
+    queryFn: async () => {
+      const termo = `%${buscaSinapi.trim()}%`
+      const [composicoes, insumos] = await Promise.all([
+        supabase.from('referencia_composicoes').select('id,codigo,descricao,unidade,custo_total,mes_referencia').eq('fonte', 'sinapi').or(`codigo.ilike.${termo},descricao.ilike.${termo}`).order('mes_referencia', { ascending: false }).limit(15),
+        supabase.from('referencia_insumos').select('id,codigo,descricao,unidade,preco_mediano,mes_referencia').eq('fonte', 'sinapi').or(`codigo.ilike.${termo},descricao.ilike.${termo}`).order('mes_referencia', { ascending: false }).limit(15),
+      ])
+      if (composicoes.error) throw composicoes.error
+      if (insumos.error) throw insumos.error
+      return [...(composicoes.data ?? []).map((item: any) => ({ ...item, tipo: 'Composição', valor: Number(item.custo_total ?? 0) })), ...(insumos.data ?? []).map((item: any) => ({ ...item, tipo: 'Insumo', valor: Number(item.preco_mediano ?? 0) }))]
+    },
+  })
 
   // Status da proposta
   const isEditavel = proposta.status === 'rascunho' && !somenteLeitura
@@ -167,6 +182,10 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
     updateConfig({ manualItens: config.manualItens.map((item) => item.id === id ? { ...item, ...patch } : item) })
   }
 
+  const adicionarSubitemManual = (parentId: string) => {
+    updateConfig({ manualItens: [...config.manualItens, { id: `manual-item-${Date.now()}`, tipo: 'subitem', parentId, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
+  }
+
   const adicionarItemManual = () => {
     updateConfig({ manualItens: [...config.manualItens, { id: `manual-item-${Date.now()}`, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
   }
@@ -174,6 +193,16 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
   const removerItemManual = (id: string) => {
     const itens = config.manualItens.filter((item) => item.id !== id)
     updateConfig({ manualItens: itens.length > 0 ? itens : [{ id: `manual-item-${Date.now()}`, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
+  }
+
+  const aplicarReferenciaSinapi = (itemId: string, referenciaId: string) => {
+    const referencia = (referenciasSinapiQuery.data ?? []).find((item: any) => item.id === referenciaId)
+    if (!referencia) return
+    atualizarItemManual(itemId, {
+      descricao: `${referencia.codigo} — ${referencia.descricao}`,
+      unidade: referencia.unidade || 'un',
+      valorUnitarioCentavos: Math.max(0, Math.round(Number(referencia.valor) || 0)),
+    })
   }
 
   // Filtragem dinâmica para a pré-visualização
@@ -486,15 +515,15 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={adicionarItemManual}>Adicionar item</Button>
               </div>
+              <div><label className="text-[10px] font-medium text-slate-500">Buscar composição ou insumo SINAPI atualizado</label><Input value={buscaSinapi} onChange={(e) => setBuscaSinapi(e.target.value)} placeholder="Código ou descrição (mínimo 2 caracteres)" /><p className="mt-1 text-[10px] text-slate-500">A competência mais recente disponível na base é consultada automaticamente.</p></div>
               <div className="space-y-2">
                 {config.manualItens.map((item) => (
-                  <div key={item.id} className="grid grid-cols-1 gap-2 rounded-md border bg-white p-3 sm:grid-cols-[minmax(0,2fr)_90px_90px_120px_32px] sm:items-end">
+                  <div key={item.id} className="space-y-2 rounded-md border bg-white p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-700">{item.tipo === 'subitem' ? 'Subitem' : 'Item'}</span><div className="flex gap-1"><Button type="button" size="sm" variant="ghost" onClick={() => adicionarSubitemManual(item.id)}>Adicionar subitem</Button><Button type="button" size="icon" variant="ghost" title="Remover item" onClick={() => removerItemManual(item.id)}><Trash2 className="size-4 text-destructive" /></Button></div></div>
+                    {item.tipo === 'subitem' && <div><label className="text-[10px] font-medium text-slate-500">Item pai</label><Select value={item.parentId ?? ''} onValueChange={(value) => atualizarItemManual(item.id, { parentId: value })}><SelectTrigger><SelectValue placeholder="Selecione o item pai" /></SelectTrigger><SelectContent>{config.manualItens.filter((pai) => pai.tipo !== 'subitem' && pai.id !== item.id).map((pai) => <SelectItem key={pai.id} value={pai.id}>{pai.descricao || 'Item sem descrição'}</SelectItem>)}</SelectContent></Select></div>}
+                    {buscaSinapi.trim().length >= 2 && <div><label className="text-[10px] font-medium text-slate-500">Preencher este item pelo SINAPI</label><Select onValueChange={(value) => aplicarReferenciaSinapi(item.id, value)}><SelectTrigger><SelectValue placeholder={referenciasSinapiQuery.isLoading ? 'Buscando SINAPI…' : 'Selecione uma referência'} /></SelectTrigger><SelectContent>{(referenciasSinapiQuery.data ?? []).map((referencia: any) => <SelectItem key={referencia.id} value={referencia.id}>{referencia.tipo} · {referencia.codigo} · {referencia.descricao.slice(0, 70)}</SelectItem>)}</SelectContent></Select></div>}
                     <div><label className="text-[10px] font-medium text-slate-500">Descrição</label><Input value={item.descricao} placeholder="Ex.: Pintura interna" onChange={(e) => atualizarItemManual(item.id, { descricao: e.target.value })} /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500">Un.</label><Input value={item.unidade} onChange={(e) => atualizarItemManual(item.id, { unidade: e.target.value })} /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500">Qtd.</label><Input type="number" min="0" step="0.01" value={item.quantidade} onChange={(e) => atualizarItemManual(item.id, { quantidade: Math.max(0, Number(e.target.value) || 0) })} /></div>
-                    <div><label className="text-[10px] font-medium text-slate-500">Valor unitário</label><Input inputMode="decimal" value={(item.valorUnitarioCentavos / 100).toFixed(2).replace('.', ',')} onChange={(e) => atualizarItemManual(item.id, { valorUnitarioCentavos: Math.max(0, Math.round(Number(e.target.value.replace(',', '.')) * 100) || 0) })} /></div>
-                    <Button type="button" size="icon" variant="ghost" title="Remover item" onClick={() => removerItemManual(item.id)}><Trash2 className="size-4 text-destructive" /></Button>
-                    <div className="text-right text-xs font-semibold text-slate-700 sm:col-start-4">Total: {brl(Math.round(item.quantidade * item.valorUnitarioCentavos))}</div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><div><label className="text-[10px] font-medium text-slate-500">Un.</label><Input value={item.unidade} onChange={(e) => atualizarItemManual(item.id, { unidade: e.target.value })} /></div><div><label className="text-[10px] font-medium text-slate-500">Qtd.</label><Input type="number" min="0" step="0.01" value={item.quantidade} onChange={(e) => atualizarItemManual(item.id, { quantidade: Math.max(0, Number(e.target.value) || 0) })} /></div><div><label className="text-[10px] font-medium text-slate-500">Valor unitário</label><Input inputMode="decimal" value={(item.valorUnitarioCentavos / 100).toFixed(2).replace('.', ',')} onChange={(e) => atualizarItemManual(item.id, { valorUnitarioCentavos: Math.max(0, Math.round(Number(e.target.value.replace(',', '.')) * 100) || 0) })} /></div><div className="flex items-end justify-end text-xs font-semibold text-slate-700">Total: {brl(Math.round(item.quantidade * item.valorUnitarioCentavos))}</div></div>
                   </div>
                 ))}
               </div>
