@@ -94,7 +94,7 @@ Não há Edge Functions versionadas em `supabase/functions` neste checkout. A ap
 - Upload de arquivos e fotos: integrado ao armazenamento configurado para empresa/imóveis; conferir a configuração de produção do R2 e URLs públicas/protegidas.
 - Contratos: geração e visualização implementadas; o fluxo público permite leitura e assinatura manuscrita.
 - Assinatura digital: assinatura por mouse/toque e link público implementados; ainda é recomendável adicionar trilha de auditoria e validade jurídica conforme a política da empresa.
-- Portal do cliente: contratos, documentos, fotos, financeiro e andamento das obras vinculadas estão disponíveis.
+- Portal do cliente: contratos, documentos, fotos, financeiro e andamento das obras vinculadas estão disponíveis. A evolução inclui proposta comercial sanitizada, decisões registradas por obra, marcos do cronograma e link externo de pagamento quando publicado pelo financeiro.
 - Cobrança: parcelas, taxas e formas de pagamento estão modeladas; integrações bancárias/gateway e baixa automática dependem da configuração externa.
 - Lembretes automáticos: ainda dependem de uma rotina agendada/Edge Function e de um provedor de e-mail/SMS/WhatsApp.
 
@@ -688,13 +688,23 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - Testes unitários cobrem payload PF/PJ, normalização, busca, filtros e garantem que a rota não volte a montar a tela operacional antiga.
   - Validação: 187/187 testes automatizados aprovados, ESLint focado nos arquivos novos sem erros e build Vite + Nitro/Cloudflare concluído com sucesso.
 
+- **Cockpit Integrado de Resultado da Obra (Branch `feat/cockpit-resultado-obra`)**:
+  - A aba **Resultado da Obra** foi integrada ao Financeiro civil e recebeu filtros persistidos na URL por obra, regime de competência/caixa e período. A listagem de Obras ganhou um atalho **Resultado**, visível somente para perfis com acesso financeiro.
+  - O painel executivo apresenta Receita contratada, Custo orçado (BAC), Comprometido, Realizado, Pago, EAC, Margem projetada e Desvio projetado, com fórmulas explicáveis, comparação por etapa, gráficos e detalhamento somente de leitura até a origem.
+  - Fórmulas centrais: `EV = BAC × avanço físico`; `IDC = EV ÷ realizado`; `EAC contratual = realizado + saldo comprometido + saldo orçado`; `EAC desempenho = BAC ÷ IDC` quando há maturidade mínima; o EAC principal usa o cenário conservador válido. Margem e desvio são calculados a partir da receita contratada e do EAC principal, preservando `null` como **Não informado**.
+  - A RPC `obter_resultado_obra` consolida orçamento analítico, compras novas e legadas, contratos e medições de empreiteiros, contas a pagar e receita vinculada à obra. Transferências internas são excluídas e contas vinculadas são deduplicadas. Linhas sem associação aparecem em **Sem apropriação**, sem esconder dados parciais.
+  - No regime de competência é usada a data da obrigação; no regime de caixa, a data efetiva da liquidação. Períodos históricos deixam explícito quando o comprometido representa a **posição atual**, evitando aparentar uma fotografia retroativa inexistente.
+  - A migration `20261102000000_resultado_obra_cockpit.sql` cria a tabela auditável `resultado_obra_apropriacoes`, políticas RLS e a RPC somente de leitura. O rollback correspondente remove exclusivamente os objetos do cockpit e foi testado com reaplicação.
+  - Permissões: a RPC exige usuário autenticado, papel financeiro/diretivo e acesso à obra; engenharia e cliente não recebem leitura financeira. A interface não oferece edição, exclusão, pagamento ou outra mutação.
+  - Limitações documentadas: registros legados sem saldo ou vínculo permanecem identificados como qualidade parcial; a receita usa a revisão comercial aceita vinculada por `obras.proposta_id`, com fallback para o valor da proposta e para fontes financeiras quando os legados não possuem a revisão ou o vínculo.
+  - Validação até esta etapa: 212/212 testes automatizados aprovados; testes de migration/RLS/rollback, domínio, filtros e apresentação aprovados; builds Vite, SSR e Nitro/Cloudflare concluídos. A validação online depende da aplicação da migration e do deploy desta entrega.
+
 - **Proposta comercial independente da obra (Issue #220, Branch `feat/220-proposta-independente-obra`)**:
   - Nova proposta manual pode ser criada com cliente, título, classificação, descrição, valor, validade e condições sem exigir obra ou orçamento técnico.
   - O fluxo legado baseado em obra + orçamento + revisão congelada permanece disponível para compatibilidade.
   - Classificação persistida em `propostas.tipo_proposta`, incluindo `Reforma`; somente `Obra` cria obra após aceite.
   - Reforma, Projeto, Serviço, Regularização, Vistoria, Consultoria e Outro são aprovados sem criar obra ou contrato automaticamente.
-  - Conversão manual em obra usa RPC idempotente `converter_proposta_em_obra` e permite complementar o nome da obra.
-  - A aprovação usa wrapper idempotente para retries/cliques duplicados; a itemização detalhada de propostas manuais permanece como evolução posterior, enquanto o MVP permite publicar pelo valor total informado.
+  - Conversão manual em obra usa RPC idempotente `converter_proposta_em_obra` e permite complementar nome, endereço e status.
+  - Aprovação usa wrapper idempotente para retries/cliques duplicados; itemização detalhada de propostas manuais permanece como evolução posterior, enquanto o MVP publica pelo valor total informado.
   - Migration `20261113120000_proposta_independente_obra.sql` torna a origem técnica opcional para propostas manuais, corrige o gatilho legado e adiciona RPCs/RLS.
-  - Editor adapta itens comerciais manuais e a listagem identifica a classificação; propostas aceitas não-Obra não exibem atalho enganoso para Obras.
-  - Validação concluída: 193/193 testes automatizados aprovados, 38/38 testes focados de editor/rota/adaptador aprovados, `git diff --check` sem erros nos arquivos da feature e build Vite/Nitro/Cloudflare concluído com sucesso.
+  - Validação concluída: 193/193 testes automatizados aprovados e build Vite/Nitro/Cloudflare concluído com sucesso.
