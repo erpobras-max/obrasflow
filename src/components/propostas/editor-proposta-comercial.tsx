@@ -39,8 +39,6 @@ import {
 } from '@/components/ui/dialog'
 import {
   normalizarConfiguracaoProposta,
-  tiposProposta,
-  type TipoProposta,
   formatarRegistroEmpresa,
   tiposProposta,
   type ConfiguracaoPropostaComercial,
@@ -85,7 +83,7 @@ export function EditorPropostaComercial({
       prazoExecucaoTexto: configuracaoInicial?.prazoExecucaoTexto ?? proposta.prazoExecucaoTexto,
       })
       if (!proposta.orcamentoRevisaoId && base.manualItens.length === 0) {
-        return { ...base, manualItens: [{ id: 'manual-item-1', descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] }
+        return { ...base, manualItens: [{ id: 'manual-item-1', etapa: 'Geral', descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] }
       }
       return base
     },
@@ -183,16 +181,17 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
   }
 
   const adicionarSubitemManual = (parentId: string) => {
-    updateConfig({ manualItens: [...config.manualItens, { id: `manual-item-${Date.now()}`, tipo: 'subitem', parentId, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
+    const parent = config.manualItens.find((item) => item.id === parentId)
+    updateConfig({ manualItens: [...config.manualItens, { id: `manual-item-${Date.now()}`, tipo: 'subitem', parentId, etapa: parent?.etapa || 'Geral', descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
   }
 
   const adicionarItemManual = () => {
-    updateConfig({ manualItens: [...config.manualItens, { id: `manual-item-${Date.now()}`, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
+    updateConfig({ manualItens: [...config.manualItens, { id: `manual-item-${Date.now()}`, etapa: 'Geral', descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
   }
 
   const removerItemManual = (id: string) => {
     const itens = config.manualItens.filter((item) => item.id !== id)
-    updateConfig({ manualItens: itens.length > 0 ? itens : [{ id: `manual-item-${Date.now()}`, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
+    updateConfig({ manualItens: itens.length > 0 ? itens : [{ id: `manual-item-${Date.now()}`, etapa: 'Geral', descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
   }
 
   const aplicarReferenciaSinapi = (itemId: string, referenciaId: string) => {
@@ -209,11 +208,23 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
   const etapasVisiveis = useMemo(() => {
     const etapas = proposta.orcamentoRevisaoId
       ? (proposta.etapas ?? [])
-      : [{
-          id: 'itens-comerciais', codigo: '01', nome: 'Itens comerciais',
-          valorTotalCentavos: config.manualItens.reduce((total, item) => total + Math.round(item.quantidade * item.valorUnitarioCentavos), 0),
-          atividades: config.manualItens.map((item) => ({ id: item.id, codigo: null, descricao: item.descricao || 'Item comercial', unidade: item.unidade, quantidade: item.quantidade, precoUnitarioCentavos: item.valorUnitarioCentavos, precoTotalCentavos: Math.round(item.quantidade * item.valorUnitarioCentavos) })),
-        }]
+      : (() => {
+          const grupos = new Map<string, typeof config.manualItens>()
+          const raizes = config.manualItens.filter((item) => item.tipo !== 'subitem' || !config.manualItens.some((pai) => pai.id === item.parentId))
+          for (const item of raizes) {
+            const etapa = item.etapa?.trim() || 'Geral'
+            const grupo = grupos.get(etapa) ?? []
+            grupo.push(item, ...config.manualItens.filter((filho) => filho.tipo === 'subitem' && filho.parentId === item.id))
+            grupos.set(etapa, grupo)
+          }
+          return [...grupos.entries()].map(([nome, itens], indice) => ({
+            id: `manual-etapa-${nome}`,
+            codigo: String(indice + 1).padStart(2, '0'),
+            nome,
+            valorTotalCentavos: itens.reduce((total, item) => total + Math.round(item.quantidade * item.valorUnitarioCentavos), 0),
+            atividades: itens.map((item) => ({ id: item.id, codigo: null, descricao: item.descricao || 'Item comercial', unidade: item.unidade, quantidade: item.quantidade, precoUnitarioCentavos: item.valorUnitarioCentavos, precoTotalCentavos: Math.round(item.quantidade * item.valorUnitarioCentavos) })),
+          }))
+        })()
     return etapas
       .filter((e) => !config.etapasOcultas.includes(e.id))
       .map((e) => ({
@@ -222,7 +233,7 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
           ? []
           : e.atividades.filter((a) => !config.atividadesOcultas.includes(a.id)),
       }))
-  }, [proposta.etapas, config.etapasOcultas, config.atividadesOcultas, config.mostrarApenasEtapa])
+  }, [proposta.etapas, config.manualItens, config.etapasOcultas, config.atividadesOcultas, config.mostrarApenasEtapa])
 
   // Total da proposta visível
   const valorTotalVisivelCentavos = useMemo(() => {
@@ -434,12 +445,6 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
               </div>
 
               <div className="pt-2">
-                <label className="block text-[11px] font-semibold text-slate-600 mb-1" htmlFor="tipo-proposta">Tipo da proposta</label>
-                <select id="tipo-proposta" value={config.tipoProposta} disabled={somenteLeitura} onChange={(e) => updateConfig({ tipoProposta: e.target.value as TipoProposta })} className="h-8 w-full rounded border border-slate-300 bg-white px-2 text-xs text-slate-900">
-                  {tiposProposta.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
-                </select>
-              </div>
-              <div className="pt-2">
                 <label className="block text-[11px] font-semibold text-slate-600 mb-1">
                   Título Comercial da Proposta:
                 </label>
@@ -523,6 +528,7 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
                     {item.tipo === 'subitem' && <div><label className="text-[10px] font-medium text-slate-500">Item pai</label><Select value={item.parentId ?? ''} onValueChange={(value) => atualizarItemManual(item.id, { parentId: value })}><SelectTrigger><SelectValue placeholder="Selecione o item pai" /></SelectTrigger><SelectContent>{config.manualItens.filter((pai) => pai.tipo !== 'subitem' && pai.id !== item.id).map((pai) => <SelectItem key={pai.id} value={pai.id}>{pai.descricao || 'Item sem descrição'}</SelectItem>)}</SelectContent></Select></div>}
                     {buscaSinapi.trim().length >= 2 && <div><label className="text-[10px] font-medium text-slate-500">Preencher este item pelo SINAPI</label><Select onValueChange={(value) => aplicarReferenciaSinapi(item.id, value)}><SelectTrigger><SelectValue placeholder={referenciasSinapiQuery.isLoading ? 'Buscando SINAPI…' : 'Selecione uma referência'} /></SelectTrigger><SelectContent>{(referenciasSinapiQuery.data ?? []).map((referencia: any) => <SelectItem key={referencia.id} value={referencia.id}>{referencia.tipo} · {referencia.codigo} · {referencia.descricao.slice(0, 70)}</SelectItem>)}</SelectContent></Select></div>}
                     <div><label className="text-[10px] font-medium text-slate-500">Descrição</label><Input value={item.descricao} placeholder="Ex.: Pintura interna" onChange={(e) => atualizarItemManual(item.id, { descricao: e.target.value })} /></div>
+                    <div><label className="text-[10px] font-medium text-slate-500">Etapa / Grupo</label><Input value={item.etapa ?? 'Geral'} placeholder="Ex.: Gesso, Hidráulica, Pintura" onChange={(e) => atualizarItemManual(item.id, { etapa: e.target.value || 'Geral' })} /></div>
                     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><div><label className="text-[10px] font-medium text-slate-500">Un.</label><Input value={item.unidade} onChange={(e) => atualizarItemManual(item.id, { unidade: e.target.value })} /></div><div><label className="text-[10px] font-medium text-slate-500">Qtd.</label><Input type="number" min="0" step="0.01" value={item.quantidade} onChange={(e) => atualizarItemManual(item.id, { quantidade: Math.max(0, Number(e.target.value) || 0) })} /></div><div><label className="text-[10px] font-medium text-slate-500">Valor unitário</label><Input inputMode="decimal" value={(item.valorUnitarioCentavos / 100).toFixed(2).replace('.', ',')} onChange={(e) => atualizarItemManual(item.id, { valorUnitarioCentavos: Math.max(0, Math.round(Number(e.target.value.replace(',', '.')) * 100) || 0) })} /></div><div className="flex items-end justify-end text-xs font-semibold text-slate-700">Total: {brl(Math.round(item.quantidade * item.valorUnitarioCentavos))}</div></div>
                   </div>
                 ))}
