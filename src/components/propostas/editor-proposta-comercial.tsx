@@ -21,6 +21,7 @@ import {
   Calendar,
   DollarSign,
   RefreshCw,
+  Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -75,12 +76,18 @@ export function EditorPropostaComercial({
   onVoltar,
 }: EditorPropostaComercialProps) {
   const configRecebida = useMemo(
-    () => normalizarConfiguracaoProposta({
+    () => {
+      const base = normalizarConfiguracaoProposta({
       ...configuracaoInicial,
       tituloProposta: configuracaoInicial?.tituloProposta ?? `Proposta Comercial · ${proposta.obraNome ?? 'Obra'}`,
       prazoExecucaoTexto: configuracaoInicial?.prazoExecucaoTexto ?? proposta.prazoExecucaoTexto,
-    }),
-    [configuracaoInicial, proposta.obraNome, proposta.prazoExecucaoTexto],
+      })
+      if (!proposta.orcamentoRevisaoId && base.manualItens.length === 0) {
+        return { ...base, manualItens: [{ id: 'manual-item-1', descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] }
+      }
+      return base
+    },
+    [configuracaoInicial, proposta.obraNome, proposta.prazoExecucaoTexto, proposta.orcamentoRevisaoId],
   )
   const [config, setConfig] = useState<ConfiguracaoPropostaComercial>(configRecebida)
 
@@ -154,9 +161,29 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
     updateConfig({ atividadesOcultas: ocultas })
   }
 
+  const atualizarItemManual = (id: string, patch: Partial<ConfiguracaoPropostaComercial['manualItens'][number]>) => {
+    updateConfig({ manualItens: config.manualItens.map((item) => item.id === id ? { ...item, ...patch } : item) })
+  }
+
+  const adicionarItemManual = () => {
+    updateConfig({ manualItens: [...config.manualItens, { id: `manual-item-${Date.now()}`, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
+  }
+
+  const removerItemManual = (id: string) => {
+    const itens = config.manualItens.filter((item) => item.id !== id)
+    updateConfig({ manualItens: itens.length > 0 ? itens : [{ id: `manual-item-${Date.now()}`, descricao: '', unidade: 'un', quantidade: 1, valorUnitarioCentavos: 0 }] })
+  }
+
   // Filtragem dinâmica para a pré-visualização
   const etapasVisiveis = useMemo(() => {
-    return (proposta.etapas ?? [])
+    const etapas = proposta.orcamentoRevisaoId
+      ? (proposta.etapas ?? [])
+      : [{
+          id: 'itens-comerciais', codigo: '01', nome: 'Itens comerciais',
+          valorTotalCentavos: config.manualItens.reduce((total, item) => total + Math.round(item.quantidade * item.valorUnitarioCentavos), 0),
+          atividades: config.manualItens.map((item) => ({ id: item.id, codigo: null, descricao: item.descricao || 'Item comercial', unidade: item.unidade, quantidade: item.quantidade, precoUnitarioCentavos: item.valorUnitarioCentavos, precoTotalCentavos: Math.round(item.quantidade * item.valorUnitarioCentavos) })),
+        }]
+    return etapas
       .filter((e) => !config.etapasOcultas.includes(e.id))
       .map((e) => ({
         ...e,
@@ -442,10 +469,35 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
             </div>
           </div>
 
+          {!proposta.orcamentoRevisaoId && (
+            <div className="border border-sky-200 rounded-lg p-4 space-y-3 bg-sky-50/50">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <span className="font-bold text-slate-800 uppercase tracking-wide text-[11px] block">3. Itens comerciais da proposta</span>
+                  <p className="text-[11px] text-slate-500">Adicione os serviços que serão apresentados ao cliente. O total é calculado automaticamente.</p>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={adicionarItemManual}>Adicionar item</Button>
+              </div>
+              <div className="space-y-2">
+                {config.manualItens.map((item) => (
+                  <div key={item.id} className="grid grid-cols-1 gap-2 rounded-md border bg-white p-3 sm:grid-cols-[minmax(0,2fr)_90px_90px_120px_32px] sm:items-end">
+                    <div><label className="text-[10px] font-medium text-slate-500">Descrição</label><Input value={item.descricao} placeholder="Ex.: Pintura interna" onChange={(e) => atualizarItemManual(item.id, { descricao: e.target.value })} /></div>
+                    <div><label className="text-[10px] font-medium text-slate-500">Un.</label><Input value={item.unidade} onChange={(e) => atualizarItemManual(item.id, { unidade: e.target.value })} /></div>
+                    <div><label className="text-[10px] font-medium text-slate-500">Qtd.</label><Input type="number" min="0" step="0.01" value={item.quantidade} onChange={(e) => atualizarItemManual(item.id, { quantidade: Math.max(0, Number(e.target.value) || 0) })} /></div>
+                    <div><label className="text-[10px] font-medium text-slate-500">Valor unitário</label><Input inputMode="decimal" value={(item.valorUnitarioCentavos / 100).toFixed(2).replace('.', ',')} onChange={(e) => atualizarItemManual(item.id, { valorUnitarioCentavos: Math.max(0, Math.round(Number(e.target.value.replace(',', '.')) * 100) || 0) })} /></div>
+                    <Button type="button" size="icon" variant="ghost" title="Remover item" onClick={() => removerItemManual(item.id)}><Trash2 className="size-4 text-destructive" /></Button>
+                    <div className="text-right text-xs font-semibold text-slate-700 sm:col-start-4">Total: {brl(Math.round(item.quantidade * item.valorUnitarioCentavos))}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="text-right text-sm font-bold text-slate-800">Valor global: {brl(config.manualItens.reduce((total, item) => total + Math.round(item.quantidade * item.valorUnitarioCentavos), 0))}</div>
+            </div>
+          )}
+
           {/* 3. SELEÇÃO DE ETAPAS & DESCRIÇÃO COMERCIAL */}
           <div className="border border-slate-200 rounded-lg p-4 space-y-3 bg-slate-50/50">
             <span className="font-bold text-slate-800 uppercase tracking-wide text-[11px] block">
-              3. Seleção de Etapas & Descrição Comercial
+              4. Seleção de Etapas & Descrição Comercial
             </span>
             <p className="text-[11px] text-slate-500">
               Edite a descrição visível ao cliente sem afetar o cadastro técnico original.

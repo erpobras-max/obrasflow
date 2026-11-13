@@ -162,6 +162,7 @@ BEGIN
 
   IF v_proposta.orcamento_revisao_id IS NULL THEN
     v_fotografia := COALESCE(NULLIF(p_fotografia, '{}'::jsonb), COALESCE(v_revisao.fotografia, '{}'::jsonb));
+    v_fotografia := public.normalizar_fotografia_manual_proposta(v_fotografia);
     v_valor := COALESCE(NULLIF(v_fotografia->>'totalPrecoCentavos', '')::numeric, v_proposta.valor_total * 100) / 100;
     IF NOT FOUND THEN
       INSERT INTO public.proposta_revisoes(proposta_id, orcamento_revisao_id, numero, status, configuracao, fotografia)
@@ -231,6 +232,7 @@ BEGIN
      WHERE proposta_id = p_proposta_id AND status = 'rascunho'
      ORDER BY numero DESC LIMIT 1 FOR UPDATE;
     v_fotografia := COALESCE(NULLIF(p_fotografia, '{}'::jsonb), v_fotografia, '{}'::jsonb);
+    v_fotografia := public.normalizar_fotografia_manual_proposta(v_fotografia);
   ELSE
     v_fotografia := public.construir_fotografia_comercial(v_origem, p_configuracao);
     SELECT id INTO v_revisao_id FROM public.proposta_revisoes
@@ -255,6 +257,23 @@ $$;
 
 REVOKE ALL ON FUNCTION public.criar_proposta_manual(uuid,text,text,text,numeric,date,text,jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.criar_proposta_manual(uuid,text,text,text,numeric,date,text,jsonb) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.normalizar_fotografia_manual_proposta(p_fotografia jsonb)
+RETURNS jsonb
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public
+AS $$
+DECLARE
+  v_itens jsonb := CASE WHEN jsonb_typeof(COALESCE(p_fotografia->'itens', '[]'::jsonb)) = 'array' THEN COALESCE(p_fotografia->'itens', '[]'::jsonb) ELSE '[]'::jsonb END;
+  v_total numeric := 0;
+BEGIN
+  SELECT COALESCE(SUM(GREATEST(COALESCE(NULLIF(item->>'quantidade', '')::numeric, 0), 0) * GREATEST(COALESCE(NULLIF(item->>'valorUnitarioCentavos', '')::numeric, NULLIF(item->>'valor_unitario_centavos', '')::numeric, NULLIF(item->>'valor_unitario', '')::numeric * 100, 0), 0)), 0)
+    INTO v_total
+    FROM jsonb_array_elements(v_itens) AS linha(item);
+  RETURN jsonb_set(jsonb_set(COALESCE(p_fotografia, '{}'::jsonb), '{itens}', v_itens, true), '{totalPrecoCentavos}', to_jsonb(round(v_total)), true);
+END;
+$$;
 
 -- Função de conversão explícita para uma proposta de serviço, sem alterar sua classificação.
 CREATE OR REPLACE FUNCTION public.converter_proposta_em_obra(
