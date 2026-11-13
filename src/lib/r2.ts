@@ -69,6 +69,7 @@ export function openR2File(key: string | null | undefined): void {
 // ─────────────────────────────────────────────
 export type R2Folder =
   | "rh/atestados"
+  | "rh/fotos"
   | "rh/documentos"
   | "documentos/obras"
   | "documentos/contratos"

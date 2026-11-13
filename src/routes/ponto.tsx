@@ -28,6 +28,8 @@ import {
   CheckSquare,
   Square,
   UserCheck,
+  BookOpen,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { eachDayOfInterval, endOfMonth, format, isWeekend, parseISO, startOfMonth } from "date-fns";
@@ -77,6 +79,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { getR2Url } from "@/lib/r2";
 
 export const Route = createFileRoute("/ponto")({ component: PontoPage });
 type Marcacao = "entrada" | "saida_almoco" | "retorno_almoco" | "saida";
@@ -88,6 +91,7 @@ interface Funcionario {
   matricula: string | null;
   obra_id: string | null;
   carga_horaria_semanal: number;
+  foto_url?: string | null;
 }
 interface RegistroPonto {
   id: string;
@@ -140,6 +144,8 @@ function PontoPage() {
   const [mes, setMes] = useState(() => format(new Date(), "yyyy-MM"));
   const [ajusteOpen, setAjusteOpen] = useState(false);
   const [ajuste, setAjuste] = useState(vazio);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
   useEffect(() => {
     const timer = window.setInterval(() => setAgora(new Date()), 1000);
     return () => window.clearInterval(timer);
@@ -151,13 +157,22 @@ function PontoPage() {
       if (!user) return (await obterFuncionarioPontoCpf()) as Funcionario | null;
       const { data, error } = await (supabase as any)
         .from("funcionarios")
-        .select("id,nome,cargo,matricula,obra_id,carga_horaria_semanal")
+        .select("id,nome,cargo,matricula,obra_id,carga_horaria_semanal,foto_url")
         .eq("user_id", user.id)
         .maybeSingle();
       if (error) throw error;
       return data as Funcionario | null;
     },
   });
+  useEffect(() => {
+    if (!funcionario?.id) return;
+    const key = `obrasflow-funcionario-tutorial:${funcionario.id}`;
+    if (window.localStorage.getItem(key) !== "concluido") setTutorialOpen(true);
+  }, [funcionario?.id]);
+  const concluirTutorial = () => {
+    if (funcionario?.id) window.localStorage.setItem(`obrasflow-funcionario-tutorial:${funcionario.id}`, "concluido");
+    setTutorialOpen(false);
+  };
   useEffect(() => {
     if (loading || loadingFunc) return;
     if (!user && !funcionario) navigate({ to: "/auth", replace: true });
@@ -596,12 +611,38 @@ function PontoPage() {
                 {funcionario?.nome} · {funcionario?.cargo}
               </p>
             </div>
+            {funcionario?.foto_url && <img src={getR2Url(funcionario.foto_url)} alt="Foto do funcionário" className="size-9 rounded-full object-cover border" />}
           </div>
           <Button onClick={sair} variant="ghost" size="sm" className="gap-2 print:hidden">
             <LogOut className="size-4" /> Sair
           </Button>
         </div>
       </header>
+      <Dialog open={tutorialOpen} onOpenChange={(open) => { if (!open) concluirTutorial(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><BookOpen className="size-5 text-amber-600" /> Como usar o ponto</DialogTitle>
+            <DialogDescription>Um guia rápido para registrar seu dia corretamente.</DialogDescription>
+          </DialogHeader>
+          <div className="rounded-xl bg-slate-50 p-5 text-center">
+            <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-full bg-slate-950 text-white"><span className="text-lg font-bold">{tutorialStep + 1}</span></div>
+            <h3 className="font-semibold text-slate-900">{[
+              "Entre com seu CPF",
+              "Toque no botão da próxima marcação",
+              "Confira o resumo e solicite ajustes quando necessário",
+            ][tutorialStep]}</h3>
+            <p className="mt-2 text-sm text-slate-600">{[
+              "Use o CPF cadastrado pelo RH para abrir o portal.",
+              "Registre entrada, saída para almoço, retorno e saída final.",
+              "Se algum horário estiver incorreto, envie uma solicitação ao RH.",
+            ][tutorialStep]}</p>
+          </div>
+          <DialogFooter className="flex-row justify-between sm:justify-between">
+            <Button type="button" variant="ghost" onClick={concluirTutorial}>Pular tutorial</Button>
+            {tutorialStep < 2 ? <Button type="button" onClick={() => setTutorialStep((step) => step + 1)}>Próximo <ArrowRight className="ml-2 size-4" /></Button> : <Button type="button" onClick={concluirTutorial}>Começar</Button>}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <main className="mx-auto max-w-6xl px-4 py-6 md:py-8">
         {/* Seletor de Obra em Destaque para Mestre de Obras ou se houver obras ativas */}
         {isMestreDeObras && (

@@ -34,6 +34,7 @@ function isStaticAssetRequest(request: Request) {
     path === "/OneSignalSDKWorker.js" ||
     path === "/sw.js" ||
     path === "/manifest.json" ||
+    path === "/manifest-funcionario.json" ||
     path === "/favicon.ico" ||
     /^\/(?:icon|apple-touch-icon)-.+\.(?:png|svg|ico)$/i.test(path)
   );

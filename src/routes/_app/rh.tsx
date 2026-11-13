@@ -413,6 +413,7 @@ const funcionarioSchema = z.object({
   pis: z.string().optional().or(z.literal("")),
   ctps_numero: z.string().optional().or(z.literal("")),
   ctps_serie: z.string().optional().or(z.literal("")),
+  foto_url: z.string().optional().or(z.literal("")),
   observacoes: z.string().optional().or(z.literal("")),
 });
 type FuncionarioForm = z.infer<typeof funcionarioSchema>;
@@ -737,6 +738,7 @@ function RhPage() {
         pis: values.pis || null,
         ctps_numero: values.ctps_numero || null,
         ctps_serie: values.ctps_serie || null,
+        foto_url: values.foto_url || null,
         observacoes: values.observacoes || null,
       };
       if (target) {
@@ -1517,9 +1519,7 @@ function RhPage() {
                   <TableRow key={func.id} className="group cursor-pointer hover:bg-muted/30" onClick={() => setFuncModal(func)}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <div className="size-8 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center text-xs font-bold text-[#1e3a5f]">
-                          {func.nome.slice(0, 2).toUpperCase()}
-                        </div>
+                        {func.foto_url ? <img src={getR2Url(func.foto_url)} alt={`Foto de ${func.nome}`} className="size-8 rounded-full object-cover border" /> : <div className="size-8 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center text-xs font-bold text-[#1e3a5f]">{func.nome.slice(0, 2).toUpperCase()}</div>}
                         <div>
                           <div className="font-medium">{func.nome}</div>
                           <div className="text-xs text-muted-foreground">{func.cpf}</div>
@@ -2197,6 +2197,7 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
 }) {
   const [section, setSection] = useState("pessoal");
   const [buscandoCep, setBuscandoCep] = useState(false);
+  const [fotoUploading, setFotoUploading] = useState(false);
   const form = useForm<FuncionarioForm>({
     resolver: zodResolver(funcionarioSchema) as any,
     defaultValues: {
@@ -2208,6 +2209,7 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
       carga_horaria_semanal: 44, salario_base: 0, status: "ativo",
       banco: "", agencia: "", conta: "", tipo_conta: "", pix: "",
       pis: "", ctps_numero: "", ctps_serie: "", observacoes: "",
+      foto_url: "",
     },
   });
 
@@ -2235,6 +2237,7 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
           conta: target.conta ?? "", tipo_conta: target.tipo_conta ?? "",
           pix: target.pix ?? "", pis: target.pis ?? "",
           ctps_numero: target.ctps_numero ?? "", ctps_serie: target.ctps_serie ?? "",
+          foto_url: target.foto_url ?? "",
           observacoes: target.observacoes ?? "",
         });
       } else {
@@ -2258,6 +2261,24 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
     form.setValue("cidade", endereco.cidade);
     form.setValue("uf", endereco.uf);
     toast.success("Endereço preenchido pelo CEP. Revise antes de salvar.");
+  };
+
+  const selecionarFoto = async (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/") || file.size > 10 * 1024 * 1024) {
+      toast.error("Selecione uma imagem de até 10 MB.");
+      return;
+    }
+    setFotoUploading(true);
+    try {
+      const key = await uploadR2(file, "rh/fotos");
+      form.setValue("foto_url", key, { shouldDirty: true });
+      toast.success("Foto carregada. Salve o funcionário para confirmar.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível carregar a foto.");
+    } finally {
+      setFotoUploading(false);
+    }
   };
 
   const sections = [
@@ -2298,6 +2319,10 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
                     <FormMessage />
                   </FormItem>
                 )} />
+                <div className="col-span-2 flex items-center gap-4 rounded-lg border bg-muted/20 p-3">
+                  {form.watch("foto_url") ? <img src={getR2Url(form.watch("foto_url"))} alt="Foto do funcionário" className="size-16 rounded-full object-cover border" /> : <div className="flex size-16 items-center justify-center rounded-full bg-slate-200 text-slate-500"><User className="size-7" /></div>}
+                  <div className="space-y-1"><FormLabel>Foto do funcionário</FormLabel><Input type="file" accept="image/*" capture="user" disabled={fotoUploading} onChange={(event) => void selecionarFoto(event.target.files?.[0])} /><p className="text-xs text-muted-foreground">O RH pode enviar do computador ou usar a câmera do celular.</p></div>
+                </div>
                 <FormField control={form.control as any} name="cpf" render={({ field }) => (
                   <FormItem>
                     <FormLabel>CPF *</FormLabel>

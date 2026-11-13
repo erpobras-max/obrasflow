@@ -41,7 +41,7 @@ const AREA_COPY: Record<AccessArea, { title: string; hint: string }> = {
 };
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: z.object({ redirect: z.string().optional() }),
+  validateSearch: z.object({ redirect: z.string().optional(), area: z.enum(["general", "client", "employee"]).optional() }),
   head: () => ({ meta: [{ title: "Entrar — ERP Obras" }] }),
   component: AuthPage,
 });
@@ -85,8 +85,9 @@ function formatDocumentInput(value: string, area: AccessArea) {
 
 function AuthPage() {
   const navigate = useNavigate();
-  const { redirect } = Route.useSearch();
-  const [area, setArea] = useState<AccessArea>("general");
+  const { redirect, area: requestedArea } = Route.useSearch();
+  const restrictedEmployee = requestedArea === "employee";
+  const [area, setArea] = useState<AccessArea>(requestedArea ?? "general");
   const [submitting, setSubmitting] = useState(false);
   const [accessError, setAccessError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -276,16 +277,18 @@ function AuthPage() {
 
             <Card className="border-slate-200 p-1 shadow-none">
               <div
-                className="grid grid-cols-3 gap-1 rounded-md bg-slate-100 p-1"
+                className={`${restrictedEmployee ? "grid grid-cols-1" : "grid grid-cols-3"} gap-1 rounded-md bg-slate-100 p-1`}
                 role="tablist"
                 aria-label="Área de acesso"
               >
                 {(
-                  [
-                    ["general", "Equipe", ShieldCheck],
-                    ["client", "Cliente", UserRound],
-                    ["employee", "Funcionário", UsersRound],
-                  ] as const
+                  restrictedEmployee
+                    ? ([['employee', 'Funcionário', UsersRound]] as const)
+                    : ([
+                        ["general", "Equipe", ShieldCheck],
+                        ["client", "Cliente", UserRound],
+                        ["employee", "Funcionário", UsersRound],
+                      ] as const)
                 ).map(([value, label, Icon]) => (
                   <button
                     key={value}
@@ -293,6 +296,7 @@ function AuthPage() {
                     role="tab"
                     aria-selected={area === value}
                     onClick={() => {
+                      if (restrictedEmployee) return;
                       setArea(value);
                       setPendingAccess(null);
                       setOtpCode("");

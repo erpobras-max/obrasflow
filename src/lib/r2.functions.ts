@@ -8,6 +8,7 @@ import { getDiarioMediaError } from "@/lib/diario-media";
 
 const folders = [
   "rh/atestados",
+  "rh/fotos",
   "rh/documentos",
   "documentos/obras",
   "documentos/contratos",
