@@ -2321,7 +2321,7 @@ function FuncionarioDialog({ open, onOpenChange, target, obras, onSubmit, submit
                 )} />
                 <div className="col-span-2 flex items-center gap-4 rounded-lg border bg-muted/20 p-3">
                   {form.watch("foto_url") ? <img src={getR2Url(form.watch("foto_url"))} alt="Foto do funcionário" className="size-16 rounded-full object-cover border" /> : <div className="flex size-16 items-center justify-center rounded-full bg-slate-200 text-slate-500"><User className="size-7" /></div>}
-                  <div className="space-y-1"><FormLabel>Foto do funcionário</FormLabel><Input type="file" accept="image/*" capture="user" disabled={fotoUploading} onChange={(event) => void selecionarFoto(event.target.files?.[0])} /><p className="text-xs text-muted-foreground">O RH pode enviar do computador ou usar a câmera do celular.</p></div>
+                  <div className="space-y-1"><label htmlFor="foto-funcionario" className="text-sm font-medium leading-none">Foto do funcionário</label><Input id="foto-funcionario" type="file" accept="image/*" capture="user" disabled={fotoUploading} onChange={(event) => void selecionarFoto(event.target.files?.[0])} /><p className="text-xs text-muted-foreground">O RH pode enviar do computador ou usar a câmera do celular.</p></div>
                 </div>
                 <FormField control={form.control as any} name="cpf" render={({ field }) => (
                   <FormItem>
