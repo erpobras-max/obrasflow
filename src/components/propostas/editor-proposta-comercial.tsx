@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import {
@@ -40,6 +41,7 @@ import {
   tiposProposta,
   type TipoProposta,
   formatarRegistroEmpresa,
+  tiposProposta,
   type ConfiguracaoPropostaComercial,
 } from '@/lib/proposta-orcamento.functions'
 import type { PropostaEditorData } from '@/lib/propostas/proposta-editor.types'
@@ -343,6 +345,14 @@ const cnpjFormatado = empresa?.cnpj ? formatCpfCnpj(empresa.cnpj) : ''
             </span>
 
             <div className="space-y-2">
+              <div className="pt-1">
+                <label className="block text-[11px] font-semibold text-slate-600 mb-1">Classificação da proposta:</label>
+                <Select value={config.tipoProposta} onValueChange={(tipo) => updateConfig({ tipoProposta: tipo as ConfiguracaoPropostaComercial['tipoProposta'] })} disabled={!isEditavel}>
+                  <SelectTrigger className="h-8 text-xs bg-white text-slate-900 border-slate-300"><SelectValue /></SelectTrigger>
+                  <SelectContent>{tiposProposta.map((tipo) => <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center justify-between py-1 border-b border-slate-200/60">
                 <span className="text-slate-700">Exibir Capa Comercial</span>
                 <Switch

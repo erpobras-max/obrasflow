@@ -15,6 +15,12 @@ test('normaliza configuracao ausente para impedir campos indefinidos no editor',
   assert.deepEqual(config.atividadesOcultas, [])
   assert.deepEqual(config.descricoesComerciais, {})
   assert.equal(config.mostrarAssinaturas, true)
+  assert.equal(config.tipoProposta, 'Obra')
+})
+
+test('preserva classificacao Reforma para proposta manual', () => {
+  const config = normalizarConfiguracaoProposta({ tipoProposta: 'Reforma' })
+  assert.equal(config.tipoProposta, 'Reforma')
 })
 
 test('completa configuracao basica preservando textos comerciais informados', () => {

@@ -25,7 +25,7 @@ export function adaptarFotografiaParaEditor(
   contexto: ContextoProposta,
 ): PropostaEditorData {
   const origem = registro(fotografia)
-  const etapas = lista(origem.etapas).map((etapaValor, etapaIndice): EtapaEditor => {
+  let etapas = lista(origem.etapas).map((etapaValor, etapaIndice): EtapaEditor => {
     const etapa = registro(etapaValor)
     const atividades = lista(etapa.atividades).map((atividadeValor, atividadeIndice): AtividadeEditor => {
       const atividade = registro(atividadeValor)
@@ -48,6 +48,30 @@ export function adaptarFotografiaParaEditor(
       atividades,
     }
   })
+
+  if (etapas.length === 0 && lista(origem.itens).length > 0) {
+    const atividades = lista(origem.itens).map((itemValor, indice): AtividadeEditor => {
+      const item = registro(itemValor)
+      const quantidade = numero(item.quantidade, 1)
+      const precoUnitarioCentavos = Math.round(numero(item.valor_unitario, numero(item.valorUnitarioCentavos) / 100) * 100)
+      return {
+        id: texto(item.id, `item-${indice + 1}`),
+        codigo: texto(item.codigo) || null,
+        descricao: texto(item.descricao, 'Serviço'),
+        unidade: texto(item.unidade, 'un'),
+        quantidade,
+        precoUnitarioCentavos,
+        precoTotalCentavos: Math.round(numero(item.precoTotalCentavos, quantidade * precoUnitarioCentavos)),
+      }
+    })
+    etapas = [{
+      id: 'itens-comerciais',
+      codigo: '01',
+      nome: 'Itens comerciais',
+      valorTotalCentavos: atividades.reduce((total, atividade) => total + atividade.precoTotalCentavos, 0),
+      atividades,
+    }]
+  }
 
   return {
     id: contexto.propostaId,
