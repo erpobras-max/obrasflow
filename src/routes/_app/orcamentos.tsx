@@ -81,7 +81,7 @@ type CatalogColumnMap = {
   classe: number;
 };
 
-const detectCatalogColumns = (rows: any[][]): { headerIndex: number; headers: string[]; mapping: CatalogColumnMap } | null => {
+const detectCatalogColumns = (rows: any[][], requestedUF = "SP"): { headerIndex: number; headers: string[]; mapping: CatalogColumnMap } | null => {
   let best: { headerIndex: number; headers: string[]; mapping: CatalogColumnMap; score: number } | null = null;
 
   for (let rowIndex = 0; rowIndex < Math.min(rows.length, 60); rowIndex++) {
@@ -98,6 +98,25 @@ const detectCatalogColumns = (rows: any[][]): { headerIndex: number; headers: st
       if (mapping.valor < 0 && (text.includes("preco mediano") || text.includes("preco") || text.includes("custo total") || text.includes("valor unitario") || text.includes("valor"))) mapping.valor = index;
       if (mapping.classe < 0 && (text.includes("classe") || text.includes("grupo") || text.includes("tipo"))) mapping.classe = index;
     });
+
+    // SINAPI's official workbooks are wide: each UF is a price column. For
+    // input sheets the UF is in the same header row; for composition sheets
+    // the UF is one row above repeated "Custo (R$)" columns.
+    if (mapping.valor < 0) {
+      const uf = requestedUF.toUpperCase();
+      const ufRowIndex = rows.slice(Math.max(0, rowIndex - 4), rowIndex + 1).findIndex((candidate) =>
+        Array.isArray(candidate) && candidate.some((cell) => String(cell ?? "").trim().toUpperCase() === uf)
+      );
+      if (ufRowIndex >= 0) {
+        const candidate = rows[Math.max(0, rowIndex - 4) + ufRowIndex] ?? [];
+        const ufColumn = candidate.findIndex((cell) => String(cell ?? "").trim().toUpperCase() === uf);
+        if (ufColumn >= 0) {
+          // On composition sheets the row immediately below the UF contains
+          // the paired cost column at the same index.
+          mapping.valor = ufColumn;
+        }
+      }
+    }
 
     const score = [mapping.codigo, mapping.descricao, mapping.unidade, mapping.valor].filter((index) => index >= 0).length;
     if (!best || score > best.score) best = { headerIndex: rowIndex, headers, mapping, score };
@@ -145,13 +164,17 @@ function OrcamentosPage() {
   const [refSearch, setRefSearch] = useState("");
   const [refSource, setRefSource] = useState<"sinapi" | "sicro">("sinapi");
   const [refType, setRefType] = useState<"insumos" | "composicoes">("insumos");
-  const [refUF, setRefUF] = useState("SP");
-  const [refMes, setRefMes] = useState("05/2026");
+  const [refUF, setRefUF] = useState("MG");
+  const [refMes, setRefMes] = useState(() => {
+    const now = new Date();
+    return `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+  });
 
   // Dynamic list of reference months from 2024 to 2026
   const availableMonths = useMemo(() => {
     const list = [];
-    for (let year = 2024; year <= 2026; year++) {
+    const currentYear = new Date().getFullYear();
+    for (let year = 2024; year <= currentYear; year++) {
       for (let month = 1; month <= 12; month++) {
         const mStr = String(month).padStart(2, "0");
         list.push(`${mStr}/${year}`);
@@ -743,26 +766,55 @@ function OrcamentosPage() {
       let skipped = 0;
       for (const [index, name] of spreadsheetNames.entries()) {
         setImportStatus(`Analisando ${index + 1} de ${spreadsheetNames.length}: ${name.split("/").pop()}`);
+        const fileKey = normalizeCatalogText(name);
+        if (fileKey.includes("mao de obra") || fileKey.includes("familias") || fileKey.includes("manutenc")) { skipped++; continue; }
         const bytes = await zip.files[name].async("uint8array");
         const workbook = XLSX.read(bytes, { type: "array" });
+        const compositionCodeByDescription = new Map<string, string>();
+        const analyticSheet = workbook.Sheets[workbook.SheetNames.find((sheet) => normalizeCatalogText(sheet).startsWith("analitico")) ?? ""];
+        if (analyticSheet) {
+          const analyticRows = XLSX.utils.sheet_to_json(analyticSheet, { header: 1, defval: "" }) as any[][];
+          const analyticHeader = analyticRows.findIndex((row) => Array.isArray(row) && row.some((cell) => normalizeCatalogText(cell).includes("codigo da composicao")));
+          if (analyticHeader >= 0) {
+            for (const row of analyticRows.slice(analyticHeader + 1)) {
+              const code = String(row[1] ?? "").trim();
+              const itemType = String(row[2] ?? "").trim();
+              const description = String(row[4] ?? "").trim();
+              if (code && code !== "0" && !itemType && description) compositionCodeByDescription.set(normalizeCatalogText(description), code);
+            }
+          }
+        }
         for (const sheetName of workbook.SheetNames) {
+          const sheetKey = normalizeCatalogText(sheetName);
+          // These are auxiliary reports without a single catalog price. The
+          // canonical ISD/ICD/ISE and CSD/CCD/CSE sheets are handled below.
+          if (["menu", "busca", "coeficientes", "manutencoes", "analitico com custo"].includes(sheetKey)) { skipped++; continue; }
           const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" }) as any[][];
-          const detected = detectCatalogColumns(rows);
+          const detected = detectCatalogColumns(rows, automaticUF);
           if (!detected) { skipped++; continue; }
 
           const innerName = normalizeCatalogText(`${name} ${sheetName}`);
           const innerHasExplicitType = innerName.includes("insumo") || innerName.includes("compos") || innerName.includes("sintet");
-          const type = innerHasExplicitType
+          const officialSheetType = /^(isd|icd|ise)$/.test(sheetKey)
+            ? "insumos"
+            : /^(csd|ccd|cse)$/.test(sheetKey)
+              ? "composicoes"
+              : null;
+          if (officialSheetType && !["isd", "csd"].includes(sheetKey)) { skipped++; continue; }
+          const type = officialSheetType ?? (innerHasExplicitType
             ? detectCatalogType(`${name} ${sheetName}`, detected.headers)
-            : (automaticType ?? detectCatalogType(`${file.name} ${name} ${sheetName}`, detected.headers));
+            : (automaticType ?? detectCatalogType(`${file.name} ${name} ${sheetName}`, detected.headers)));
           const competence = detectCatalogCompetence(`${file.name} ${name} ${sheetName}`, automaticMes);
           const source = refSource;
           const uf = automaticUF;
           const table = type === "composicoes" ? "referencia_composicoes" : "referencia_insumos";
           const seen = new Set<string>();
           const payload = rows.slice(detected.headerIndex + 1).flatMap((row) => {
-            const code = String(row[detected.mapping.codigo] ?? "").trim();
             const descricao = String(row[detected.mapping.descricao] ?? "").trim();
+            const rawCode = String(row[detected.mapping.codigo] ?? "").trim();
+            const code = type === "composicoes" && (rawCode === "0" || !rawCode)
+              ? compositionCodeByDescription.get(normalizeCatalogText(descricao)) ?? ""
+              : rawCode;
             if (!code || !descricao || seen.has(code)) return [];
             seen.add(code);
             const base = { fonte: source, uf, mes_referencia: competence, codigo: code, descricao, unidade: String(row[detected.mapping.unidade] ?? "").trim() || "un" };
