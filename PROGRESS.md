@@ -2,6 +2,14 @@
 
 Atualizado em 31/10/2026. Este arquivo registra o estado conhecido no código, no banco publicado e nas entregas recentes do sistema.
 
+### 13/11/2026 — Portal PWA do funcionário
+
+- Criada entrada `/funcionario` com login restrito à área de funcionário por CPF.
+- Adicionado manifesto PWA dedicado (`/manifest-funcionario.json`) para instalação direta do portal de ponto.
+- Incluído tutorial de primeiro acesso com instruções de entrada, marcações e ajustes.
+- Cadastro do RH agora permite upload ou captura de foto do funcionário; a foto aparece na listagem e no portal de ponto.
+- Mantidos os registros e RPCs de ponto existentes, com bloqueio de rotas administrativas para perfil exclusivamente funcionário.
+
 ## 1. Rotas e páginas
 
 As rotas principais estão implementadas com TanStack Router. As páginas protegidas ficam em `src/routes/_app`; os portais, login, assinatura e imóveis públicos ficam fora desse agrupamento.

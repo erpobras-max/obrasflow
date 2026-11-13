@@ -31,7 +31,7 @@ export async function getPontoFuncionario() {
   const supabaseAdmin = createSupabaseAdminClient();
   const { data, error } = await supabaseAdmin
     .from("funcionarios")
-    .select("id,nome,cargo,matricula,obra_id,carga_horaria_semanal")
+    .select("id,nome,cargo,matricula,obra_id,carga_horaria_semanal,foto_url")
     .eq("id", funcionarioId)
     .eq("status", "ativo")
     .maybeSingle();

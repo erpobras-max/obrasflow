@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PortalRouteImport } from './routes/portal'
 import { Route as PontoRouteImport } from './routes/ponto'
+import { Route as FuncionarioRouteImport } from './routes/funcionario'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/_app'
@@ -88,6 +89,11 @@ const PortalRoute = PortalRouteImport.update({
 const PontoRoute = PontoRouteImport.update({
   id: '/ponto',
   path: '/ponto',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FuncionarioRoute = FuncionarioRouteImport.update({
+  id: '/funcionario',
+  path: '/funcionario',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
@@ -407,6 +413,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/funcionario': typeof FuncionarioRoute
   '/ponto': typeof PontoRoute
   '/portal': typeof PortalRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -473,6 +480,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/funcionario': typeof FuncionarioRoute
   '/ponto': typeof PontoRoute
   '/reset-password': typeof ResetPasswordRoute
   '/comercial': typeof AppComercialRouteWithChildren
@@ -540,6 +548,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/funcionario': typeof FuncionarioRoute
   '/ponto': typeof PontoRoute
   '/portal': typeof PortalRouteWithChildren
   '/reset-password': typeof ResetPasswordRoute
@@ -608,6 +617,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/forgot-password'
+    | '/funcionario'
     | '/ponto'
     | '/portal'
     | '/reset-password'
@@ -674,6 +684,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/forgot-password'
+    | '/funcionario'
     | '/ponto'
     | '/reset-password'
     | '/comercial'
@@ -740,6 +751,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/auth'
     | '/forgot-password'
+    | '/funcionario'
     | '/ponto'
     | '/portal'
     | '/reset-password'
@@ -808,6 +820,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   AuthRoute: typeof AuthRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  FuncionarioRoute: typeof FuncionarioRoute
   PontoRoute: typeof PontoRoute
   PortalRoute: typeof PortalRouteWithChildren
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -844,6 +857,13 @@ declare module '@tanstack/react-router' {
       path: '/ponto'
       fullPath: '/ponto'
       preLoaderRoute: typeof PontoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/funcionario': {
+      id: '/funcionario'
+      path: '/funcionario'
+      fullPath: '/funcionario'
+      preLoaderRoute: typeof FuncionarioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/forgot-password': {
@@ -1440,6 +1460,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   AuthRoute: AuthRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  FuncionarioRoute: FuncionarioRoute,
   PontoRoute: PontoRoute,
   PortalRoute: PortalRouteWithChildren,
   ResetPasswordRoute: ResetPasswordRoute,
