@@ -705,3 +705,10 @@ Realizada varredura completa em todo o pipeline operacional do sistema: **Cadast
   - O servidor normaliza itens manuais e recalcula `propostas.valor_total` ao salvar ou publicar.
   - Fluxo baseado em orçamento permanece inalterado.
   - Teste de persistência e build de produção aprovados.
+
+- **Subitens comerciais e referências SINAPI na proposta (Issue #223)**:
+  - Itens manuais agora aceitam subitens vinculados a um item pai, com códigos comerciais hierárquicos (01, 01.1) na proposta.
+  - Layout do editor foi reorganizado para impedir sobreposição da descrição e facilitar edição em telas estreitas.
+  - O editor consulta composições e insumos SINAPI da competência mais recente disponível para preencher itens manuais.
+  - A sincronização oficial deixou de inserir exemplos fixos e passou a baixar o pacote ZIP da Caixa, processar planilhas válidas e importar composições/insumos em lotes.
+  - Validação: build Vite/Nitro/Cloudflare concluído; propostas publicadas continuam congeladas e novas revisões usam a competência atual.

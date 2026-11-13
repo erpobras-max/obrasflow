@@ -52,6 +52,8 @@ export interface ConfiguracaoPropostaComercial extends ConfiguracaoPropostaBase 
 
 export interface ItemManualProposta {
   id: string
+  tipo?: 'item' | 'subitem'
+  parentId?: string | null
   descricao: string
   unidade: string
   quantidade: number
@@ -155,6 +157,8 @@ export function normalizarConfiguracaoProposta(
           const registro = item && typeof item === 'object' ? item as Record<string, unknown> : {}
           return {
             id: typeof registro.id === 'string' ? registro.id : `item-manual-${indice + 1}`,
+            tipo: registro.tipo === 'subitem' ? 'subitem' : 'item',
+            parentId: typeof registro.parentId === 'string' ? registro.parentId : null,
             descricao: typeof registro.descricao === 'string' ? registro.descricao : '',
             unidade: typeof registro.unidade === 'string' ? registro.unidade : 'un',
             quantidade: Number.isFinite(Number(registro.quantidade)) ? Math.max(0, Number(registro.quantidade)) : 1,
