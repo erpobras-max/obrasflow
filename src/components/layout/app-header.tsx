@@ -148,7 +148,14 @@ export function AppHeader() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast.success("Sessão encerrada");
-    navigate({ to: "/auth", replace: true });
+    const managementRoles = roles.filter((role) => !["cliente", "funcionario"].includes(role));
+    navigate({
+      to: "/auth",
+      search: managementRoles.length === 0 && roles.includes("funcionario")
+        ? { area: "employee" }
+        : undefined,
+      replace: true,
+    });
   };
 
   return (

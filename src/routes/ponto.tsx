@@ -568,7 +568,7 @@ function PontoPage() {
     void qc.removeQueries({ queryKey: ["ponto-funcionario"] });
     void qc.removeQueries({ queryKey: ["ponto-registros"] });
     void qc.removeQueries({ queryKey: ["ponto-ajustes"] });
-    navigate({ to: "/auth", replace: true });
+    navigate({ to: "/auth", search: { area: "employee" }, replace: true });
   }
   if (loading || loadingFunc)
     return (
